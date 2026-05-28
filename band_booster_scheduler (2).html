@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Band Booster Scheduler</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+  :root {
+    --bg: #f8f7f4;
+    --surface: #ffffff;
+    --surface2: #f1efe8;
+    --border: rgba(0,0,0,0.12);
+    --border-med: rgba(0,0,0,0.2);
+    --text: #1a1a18;
+    --text2: #5f5e5a;
+    --text3: #999895;
+    --blue: #185FA5;
+    --blue-lt: #E6F1FB;
+    --blue-dk: #0C447C;
+    --teal: #085041;
+    --teal-lt: #E1F5EE;
+    --teal-mid: #0F6E56;
+    --amber-lt: #FAEEDA;
+    --amber-dk: #633806;
+    --green-lt: #EAF3DE;
+    --green-dk: #27500A;
+    --gray-lt: #F1EFE8;
+    --gray-dk: #444441;
+    --danger: #fcebeb;
+    --danger-text: #791F1F;
+    --danger-border: rgba(163,45,45,0.3);
+    --warning: #ba7517;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a18;
+      --surface: #242422;
+      --surface2: #2c2c2a;
+      --border: rgba(255,255,255,0.1);
+      --border-med: rgba(255,255,255,0.18);
+      --text: #f0ede6;
+      --text2: #b4b2a9;
+      --text3: #888780;
+      --blue-lt: #0c2d4a;
+      --blue-dk: #85B7EB;
+      --teal-lt: #04342c;
+      --teal: #9FE1CB;
+      --teal-mid: #5DCAA5;
+      --amber-lt: #412402;
+      --amber-dk: #FAC775;
+      --green-lt: #173404;
+      --green-dk: #C0DD97;
+      --gray-lt: #2c2c2a;
+      --gray-dk: #D3D1C7;
+      --danger: #501313;
+      --danger-text: #F09595;
+      --danger-border: rgba(240,149,149,0.3);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 14px; color: var(--text); background: var(--bg); min-height: 100vh; }
+  .app-wrap { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+  .app-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 10px; border-bottom: .5px solid var(--border); padding-bottom: 1rem; }
+  .app-title { font-size: 22px; font-weight: 500; letter-spacing: -0.3px; }
+  .app-title span { color: var(--blue); }
+  .app-subtitle { font-size: 13px; color: var(--text2); margin-top: 2px; }
+  .header-right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  /* TABS */
+  .tabs { display: flex; gap: 4px; margin-bottom: 1.5rem; border-bottom: .5px solid var(--border); flex-wrap: wrap; }
+  .tab { padding: 8px 16px; border-radius: var(--radius) var(--radius) 0 0; cursor: pointer; font-size: 13px; color: var(--text2); border: .5px solid transparent; border-bottom: none; position: relative; top: 1px; transition: background .15s; user-select: none; }
+  .tab:hover { background: var(--surface2); }
+  .tab.active { background: var(--surface); border-color: var(--border); color: var(--text); font-weight: 500; }
+  .panel { display: none; } .panel.active { display: block; }
+
+  /* BUTTONS */
+  .btn { padding: 7px 14px; border: .5px solid var(--border-med); border-radius: var(--radius); background: var(--surface); cursor: pointer; font-size: 13px; color: var(--text); display: inline-flex; align-items: center; gap: 6px; transition: background .15s; font-family: inherit; }
+  .btn:hover { background: var(--surface2); }
+  .btn.primary { background: var(--blue); border-color: var(--blue); color: #E6F1FB; }
+  .btn.primary:hover { background: var(--blue-dk); }
+  .btn.danger { background: var(--danger); border-color: var(--danger-border); color: var(--danger-text); }
+  .btn.sm { padding: 4px 10px; font-size: 12px; }
+  .btn.xs { padding: 3px 7px; font-size: 11px; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: .5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 1rem; }
+
+  /* FORM ELEMENTS */
+  input[type=text], input[type=email], input[type=tel], input[type=date], select {
+    padding: 7px 10px; border: .5px solid var(--border-med); border-radius: var(--radius);
+    background: var(--surface); font-size: 13px; color: var(--text); width: 100%; font-family: inherit;
+  }
+  input:focus, select:focus { outline: none; box-shadow: 0 0 0 2px rgba(24,95,165,0.3); }
+  input[type=checkbox] { width: auto; }
+  label { font-family: inherit; }
+
+  /* BADGES */
+  .badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; }
+  .badge.green { background: var(--green-lt); color: var(--green-dk); }
+  .badge.amber { background: var(--amber-lt); color: var(--amber-dk); }
+  .badge.blue { background: var(--blue-lt); color: var(--blue-dk); }
+  .badge.gray { background: var(--gray-lt); color: var(--gray-dk); }
+  .badge.teal { background: var(--teal-lt); color: var(--teal); }
+  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: var(--radius); font-size: 12px; background: var(--surface2); border: .5px solid var(--border); color: var(--text2); }
+
+  /* POOL */
+  .pool { display: flex; flex-wrap: wrap; gap: 6px; min-height: 52px; padding: .75rem; background: var(--surface2); border: .5px dashed var(--border-med); border-radius: var(--radius-lg); margin-bottom: 1rem; }
+  .pool.drag-over { border-color: var(--blue); background: var(--blue-lt); }
+
+  /* CHIPS (pool only) */
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; cursor: grab; border: .5px solid var(--border-med); background: var(--surface); color: var(--text); white-space: nowrap; user-select: none; transition: box-shadow .15s; }
+  .chip:active { cursor: grabbing; }
+  .chip .chip-hours { font-size: 11px; color: var(--text3); font-weight: 400; }
+
+  /* BOARD */
+  .jobs-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+  .job-slot { background: var(--surface2); border: .5px solid var(--border); border-radius: var(--radius-lg); padding: .75rem; transition: border-color .15s, background .15s; }
+  .job-slot.drag-over { border-color: var(--blue); background: var(--blue-lt); }
+  .slot-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: .35rem; }
+  .slot-title { font-size: 13px; font-weight: 500; line-height: 1.3; }
+  .slot-meta { font-size: 11px; color: var(--text2); margin-bottom: .4rem; }
+
+  /* POSITION ROWS */
+  .slot-positions { display: flex; flex-direction: column; gap: 5px; margin-top: .4rem; }
+  .pos-row { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: var(--radius); background: var(--surface); border: .5px solid var(--border); }
+  .pos-row.is-lead-row { border-color: var(--teal-mid); background: var(--teal-lt); }
+  .pos-num { font-size: 11px; font-weight: 500; min-width: 18px; color: var(--text2); flex-shrink: 0; }
+  .pos-row.is-lead-row .pos-num { color: var(--teal); }
+  .pos-name { font-size: 12px; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pos-ht-select { font-size: 11px; padding: 2px 4px; border: .5px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text2); min-width: 0; flex: 1; max-width: 110px; font-family: inherit; }
+  .pos-remove { font-size: 13px; color: var(--text2); cursor: pointer; line-height: 1; flex-shrink: 0; }
+  .pos-remove:hover { color: var(--danger-text); }
+  .pos-row.drag-over { border-color: var(--blue); background: var(--blue-lt); outline: 2px dashed var(--blue); outline-offset: -2px; }
+  .pos-row.dragging { opacity: .35; }
+  .chip.dragging { opacity: .35; }
+
+  /* TABLES */
+  .rtable, .jtable { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  .rtable th, .jtable th { text-align: left; padding: 7px 8px; color: var(--text2); border-bottom: .5px solid var(--border); font-weight: 500; }
+  .rtable td, .jtable td { padding: 5px 8px; border-bottom: .5px solid var(--border); vertical-align: middle; overflow: hidden; }
+  .rtable tr:last-child td, .jtable tr:last-child td { border-bottom: none; }
+  .rtable tr.inactive td { opacity: .45; }
+  .inline-edit { background: transparent; border: none; width: 100%; font-size: 13px; color: var(--text); padding: 2px 4px; border-radius: 4px; font-family: inherit; }
+  .inline-edit:focus { outline: none; background: var(--surface2); box-shadow: 0 0 0 1.5px rgba(24,95,165,0.4); }
+
+  /* STATS ROW */
+  #assign-stats { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  /* PRINT */
+  @media print {
+    .no-print { display: none !important; }
+    .print-only { display: block !important; }
+    body { background: white; font-size: 12px; }
+  }
+  .print-only { display: none; }
+
+  /* GRID HELPERS */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 8px; align-items: end; }
+  .grid3c { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 8px; align-items: end; }
+  .grid2c { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+  .lbl { font-size: 12px; color: var(--text2); display: block; margin-bottom: 3px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="app-wrap no-print">
+  <div class="app-header">
+    <div>
+      <div class="app-title">Band <span>Booster</span> Scheduler</div>
+      <div class="app-subtitle" id="week-label">No week selected</div>
+    </div>
+    <div class="header-right">
+      <input type="date" id="week-date" style="width:155px" onchange="setWeek(this.value)">
+      <button class="btn sm" onclick="printSchedule()"><i class="ti ti-printer"></i> Print</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('assign')"><i class="ti ti-layout-board"></i> Assign</div>
+    <div class="tab" onclick="showTab('volunteers')"><i class="ti ti-users"></i> Master roster</div>
+    <div class="tab" onclick="showTab('config')"><i class="ti ti-settings"></i> Configuration</div>
+    <div class="tab" onclick="showTab('history')"><i class="ti ti-clock-hour-4"></i> History</div>
+  </div>
+
+  <!-- ASSIGN -->
+  <div class="panel active" id="panel-assign">
+    <div class="row" style="justify-content:space-between;margin-bottom:1rem">
+      <div id="assign-stats"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn sm" onclick="autoAssign()"><i class="ti ti-wand"></i> Auto-assign</button>
+        <button class="btn sm" onclick="clearAssignments()"><i class="ti ti-eraser"></i> Clear all</button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:.4rem">Drag volunteers from the pool or any position row — drop onto a job to append, onto a specific position row to insert there, or back to the pool to unassign.</div>
+    <div class="pool" id="pool" ondragover="dragOver(event,null,null)" ondrop="drop(event,null,null)" ondragleave="dragLeave(event)"></div>
+    <div class="jobs-board" id="jobs-board"></div>
+  </div>
+
+  <!-- VOLUNTEERS -->
+  <div class="panel" id="panel-volunteers">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:flex-start;margin-bottom:.75rem;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-size:15px;font-weight:500;margin-bottom:3px">Weekly CSV import</div>
+          <div style="font-size:12px;color:var(--text2)">Skips first and last lines; imports rows where column 2 is "Logistics Volunteers" — first name (col 5), last name (col 6), phone (col 7 or "unknown"), email (col 8). New volunteers are added to master roster; everyone in the file is marked active for this week. Volunteers not in the file are marked inactive.</div>
+        </div>
+        <input type="file" id="csv-file" accept=".csv" onchange="importCSV(event)" style="width:220px;font-size:12px;flex-shrink:0">
+      </div>
+      <div id="import-result" style="font-size:12px"></div>
+    </div>
+
+    <div class="card">
+      <div style="font-size:15px;font-weight:500;margin-bottom:.75rem">Add volunteer manually</div>
+      <div class="grid4">
+        <div><label class="lbl">First name</label><input type="text" id="v-fname" placeholder="First"></div>
+        <div><label class="lbl">Last name</label><input type="text" id="v-lname" placeholder="Last"></div>
+        <div><label class="lbl">Email</label><input type="email" id="v-email" placeholder="email@example.com"></div>
+        <div><label class="lbl">Phone</label><input type="tel" id="v-phone" placeholder="555-555-5555"></div>
+        <button class="btn primary" onclick="addVolunteer()" style="white-space:nowrap"><i class="ti ti-plus"></i> Add</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
+        <div class="row" style="gap:10px">
+          <div style="font-size:15px;font-weight:500">Master roster</div>
+          <span id="v-count" class="badge blue"></span>
+          <span id="v-active-count" class="badge teal"></span>
+        </div>
+        <div class="row" style="gap:8px">
+          <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:5px"><input type="checkbox" id="show-inactive" onchange="renderVolunteers()"> Show inactive</label>
+          <input type="text" id="v-search" placeholder="Search..." style="width:140px;font-size:12px" oninput="renderVolunteers()">
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Click any cell to edit inline. Changes save automatically.</div>
+      <table class="rtable">
+        <colgroup><col style="width:4%"><col style="width:15%"><col style="width:15%"><col style="width:31%"><col style="width:19%"><col style="width:12%"><col style="width:4%"></colgroup>
+        <thead><tr><th></th><th>First</th><th>Last</th><th>Email</th><th>Phone</th><th>This week</th><th></th></tr></thead>
+        <tbody id="vol-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- CONFIGURATION -->
+  <div class="panel" id="panel-config">
+    <div class="card">
+      <div style="font-size:15px;font-weight:500;margin-bottom:.75rem">Add job</div>
+      <div class="grid3c">
+        <div><label class="lbl">Job title</label><input type="text" id="j-name" placeholder="Job title"></div>
+        <div><label class="lbl">Notes</label><input type="text" id="j-desc" placeholder="Optional notes"></div>
+        <div><label class="lbl">Slots needed</label>
+          <select id="j-req" style="width:80px">
+            <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+            <option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
+          </select>
+        </div>
+        <button class="btn primary" onclick="addJob()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
+      </div>
+    </div>
+    <div class="card">
+      <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Job roster</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Click any cell to edit inline. Position #1 is always the lead — assigned weekly on the Assign board.</div>
+      <table class="jtable">
+        <colgroup><col style="width:32%"><col style="width:44%"><col style="width:12%"><col style="width:12%"></colgroup>
+        <thead><tr><th>Job title</th><th>Notes</th><th>Slots</th><th></th></tr></thead>
+        <tbody id="job-body"></tbody>
+      </table>
+    </div>
+
+    <div class="card" style="margin-top:1.5rem">
+      <div style="font-size:15px;font-weight:500;margin-bottom:.75rem">Add halftime job</div>
+      <div class="grid2c">
+        <div><label class="lbl">Halftime job name</label><input type="text" id="ht-name" placeholder="e.g. Water station, Props crew"></div>
+        <button class="btn primary" onclick="addHalftimeJob()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
+      </div>
+    </div>
+    <div class="card">
+      <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Halftime jobs</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">These appear as options in the halftime dropdown on each position in the assignment board. Click to edit inline.</div>
+      <table class="jtable">
+        <colgroup><col style="width:88%"><col style="width:12%"></colgroup>
+        <thead><tr><th>Halftime job name</th><th></th></tr></thead>
+        <tbody id="ht-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="panel" id="panel-history">
+    <div class="card">
+      <div style="font-size:15px;font-weight:500;margin-bottom:.5rem">Assignment history</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Saving a week logs all assignments, positions, and halftime jobs. Re-saving the same week overwrites the previous entry.</div>
+      <button class="btn sm primary" onclick="saveWeek()" style="margin-bottom:1rem"><i class="ti ti-device-floppy"></i> Save this week</button>
+      <table class="jtable" style="table-layout:auto">
+        <thead><tr><th>Week</th><th>Job</th><th>#</th><th>Volunteer</th><th>Halftime job</th></tr></thead>
+        <tbody id="hist-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="print-only" id="print-view"></div>
+
+<script>
+const SK='band_sched_v7';
+let S=load();
+
+function load(){
+  try{const s=JSON.parse(localStorage.getItem(SK));if(s&&s._v===7)return s;}catch(e){}
+  return{
+    _v:7,week:'',
+    volunteers:[],
+    jobs:[
+      {id:'j1',name:'Gate entry',desc:'Scan tickets at main gate',slots:2},
+      {id:'j2',name:'Concessions lead',desc:'Oversee concession stand',slots:1},
+      {id:'j3',name:'Concessions helper',desc:'',slots:3},
+      {id:'j4',name:'Equipment load-in',desc:'Help move instruments',slots:4},
+      {id:'j5',name:'Equipment load-out',desc:'',slots:4},
+      {id:'j6',name:'Chaperone (field)',desc:'On-field supervision',slots:2},
+      {id:'j7',name:'Pit crew',desc:'Pit equipment management',slots:3},
+      {id:'j8',name:'Uniform check',desc:'Check uniforms pre-show',slots:2},
+      {id:'j9',name:'Photography',desc:'',slots:1},
+      {id:'j10',name:'First aid station',desc:'Staffing first aid tent',slots:1},
+    ],
+    halftimeJobs:[
+      {id:'h1',name:'Water station'},
+      {id:'h2',name:'Props crew'},
+      {id:'h3',name:'Front gate'},
+    ],
+    assignments:{},
+    halftimeAssignments:{},
+    history:[]
+  };
+}
+function save(){try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){}}
+function uid(){return '_'+Math.random().toString(36).slice(2,9);}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+function fullName(v){return(v.fname+' '+v.lname).trim();}
+
+function showTab(t){
+  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',['assign','volunteers','config','history'][i]===t));
+  document.querySelectorAll('.panel').forEach(el=>el.classList.remove('active'));
+  document.getElementById('panel-'+t).classList.add('active');
+  if(t==='assign')renderBoard();
+  if(t==='volunteers')renderVolunteers();
+  if(t==='config'){renderJobsTable();renderHalftimeTable();}
+  if(t==='history')renderHistory();
+}
+
+function setWeek(v){
+  S.week=v;
+  const d=new Date(v+'T00:00:00');
+  document.getElementById('week-label').textContent='Week of '+d.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  save();
+}
+(function(){
+  const iso=new Date().toISOString().slice(0,10);
+  document.getElementById('week-date').value=iso;
+  setWeek(iso);
+})();
+
+/* ── DRAG ── */
+let dragVid=null,dragFrom=null;
+
+function makePoolChip(v){
+  const c=document.createElement('div');
+  c.className='chip';c.draggable=true;
+  c.innerHTML=`<span>${esc(fullName(v))}</span>`;
+  c.addEventListener('dragstart',e=>{
+    dragVid=v.id;dragFrom=null;
+    e.dataTransfer.effectAllowed='move';
+    e.dataTransfer.setData('text/plain',v.id);
+    setTimeout(()=>c.classList.add('dragging'),0);
+  });
+  c.addEventListener('dragend',()=>c.classList.remove('dragging'));
+  return c;
+}
+
+function clearAllDragOver(){
+  document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
+}
+
+function dragOver(e,jid,insertIdx){
+  e.preventDefault();
+  e.stopPropagation();
+  clearAllDragOver();
+  if(insertIdx!=null){
+    const el=document.querySelector(`[data-jid="${jid}"] [data-insert="${insertIdx}"]`);
+    if(el)el.classList.add('drag-over');
+  } else {
+    const t=jid?document.querySelector(`[data-jid="${jid}"]`):document.getElementById('pool');
+    if(t)t.classList.add('drag-over');
+  }
+}
+function dragLeave(e){
+  if(!e.currentTarget.contains(e.relatedTarget))e.currentTarget.classList.remove('drag-over');
+}
+
+function drop(e,jid,insertIdx){
+  e.preventDefault();
+  e.stopPropagation();
+  clearAllDragOver();
+  if(!dragVid)return;
+  const vid=dragVid,fromJob=dragFrom;
+  dragVid=null;dragFrom=null;
+
+  // remove from source
+  if(fromJob){
+    S.assignments[fromJob]=(S.assignments[fromJob]||[]).filter(x=>x!==vid);
+    // keep halftime assignment — it travels with the volunteer
+  }
+
+  if(jid){
+    const j=S.jobs.find(j=>j.id===jid);if(!j)return;
+    const arr=S.assignments[jid]||[];
+    // already in this job — reorder
+    if(arr.includes(vid)){
+      const oldIdx=arr.indexOf(vid);
+      arr.splice(oldIdx,1);
+      let newIdx=(insertIdx!=null)?insertIdx:arr.length;
+      if(newIdx>arr.length)newIdx=arr.length;
+      arr.splice(newIdx,0,vid);
+      S.assignments[jid]=arr;
+    } else {
+      // coming from elsewhere — check capacity
+      if(arr.length>=j.slots){alert('This job slot is full!');renderBoard();return;}
+      const newArr=[...arr];
+      let newIdx=(insertIdx!=null)?insertIdx:newArr.length;
+      if(newIdx>newArr.length)newIdx=newArr.length;
+      newArr.splice(newIdx,0,vid);
+      S.assignments[jid]=newArr;
+    }
+  }
+  // if jid is null → dropped on pool, volunteer just removed from source above
+  save();renderBoard();
+}
+
+/* ── BOARD ── */
+function renderBoard(){renderPool();renderJobSlots();renderStats();}
+function renderPool(){
+  const pool=document.getElementById('pool');pool.innerHTML='';
+  const assigned=new Set(Object.values(S.assignments).flat());
+  const avail=S.volunteers.filter(v=>v.active&&!assigned.has(v.id));
+  avail.forEach(v=>pool.appendChild(makePoolChip(v)));
+  if(!pool.children.length)pool.innerHTML=`<span style="font-size:12px;color:var(--text3);align-self:center">${S.volunteers.filter(v=>v.active).length===0?'No active volunteers — upload a CSV or activate in Master Roster':'All active volunteers assigned'}</span>`;
+}
+function renderJobSlots(){
+  const board=document.getElementById('jobs-board');board.innerHTML='';
+  const htOpts='<option value="">— none —</option>'+S.halftimeJobs.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
+  S.jobs.forEach(j=>{
+    const asgn=(S.assignments[j.id]||[]);
+    const full=asgn.length>=j.slots;
+    const slot=document.createElement('div');
+    slot.className='job-slot';slot.dataset.jid=j.id;
+    const badge=full?'<span class="badge green">Full</span>':asgn.length>0?`<span class="badge amber">${asgn.length}/${j.slots}</span>`:`<span class="badge gray">0/${j.slots}</span>`;
+    const volObjs=asgn.map(id=>S.volunteers.find(v=>v.id===id)).filter(Boolean);
+
+    // build position rows
+    const posWrap=document.createElement('div');
+    posWrap.className='slot-positions';
+
+    volObjs.forEach((v,idx)=>{
+      const isLead=idx===0;
+      const htKey=j.id+'_'+v.id;
+      const htVal=S.halftimeAssignments[htKey]||'';
+      const opts=htOpts.replace(`value="${htVal}"`,`value="${htVal}" selected`);
+
+      const row=document.createElement('div');
+      row.className='pos-row'+(isLead?' is-lead-row':'');
+      row.draggable=true;
+      row.dataset.insert=idx;
+      row.innerHTML=`
+        <span class="pos-num pos-drag-handle" title="Drag to reorder"><i class="ti ti-grip-vertical" style="font-size:11px;cursor:grab"></i></span>
+        <span class="pos-num" style="margin-left:-4px">${isLead?'<i class="ti ti-star" style="font-size:10px"></i>':idx+1}</span>
+        <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}</span>
+        <select class="pos-ht-select" onchange="setHalftime('${j.id}','${v.id}',this.value)">${opts}</select>
+        <span class="pos-remove" onclick="removePos('${j.id}','${v.id}')" title="Remove">×</span>`;
+
+      row.addEventListener('dragstart',e=>{
+        dragVid=v.id;dragFrom=j.id;
+        e.dataTransfer.effectAllowed='move';
+        e.dataTransfer.setData('text/plain',v.id);
+        setTimeout(()=>row.classList.add('dragging'),0);
+      });
+      row.addEventListener('dragend',()=>row.classList.remove('dragging'));
+      row.addEventListener('dragover',e=>dragOver(e,j.id,idx));
+      row.addEventListener('dragleave',e=>{if(!row.contains(e.relatedTarget))row.classList.remove('drag-over');});
+      row.addEventListener('drop',e=>drop(e,j.id,idx));
+      posWrap.appendChild(row);
+    });
+
+    // empty slot rows — also drop targets
+    for(let i=asgn.length;i<j.slots;i++){
+      const empty=document.createElement('div');
+      empty.className='pos-row';
+      empty.style.opacity='.35';
+      empty.dataset.insert=i;
+      empty.innerHTML=`<span class="pos-num">${i+1}</span><span class="pos-name" style="color:var(--text3);font-weight:400">Empty — drop here</span>`;
+      empty.addEventListener('dragover',e=>dragOver(e,j.id,i));
+      empty.addEventListener('dragleave',e=>{if(!empty.contains(e.relatedTarget))empty.classList.remove('drag-over');});
+      empty.addEventListener('drop',e=>drop(e,j.id,i));
+      posWrap.appendChild(empty);
+    }
+
+    // header area — append drop (no specific index)
+    slot.innerHTML=`<div class="slot-header" style="cursor:default"><span class="slot-title">${esc(j.name)}</span>${badge}</div>${j.desc?`<div class="slot-meta">${esc(j.desc)}</div>`:''}`;
+    slot.appendChild(posWrap);
+
+    // job slot background still accepts drops (appends)
+    slot.addEventListener('dragover',e=>{
+      if(e.target===slot||e.target.classList.contains('slot-header')||e.target.classList.contains('slot-title')||e.target.classList.contains('slot-meta')){
+        dragOver(e,j.id,null);
+      }
+    });
+    slot.addEventListener('drop',e=>{
+      if(e.target===slot||e.target.classList.contains('slot-header')||e.target.classList.contains('slot-title')||e.target.classList.contains('slot-meta')){
+        drop(e,j.id,null);
+      }
+    });
+    slot.addEventListener('dragleave',e=>dragLeave(e));
+    board.appendChild(slot);
+  });
+}
+function removePos(jid,vid){
+  S.assignments[jid]=(S.assignments[jid]||[]).filter(x=>x!==vid);
+  delete S.halftimeAssignments[jid+'_'+vid];
+  save();renderBoard();
+}
+function setHalftime(jid,vid,htId){
+  const key=jid+'_'+vid;
+  if(htId)S.halftimeAssignments[key]=htId;else delete S.halftimeAssignments[key];
+  save();
+}
+function renderStats(){
+  const active=S.volunteers.filter(v=>v.active);
+  const assigned=new Set(Object.values(S.assignments).flat());
+  const activeAssigned=[...assigned].filter(id=>S.volunteers.find(v=>v.id===id&&v.active)).length;
+  const emptyJobs=S.jobs.filter(j=>(S.assignments[j.id]||[]).length===0).length;
+  document.getElementById('assign-stats').innerHTML=`
+    <span class="tag"><i class="ti ti-users" style="font-size:13px"></i>${active.length} active</span>
+    <span class="tag"><i class="ti ti-check" style="font-size:13px"></i>${activeAssigned} assigned</span>
+    <span class="tag"><i class="ti ti-circle-dashed" style="font-size:13px"></i>${active.length-activeAssigned} unassigned</span>
+    <span class="tag" style="${emptyJobs>0?'color:var(--warning)':''}"><i class="ti ti-briefcase" style="font-size:13px"></i>${emptyJobs} jobs with nobody</span>`;
+}
+function autoAssign(){
+  const assigned=new Set(Object.values(S.assignments).flat());
+  let pool=[...S.volunteers.filter(v=>v.active&&!assigned.has(v.id))].sort((a,b)=>a.lname.localeCompare(b.lname));
+  if(!pool.length){alert('No unassigned active volunteers.');return;}
+
+  // Pass 1: give every completely empty job at least one volunteer (their lead)
+  const emptyJobs=S.jobs.filter(j=>!(S.assignments[j.id]||[]).length);
+  for(const j of emptyJobs){
+    if(!pool.length)break;
+    const n=pool.shift();
+    S.assignments[j.id]=[n.id];
+  }
+
+  // Pass 2: fill remaining open slots one-at-a-time round-robin across jobs
+  // that still have room, so no single job hogs all remaining volunteers
+  let keepGoing=true;
+  while(pool.length&&keepGoing){
+    keepGoing=false;
+    for(const j of S.jobs){
+      if(!pool.length)break;
+      const cur=(S.assignments[j.id]||[]).length;
+      if(cur<j.slots){
+        const n=pool.shift();
+        S.assignments[j.id]=S.assignments[j.id]||[];
+        S.assignments[j.id].push(n.id);
+        keepGoing=true;
+      }
+    }
+  }
+
+  save();renderBoard();
+}
+function clearAssignments(){
+  if(!confirm('Clear all assignments and halftime assignments?'))return;
+  S.assignments={};S.halftimeAssignments={};save();renderBoard();
+}
+
+/* ── VOLUNTEERS ── */
+function addVolunteer(){
+  const fname=document.getElementById('v-fname').value.trim();
+  const lname=document.getElementById('v-lname').value.trim();
+  if(!fname&&!lname){alert('First or last name is required.');return;}
+  const email=document.getElementById('v-email').value.trim();
+  const phone=document.getElementById('v-phone').value.trim()||'unknown';
+  S.volunteers.push({id:uid(),fname,lname,email,phone,hours:0,active:true});
+  ['v-fname','v-lname','v-email','v-phone'].forEach(id=>document.getElementById(id).value='');
+  save();renderVolunteers();
+}
+function removeVolunteer(id){
+  if(!confirm('Remove from master roster?'))return;
+  S.volunteers=S.volunteers.filter(v=>v.id!==id);
+  Object.keys(S.assignments).forEach(jid=>{S.assignments[jid]=S.assignments[jid].filter(x=>x!==id);});
+  Object.keys(S.halftimeAssignments).forEach(k=>{if(k.endsWith('_'+id))delete S.halftimeAssignments[k];});
+  save();renderVolunteers();
+}
+function toggleActive(id,val){const v=S.volunteers.find(v=>v.id===id);if(v){v.active=val;save();renderVolunteers();}}
+function editVolField(id,field,val){const v=S.volunteers.find(v=>v.id===id);if(v&&val.trim()){v[field]=val.trim();save();}}
+function renderVolunteers(){
+  const tbody=document.getElementById('vol-body');tbody.innerHTML='';
+  const showInactive=document.getElementById('show-inactive').checked;
+  const q=(document.getElementById('v-search').value||'').toLowerCase();
+  document.getElementById('v-count').textContent=S.volunteers.length+' total';
+  document.getElementById('v-active-count').textContent=S.volunteers.filter(v=>v.active).length+' active this week';
+  const shown=S.volunteers.filter(v=>(showInactive||v.active)&&(!q||(v.fname+v.lname+v.email+v.phone).toLowerCase().includes(q)));
+  if(!shown.length){tbody.innerHTML='<tr><td colspan="8" style="padding:1rem;font-size:13px;color:var(--text2)">No volunteers match.</td></tr>';return;}
+  shown.forEach(v=>{
+    const tr=document.createElement('tr');if(!v.active)tr.classList.add('inactive');
+    tr.innerHTML=`
+      <td><input type="checkbox" ${v.active?'checked':''} onchange="toggleActive('${v.id}',this.checked)" title="Active this week"></td>
+      <td><input class="inline-edit" value="${esc(v.fname)}" onblur="editVolField('${v.id}','fname',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><input class="inline-edit" value="${esc(v.lname)}" onblur="editVolField('${v.id}','lname',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><input class="inline-edit" type="email" value="${esc(v.email||'')}" placeholder="—" onblur="editVolField('${v.id}','email',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><input class="inline-edit" type="tel" value="${esc(v.phone||'')}" placeholder="—" onblur="editVolField('${v.id}','phone',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td style="text-align:center">${v.active?'<span class="badge teal">Active</span>':'<span class="badge gray">Inactive</span>'}</td>
+      <td><button class="btn xs danger" onclick="removeVolunteer('${v.id}')"><i class="ti ti-trash"></i></button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ── CSV ── */
+function parseCSVLine(line){
+  const cols=[];let cur='',inQ=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"')inQ=!inQ;
+    else if(ch===','&&!inQ){cols.push(cur.trim());cur='';}
+    else cur+=ch;
+  }
+  cols.push(cur.trim());return cols;
+}
+function importCSV(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const allLines=ev.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
+    if(allLines.length<3){document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">File has too few lines.</span>';return;}
+    const dataLines=allLines.slice(1,allLines.length-1);
+    const logLines=dataLines.filter(l=>(parseCSVLine(l)[1]||'').trim().toLowerCase()==='logistics volunteers');
+    if(!logLines.length){document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">No "Logistics Volunteers" rows found. Check your file.</span>';e.target.value='';return;}
+    let added=0,updated=0,activated=0;const weekKeys=new Set();
+    logLines.forEach(line=>{
+      const cols=parseCSVLine(line);
+      const fname=(cols[4]||'').trim(),lname=(cols[5]||'').trim();if(!fname&&!lname)return;
+      const rawPhone=(cols[6]||'').trim(),phone=rawPhone||'unknown',email=(cols[7]||'').trim();
+      const key=(fname+' '+lname).toLowerCase().trim();weekKeys.add(key);
+      const ex=S.volunteers.find(v=>(v.fname+' '+v.lname).toLowerCase().trim()===key);
+      if(ex){
+        let ch=false;
+        if(email&&!ex.email){ex.email=email;ch=true;}
+        if(rawPhone&&ex.phone==='unknown'){ex.phone=phone;ch=true;}
+        if(ch)updated++;
+        if(!ex.active){ex.active=true;activated++;}
+      } else {S.volunteers.push({id:uid(),fname,lname,email,phone,hours:0,active:true});added++;}
+    });
+    S.volunteers.forEach(v=>{if(!weekKeys.has((v.fname+' '+v.lname).toLowerCase().trim()))v.active=false;});
+    save();renderVolunteers();
+    document.getElementById('import-result').innerHTML=`<span style="color:green"><i class="ti ti-circle-check" style="font-size:13px;vertical-align:-1px"></i> Import complete — ${logLines.length} logistics rows found, ${added} new volunteers added, ${activated} reactivated, ${updated} contacts updated. Others marked inactive.</span>`;
+    e.target.value='';
+  };
+  reader.readAsText(file);
+}
+
+/* ── JOBS ── */
+function addJob(){
+  const name=document.getElementById('j-name').value.trim();if(!name){alert('Job title required.');return;}
+  S.jobs.push({id:uid(),name,desc:document.getElementById('j-desc').value.trim(),slots:parseInt(document.getElementById('j-req').value)||1});
+  document.getElementById('j-name').value='';document.getElementById('j-desc').value='';
+  save();renderJobsTable();
+}
+function removeJob(id){
+  if(!confirm('Remove job and its assignments?'))return;
+  S.jobs=S.jobs.filter(j=>j.id!==id);
+  delete S.assignments[id];
+  Object.keys(S.halftimeAssignments).forEach(k=>{if(k.startsWith(id+'_'))delete S.halftimeAssignments[k];});
+  save();renderJobsTable();
+}
+function editJobField(id,field,val){
+  const j=S.jobs.find(j=>j.id===id);if(!j)return;
+  if(field==='slots'){const n=parseInt(val);if(n>=1&&n<=10)j.slots=n;}
+  else j[field]=val.trim();
+  save();
+}
+function renderJobsTable(){
+  const tb=document.getElementById('job-body');tb.innerHTML='';
+  if(!S.jobs.length){tb.innerHTML='<tr><td colspan="4" style="padding:1rem;font-size:13px;color:var(--text2)">No jobs yet.</td></tr>';return;}
+  S.jobs.forEach(j=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><input class="inline-edit" value="${esc(j.name)}" onblur="editJobField('${j.id}','name',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><input class="inline-edit" value="${esc(j.desc||'')}" onblur="editJobField('${j.id}','desc',this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder="—"></td>
+      <td><select style="font-size:12px;padding:3px 6px;width:56px" onchange="editJobField('${j.id}','slots',this.value)">
+        ${Array.from({length:10},(_,i)=>`<option value="${i+1}"${j.slots===i+1?' selected':''}>${i+1}</option>`).join('')}
+      </select></td>
+      <td><button class="btn xs danger" onclick="removeJob('${j.id}')"><i class="ti ti-trash"></i></button></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+/* ── HALFTIME JOBS ── */
+function addHalftimeJob(){
+  const name=document.getElementById('ht-name').value.trim();if(!name){alert('Name required.');return;}
+  if(S.halftimeJobs.some(h=>h.name.toLowerCase()===name.toLowerCase())){alert('That halftime job already exists.');return;}
+  S.halftimeJobs.push({id:uid(),name});
+  document.getElementById('ht-name').value='';
+  save();renderHalftimeTable();
+}
+function removeHalftimeJob(id){
+  if(!confirm('Remove this halftime job?'))return;
+  S.halftimeJobs=S.halftimeJobs.filter(h=>h.id!==id);
+  Object.keys(S.halftimeAssignments).forEach(k=>{if(S.halftimeAssignments[k]===id)delete S.halftimeAssignments[k];});
+  save();renderHalftimeTable();
+}
+function editHalftimeField(id,val){
+  const h=S.halftimeJobs.find(h=>h.id===id);if(h&&val.trim())h.name=val.trim();save();
+}
+function renderHalftimeTable(){
+  const tb=document.getElementById('ht-body');tb.innerHTML='';
+  if(!S.halftimeJobs.length){tb.innerHTML='<tr><td colspan="2" style="padding:1rem;font-size:13px;color:var(--text2)">No halftime jobs defined yet.</td></tr>';return;}
+  S.halftimeJobs.forEach(h=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><input class="inline-edit" value="${esc(h.name)}" onblur="editHalftimeField('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><button class="btn xs danger" onclick="removeHalftimeJob('${h.id}')"><i class="ti ti-trash"></i></button></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+/* ── HISTORY ── */
+function saveWeek(){
+  if(!S.week){alert('Set the week date first.');return;}
+  const entries=[];
+  S.jobs.forEach(j=>{
+    const asgn=(S.assignments[j.id]||[]);if(!asgn.length)return;
+    asgn.forEach((vid,idx)=>{
+      const v=S.volunteers.find(v=>v.id===vid);if(!v)return;
+      const htId=S.halftimeAssignments[j.id+'_'+vid]||'';
+      const htName=htId?(S.halftimeJobs.find(h=>h.id===htId)||{name:''}).name:'';
+      entries.push({jobName:j.name,pos:idx+1,volName:fullName(v),htName});
+    });
+  });
+  if(!entries.length){alert('No assignments to save.');return;}
+  const existingIdx=S.history.findIndex(r=>r.week===S.week);
+  if(existingIdx>=0){
+    S.history[existingIdx]={week:S.week,entries};
+  } else {
+    S.history.unshift({week:S.week,entries});
+  }
+  save();renderHistory();alert('Week saved!');
+}
+function renderHistory(){
+  const tb=document.getElementById('hist-body');tb.innerHTML='';
+  if(!S.history.length){tb.innerHTML='<tr><td colspan="5" style="padding:1rem;font-size:13px;color:var(--text2)">No history yet.</td></tr>';return;}
+  S.history.forEach(rec=>{
+    const d=new Date(rec.week+'T00:00:00');
+    const label=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+    rec.entries.forEach((e,i)=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`${i===0?`<td rowspan="${rec.entries.length}" style="font-weight:500;vertical-align:top;padding-top:9px;white-space:nowrap">${label}</td>`:''}<td>${esc(e.jobName)}</td><td style="text-align:center">${e.pos===1?'<i class="ti ti-star" style="font-size:11px;color:var(--teal-mid)"></i>':e.pos}</td><td>${esc(e.volName)}</td><td style="color:var(--text2)">${esc(e.htName||'—')}</td>`;
+      tb.appendChild(tr);
+    });
+  });
+}
+
+/* ── PRINT ── */
+function printSchedule(){
+  const pv=document.getElementById('print-view');
+  const d=new Date((S.week||new Date().toISOString().slice(0,10))+'T00:00:00');
+  const label=d.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  let html=`
+    <h1 style="font-size:18px;font-weight:500;margin-bottom:4px;font-family:Georgia,serif">Band Booster Volunteer Assignments</h1>
+    <p style="font-size:13px;color:#555;margin-bottom:20px">Week of ${label}</p>`;
+
+  S.jobs.forEach(j=>{
+    const asgn=(S.assignments[j.id]||[]);if(!asgn.length)return;
+    html+=`<div style="margin-bottom:18px;break-inside:avoid">
+      <div style="font-weight:600;font-size:13px;background:#f1efe8;padding:5px 8px;border-radius:4px;margin-bottom:5px">${j.name}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="border-bottom:1px solid #ddd">
+          <th style="text-align:left;padding:4px 8px;color:#666;font-weight:500;width:12%">Position</th>
+          <th style="text-align:left;padding:4px 8px;color:#666;font-weight:500;width:38%">Volunteer</th>
+          <th style="text-align:left;padding:4px 8px;color:#666;font-weight:500;width:50%">Halftime job</th>
+        </tr></thead>
+        <tbody>`;
+    asgn.forEach((vid,idx)=>{
+      const v=S.volunteers.find(v=>v.id===vid);if(!v)return;
+      const htId=S.halftimeAssignments[j.id+'_'+vid]||'';
+      const htName=htId?(S.halftimeJobs.find(h=>h.id===htId)||{name:'—'}).name:'—';
+      const isLead=idx===0;
+      const posLabel=isLead?'&#9733; Lead':`#${idx+1}`;
+      const posStyle=isLead?'color:#0F6E56;font-weight:600':'color:#555';
+      const nameStyle=isLead?'font-weight:600':'font-weight:400';
+      html+=`<tr style="border-bottom:.5px solid #eee">
+        <td style="padding:4px 8px;${posStyle}">${posLabel}</td>
+        <td style="padding:4px 8px;${nameStyle}">${fullName(v)}</td>
+        <td style="padding:4px 8px;color:#555">${htName}</td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  });
+
+  const unassigned=S.volunteers.filter(v=>v.active&&!new Set(Object.values(S.assignments).flat()).has(v.id));
+  if(unassigned.length){
+    html+=`<div style="margin-top:16px;padding:8px;border:1px dashed #ccc;border-radius:4px;font-size:12px;color:#777">
+      <strong style="color:#555">Unassigned volunteers:</strong> ${unassigned.map(v=>fullName(v)).join(', ')}
+    </div>`;
+  }
+  html+=`<p style="margin-top:20px;font-size:10px;color:#aaa">Printed ${new Date().toLocaleString()}</p>`;
+
+  pv.innerHTML=html;
+  pv.style.display='block';
+  document.querySelector('.app-wrap').style.display='none';
+  window.print();
+  document.querySelector('.app-wrap').style.display='block';
+  pv.style.display='none';
+}
+
+renderBoard();
+</script>
+</body>
+</html>
