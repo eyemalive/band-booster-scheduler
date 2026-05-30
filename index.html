@@ -405,30 +405,36 @@ async function apiCall(action, data){
 
 // ── Load from Sheets (with local cache fallback) ──────────────
 async function loadData(){
-  setSyncStatus('busy','Loading…');
+  // First load from local cache instantly so the app is never blank
+  try{
+    const cached = JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
+    if(cached) S = cached;
+  } catch(e){}
+  if(!S) S = defaultState();
+
+  // Then try to refresh from Sheets if connected (with a 8s timeout)
   if(isConnected()){
+    setSyncStatus('busy','Syncing…');
     try{
-      const r = await apiCall('load');
+      const r = await Promise.race([
+        apiCall('load'),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
+      ]);
       if(r.data){
         S = r.data;
         localStorage.setItem(CACHE_KEY, JSON.stringify(S));
         setSyncStatus('ok','Synced');
-        return;
+      } else {
+        setSyncStatus('ok','Connected — sheet empty, using local data');
       }
-      // sheet is empty — use local cache or default
     } catch(err){
-      setSyncStatus('err','Sync error — using local cache');
-      console.warn('load error', err);
+      setSyncStatus('err','Could not reach Sheets — using local data');
+      console.warn('loadData remote error:', err);
     }
   } else {
-    setSyncStatus('offline','Not connected');
+    setSyncStatus('offline','Not connected — data is local only');
   }
-  // Fall back to local cache
-  try{
-    const cached = JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
-    if(cached){ S = cached; return; }
-  } catch(e){}
-  S = defaultState();
+  // S is guaranteed to be set at this point
 }
 
 // ── Save to Sheets ─────────────────────────────────────────────
@@ -1107,9 +1113,21 @@ function printSchedule(){
 }
 
 /* ── INIT ── */
+function hideLoadingOverlay(){
+  const el = document.getElementById('loading-overlay');
+  if(el) el.style.display = 'none';
+}
+
 (async function init(){
-  await loadData();
+  try {
+    await loadData();
+  } catch(e) {
+    console.warn('loadData failed, using defaults:', e);
+  }
   if(!S) S = defaultState();
+
+  hideLoadingOverlay();
+
   // Show setup overlay only if no connection is configured
   if(!isConnected()){
     document.getElementById('setup-overlay').style.display='flex';
