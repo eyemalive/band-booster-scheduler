@@ -166,7 +166,9 @@
       <div id="sync-status" style="display:none;align-items:center;gap:6px;font-size:12px;color:var(--text2);padding:4px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2)">
         <i class="ti ti-refresh" style="font-size:13px"></i><span id="sync-status-text"></span>
       </div>
+      <button class="btn sm" onclick="doForcePush()" title="Push local data to Google Sheets"><i class="ti ti-cloud-upload"></i> Sync now</button>
       <button class="btn sm" onclick="printSchedule()"><i class="ti ti-printer"></i> Print current</button>
+      <button class="btn sm" onclick="openSettings()"><i class="ti ti-settings"></i> Settings</button>
     </div>
   </div>
   
@@ -444,6 +446,22 @@ async function pushToSheets(){
     console.warn('pushToSheets error:', err);
   }
   _syncing = false;
+}
+
+async function doForcePush(){
+  // Called from header button — gives feedback via sync bar
+  clearTimeout(_saveTimer);
+  setSyncStatus('busy','Pushing…');
+  try{
+    await apiCall('save', S);
+    markConnected();
+    _dirty = false;
+    setSyncStatus('ok','Saved ' + new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+    alert('✓ Data pushed to Google Sheets successfully.');
+  } catch(err){
+    setSyncStatus('err','Push failed');
+    alert('✗ Push failed: ' + err.message + '\n\nCheck Settings → Diagnose for details.');
+  }
 }
 
 async function forcePush(){
