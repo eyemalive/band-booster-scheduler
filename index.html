@@ -369,7 +369,13 @@ let _syncing = false;
 // Users no longer need to paste a URL — the Settings panel just has a
 // "Test connection" button.
 function isConnected(){
-  // We're connected if we're on a proper http/https origin (not file://)
+  // True once we've confirmed /api/sync is working
+  // Stored in localStorage so we don't re-test on every load
+  return localStorage.getItem('bbs_synced') === 'yes';
+}
+function markConnected(){ localStorage.setItem('bbs_synced','yes'); }
+function markDisconnected(){ localStorage.removeItem('bbs_synced'); }
+function onHttpsHost(){
   return location.protocol === 'https:' || location.hostname === 'localhost';
 }
 
@@ -402,7 +408,7 @@ async function apiCall(action, payload){
 // ── Load data (cache-first, then sync) ───────────────────────
 async function loadData(){
   // Used by Settings resync button — pull fresh data from Sheets
-  if(!isConnected()){
+  if(!onHttpsHost()){
     setSyncStatus('offline', 'Local only');
     return;
   }
@@ -434,7 +440,7 @@ function save(){
 }
 
 async function pushToSheets(){
-  if(!isConnected() || !S || _syncing) return;
+  if(!onHttpsHost() || !S || _syncing) return;
   _syncing = true;
   setSyncStatus('busy', 'Saving…');
   try{
@@ -465,7 +471,8 @@ function closeSettings(){
   document.getElementById('settings-modal').style.display = 'none';
 }
 function disconnectSheets(){
-  if(!confirm('This will clear your local cache. Are you sure?')) return;
+  if(!confirm('This will clear your local cache and disconnect from Google Sheets. Are you sure?')) return;
+  markDisconnected();
   localStorage.removeItem(CACHE_KEY);
   location.reload();
 }
@@ -482,6 +489,7 @@ async function testAndSaveConnection(){
       S = r.data;
       localStorage.setItem(CACHE_KEY, JSON.stringify(S));
     }
+    markConnected();
     setSyncStatus('ok', 'Connected');
     errEl.innerHTML = '';
     document.getElementById('setup-overlay').style.display = 'none';
@@ -504,6 +512,7 @@ async function saveSettings(){
   try{
     const r = await apiCall('load');
     if(r.data){ S = r.data; localStorage.setItem(CACHE_KEY, JSON.stringify(S)); }
+    markConnected();
     setSyncStatus('ok', 'Connected');
     msg.innerHTML = '✓ Connected and synced.';
     refreshAllPanels();
@@ -1116,8 +1125,8 @@ function hideLoadingOverlay(){
   // 2. Hide loading overlay immediately — app is ready
   hideLoadingOverlay();
 
-  // 3. Show setup overlay if not on a proper hosted origin
-  if(!isConnected()){
+  // 3. Show setup wizard if we haven't confirmed a working backend yet
+  if(onHttpsHost() && !isConnected()){
     document.getElementById('setup-overlay').style.display='flex';
   }
 
@@ -1125,7 +1134,7 @@ function hideLoadingOverlay(){
   renderSchedules();
 
   // 4. Sync with Sheets in the background (non-blocking)
-  if(isConnected()){
+  if(onHttpsHost() && isConnected()){
     setSyncStatus('busy','Syncing…');
     apiCall('load')
       .then(r => {
@@ -1134,6 +1143,7 @@ function hideLoadingOverlay(){
           localStorage.setItem(CACHE_KEY, JSON.stringify(S));
           refreshAllPanels();
         }
+        markConnected();
         setSyncStatus('ok','Synced');
       })
       .catch(err => {
@@ -1143,7 +1153,7 @@ function hideLoadingOverlay(){
   }
   // Reload from Sheets every 2 minutes in case another device made changes
   setInterval(async()=>{
-    if(!isConnected()||_dirty||_syncing) return;
+    if(!onHttpsHost()||!isConnected()||_dirty||_syncing) return;
     try{
       const r = await apiCall('load');
       if(r.data){
