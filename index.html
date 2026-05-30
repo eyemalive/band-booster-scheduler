@@ -131,28 +131,27 @@
 <div class="app-wrap no-print">
   <!-- SETUP WIZARD OVERLAY -->
   <div id="setup-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:center;justify-content:center">
-    <div style="background:var(--surface);border-radius:var(--radius-lg);padding:2rem;max-width:540px;width:93%;box-shadow:0 10px 40px rgba(0,0,0,.3);max-height:90vh;overflow-y:auto">
+    <div style="background:var(--surface);border-radius:var(--radius-lg);padding:2rem;max-width:560px;width:93%;box-shadow:0 10px 40px rgba(0,0,0,.3);max-height:90vh;overflow-y:auto">
       <div style="font-size:18px;font-weight:500;margin-bottom:1.25rem">Connect to Google Sheets</div>
       <div id="setup-step-1" class="setup-step active">
-        <p style="font-size:13px;margin-bottom:1rem">This connects your scheduler to Google Sheets so data syncs across all your devices. Complete these steps once:</p>
+        <p style="font-size:13px;margin-bottom:1rem">This syncs your data to Google Sheets so it works across all your devices. Complete these steps once:</p>
         <ol style="font-size:13px;line-height:2.2;padding-left:1.25rem;margin-bottom:1.25rem">
-          <li>Go to <strong>sheets.google.com</strong> and create a new blank spreadsheet named <em>Band Booster Scheduler</em>.</li>
-          <li>In the spreadsheet click <strong>Extensions &rarr; Apps Script</strong>.</li>
-          <li>Delete all default code, then paste in the entire contents of <strong>BandBoosterBackend.gs</strong>.</li>
-          <li>On line 8, replace <span style="font-family:monospace;background:var(--surface2);padding:1px 5px;border-radius:3px">CHANGE_ME_TO_SOMETHING_RANDOM</span> with your own passphrase.</li>
-          <li>Click <strong>Deploy &rarr; New deployment</strong>. Type = <strong>Web app</strong>, execute as <strong>Me</strong>, access = <strong>Anyone</strong>. Click Deploy, approve permissions, and copy the URL.</li>
+          <li>Go to <strong>sheets.google.com</strong> → create a new blank spreadsheet named <em>Band Booster Scheduler</em>.</li>
+          <li>In the spreadsheet click <strong>Extensions → Apps Script</strong>. Delete all default code, paste in <strong>BandBoosterBackend.gs</strong>, set your passphrase on line 10, Save.</li>
+          <li>In Apps Script click <strong>Deploy → New deployment</strong> → Web app → Execute as <strong>Me</strong> → Access <strong>Anyone</strong> → Deploy → copy the URL.</li>
+          <li>In your <strong>Vercel dashboard</strong> → your project → <strong>Settings → Environment Variables</strong>, add two variables:<br>
+            <span style="font-family:monospace;font-size:12px;background:var(--surface2);padding:2px 6px;border-radius:4px;display:inline-block;margin-top:4px">APPS_SCRIPT_URL</span> = the /exec URL from step 3<br>
+            <span style="font-family:monospace;font-size:12px;background:var(--surface2);padding:2px 6px;border-radius:4px;display:inline-block;margin-top:4px">API_KEY</span> = the passphrase you set in step 2
+          </li>
+          <li>In Vercel → <strong>Deployments → Redeploy</strong> (so it picks up the new env vars).</li>
         </ol>
-        <button class="btn primary" onclick="document.getElementById('setup-step-1').classList.remove('active');document.getElementById('setup-step-2').classList.add('active')">Next <i class="ti ti-arrow-right"></i></button>
-        <button class="btn" style="margin-left:8px" onclick="document.getElementById('setup-overlay').style.display='none'">Skip for now (local only)</button>
+        <button class="btn primary" onclick="document.getElementById('setup-step-1').classList.remove('active');document.getElementById('setup-step-2').classList.add('active')">I've done all that <i class="ti ti-arrow-right"></i></button>
+        <button class="btn" style="margin-left:8px" onclick="document.getElementById('setup-overlay').style.display='none'">Skip — use locally only</button>
       </div>
       <div id="setup-step-2" class="setup-step">
-        <p style="font-size:13px;margin-bottom:1rem">Paste your deployment URL and API key:</p>
-        <div style="margin-bottom:.75rem"><label class="lbl">Apps Script deployment URL</label><input type="text" id="setup-url" placeholder="https://script.google.com/macros/s/.../exec"></div>
-        <div style="margin-bottom:1.25rem"><label class="lbl">API key (the passphrase you set in the script)</label><input type="text" id="setup-key" placeholder="e.g. BandBooster2025!"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn" onclick="document.getElementById('setup-step-2').classList.remove('active');document.getElementById('setup-step-1').classList.add('active')"><i class="ti ti-arrow-left"></i> Back</button>
-          <button class="btn primary" onclick="testAndSaveConnection()"><i class="ti ti-plug"></i> Connect &amp; test</button>
-        </div>
+        <p style="font-size:13px;margin-bottom:1rem">Click below to test the connection. If Vercel env vars are set correctly, this will connect immediately.</p>
+        <button class="btn primary" onclick="testAndSaveConnection()"><i class="ti ti-plug"></i> Test connection</button>
+        <button class="btn" style="margin-left:8px" onclick="document.getElementById('setup-step-2').classList.remove('active');document.getElementById('setup-step-1').classList.add('active')"><i class="ti ti-arrow-left"></i> Back</button>
         <div id="setup-error" style="font-size:12px;color:var(--danger-text);margin-top:.75rem"></div>
       </div>
     </div>
@@ -184,13 +183,12 @@
   <!-- SETTINGS MODAL -->
   <div id="settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:998;align-items:center;justify-content:center">
     <div style="background:var(--surface);border-radius:var(--radius-lg);padding:1.5rem;max-width:460px;width:92%;box-shadow:0 8px 32px rgba(0,0,0,.25)">
-      <div style="font-size:16px;font-weight:500;margin-bottom:1rem">Google Sheets connection</div>
-      <div style="margin-bottom:.75rem"><label class="lbl">Apps Script URL</label><input type="text" id="settings-url" placeholder="https://script.google.com/macros/s/.../exec"></div>
-      <div style="margin-bottom:1rem"><label class="lbl">API key</label><input type="password" id="settings-key" placeholder="Your passphrase"></div>
+      <div style="font-size:16px;font-weight:500;margin-bottom:.5rem">Google Sheets sync</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:1rem">The connection is configured via Vercel environment variables — no URL or key needed here.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn sm primary" onclick="saveSettings()"><i class="ti ti-plug"></i> Save &amp; reconnect</button>
+        <button class="btn sm primary" onclick="saveSettings()"><i class="ti ti-refresh"></i> Test &amp; resync</button>
         <button class="btn sm" onclick="forcePush()"><i class="ti ti-cloud-upload"></i> Force push local data</button>
-        <button class="btn sm danger" onclick="disconnectSheets()"><i class="ti ti-unlink"></i> Disconnect</button>
+        <button class="btn sm danger" onclick="disconnectSheets()"><i class="ti ti-trash"></i> Clear local cache</button>
         <button class="btn sm" onclick="closeSettings()">Close</button>
       </div>
       <div id="settings-msg" style="font-size:12px;margin-top:.75rem"></div>
@@ -354,299 +352,173 @@
 
 <script>
 // ════════════════════════════════════════════════════════════
-//  GOOGLE SHEETS SYNC LAYER
+//  SYNC LAYER  — talks to /api/sync (Vercel proxy, same origin)
+//  No CORS issues because it's the same domain as the app.
+//  The proxy forwards requests to Google Apps Script server-side.
 // ════════════════════════════════════════════════════════════
-const CONN_KEY = 'bbs_connection';   // localStorage key for URL+apikey
-const CACHE_KEY = 'bbs_cache_v8';   // localStorage key for data cache
+const CONN_KEY  = 'bbs_connection';
+const CACHE_KEY = 'bbs_cache_v8';
 
-let S = null;          // live state
-let _dirty = false;    // true when local changes haven't been pushed
+let _dirty   = false;
 let _syncing = false;
 
-// ── Connection helpers ────────────────────────────────────────
-function getConn(){
-  try{ return JSON.parse(localStorage.getItem(CONN_KEY)||'null'); }catch(e){return null;}
-}
-function setConn(url,key){
-  localStorage.setItem(CONN_KEY, JSON.stringify({url,key}));
-}
-function clearConn(){
-  localStorage.removeItem(CONN_KEY);
-}
+// ── Connection config ─────────────────────────────────────────
+// With the proxy approach the URL and key live in Vercel env vars,
+// so the app just needs to know it's "connected" (i.e. running on Vercel).
+// We detect this by checking if /api/sync is reachable.
+// Users no longer need to paste a URL — the Settings panel just has a
+// "Test connection" button.
 function isConnected(){
-  const c=getConn(); return !!(c&&c.url&&c.key);
+  // We're connected if we're on a proper http/https origin (not file://)
+  return location.protocol === 'https:' || location.hostname === 'localhost';
 }
 
-// ── Sync status UI ───────────────────────────────────────────
+// ── Sync status UI ────────────────────────────────────────────
 function setSyncStatus(state, label){
   const dot = document.getElementById('sync-dot');
   const lbl = document.getElementById('sync-label');
-  if(!dot||!lbl) return;
+  if(!dot || !lbl) return;
   dot.className = 'sync-dot ' + state;
   lbl.textContent = label;
 }
 
-// ── API calls ─────────────────────────────────────────────────
-// LOAD uses JSONP (GET + <script> tag) — completely bypasses CORS
-// SAVE uses a hidden form POST — no CORS preflight on same-origin form posts
-//   but Apps Script redirects POSTs, so we use an iframe trick to fire-and-forget
-
-let _jsonpCounter = 0;
-
-function jsonpCall(url, params){
-  // Injects a <script> tag; Apps Script wraps response in callback(...)
-  // which the browser executes, resolving our promise.
-  return new Promise((resolve, reject) => {
-    const cbName = '_bbs_cb_' + (++_jsonpCounter);
-    const timeout = setTimeout(() => {
-      delete window[cbName];
-      if(script.parentNode) script.parentNode.removeChild(script);
-      reject(new Error('Timed out after 10 seconds'));
-    }, 10000);
-
-    window[cbName] = function(data){
-      clearTimeout(timeout);
-      delete window[cbName];
-      if(script.parentNode) script.parentNode.removeChild(script);
-      if(data && data.ok === false) reject(new Error(data.error || 'Unknown error'));
-      else resolve(data);
-    };
-
-    const qs = new URLSearchParams(params);
-    qs.append('callback', cbName);
-    const script = document.createElement('script');
-    script.src = url + '?' + qs.toString();
-    script.onerror = () => {
-      clearTimeout(timeout);
-      delete window[cbName];
-      reject(new Error('Script load failed — check deployment URL'));
-    };
-    document.head.appendChild(script);
-  });
-}
-
-function formPostCall(url, params){
-  // Submits a hidden form to a hidden iframe — fire and forget (no response needed)
-  // We pair this with a follow-up JSONP load to confirm the save went through
-  return new Promise((resolve, reject) => {
-    const iframeName = '_bbs_iframe_' + (++_jsonpCounter);
-    const iframe = document.createElement('iframe');
-    iframe.name = iframeName;
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = url;
-    form.target = iframeName;
-    form.style.display = 'none';
-
-    Object.entries(params).forEach(([k,v]) => {
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = k;
-      input.value = v;
-      form.appendChild(input);
-    });
-
-    document.body.appendChild(form);
-
-    iframe.onload = () => {
-      setTimeout(() => {
-        if(form.parentNode) form.parentNode.removeChild(form);
-        if(iframe.parentNode) iframe.parentNode.removeChild(iframe);
-      }, 1000);
-      resolve({ ok: true });
-    };
-
-    setTimeout(() => {
-      if(form.parentNode) form.parentNode.removeChild(form);
-      if(iframe.parentNode) iframe.parentNode.removeChild(iframe);
-      reject(new Error('Save timed out'));
-    }, 12000);
-
-    form.submit();
-  });
-}
-
+// ── Core API call — hits /api/sync on same origin ─────────────
 async function apiCall(action, payload){
-  const c = getConn();
-  if(!c) throw new Error('Not connected');
+  const body = { action };
+  if(payload !== undefined) body.payload = payload;
 
-  if(action === 'save'){
-    // Save via form POST (fire-and-forget into hidden iframe)
-    const params = { action, key: c.key };
-    if(payload !== undefined) params.payload = JSON.stringify(payload);
-    return await formPostCall(c.url, params);
-  } else {
-    // Load/ping via JSONP GET
-    const params = { action, key: c.key };
-    return await jsonpCall(c.url, params);
-  }
+  const res = await fetch('/api/sync', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
+  });
+
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const json = await res.json();
+  if(json.ok === false) throw new Error(json.error || 'Unknown error');
+  return json;
 }
 
-// ── Load from Sheets (with local cache fallback) ──────────────
+// ── Load data (cache-first, then sync) ───────────────────────
 async function loadData(){
-  // First load from local cache instantly so the app is never blank
+  // Always load cache first so app is instant
   try{
-    const cached = JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
+    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
     if(cached) S = cached;
   } catch(e){}
   if(!S) S = defaultState();
 
-  // Then try to refresh from Sheets if connected (with a 8s timeout)
-  if(isConnected()){
-    setSyncStatus('busy','Syncing…');
-    try{
-      const r = await Promise.race([
-        apiCall('load'),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
-      ]);
-      if(r.data){
-        S = r.data;
-        localStorage.setItem(CACHE_KEY, JSON.stringify(S));
-        setSyncStatus('ok','Synced');
-      } else {
-        setSyncStatus('ok','Connected — sheet empty, using local data');
-      }
-    } catch(err){
-      setSyncStatus('err','Could not reach Sheets — using local data');
-      console.warn('loadData remote error:', err);
-    }
-  } else {
-    setSyncStatus('offline','Not connected — data is local only');
+  if(!isConnected()){
+    setSyncStatus('offline', 'Local only');
+    return;
   }
-  // S is guaranteed to be set at this point
+
+  setSyncStatus('busy', 'Syncing…');
+  try{
+    const r = await Promise.race([
+      apiCall('load'),
+      new Promise((_,rej) => setTimeout(() => rej(new Error('Timeout')), 10000))
+    ]);
+    if(r.data){
+      S = r.data;
+      localStorage.setItem(CACHE_KEY, JSON.stringify(S));
+    }
+    setSyncStatus('ok', 'Synced');
+  } catch(err){
+    // Not fatal — we already have local data
+    setSyncStatus('err', 'Sync failed — using local data');
+    console.warn('loadData error:', err);
+  }
 }
 
-// ── Save to Sheets ─────────────────────────────────────────────
+// ── Save (debounced, writes to Sheets via proxy) ─────────────
 let _saveTimer = null;
 function save(){
-  // always write local cache instantly
-  try{ localStorage.setItem(CACHE_KEY, JSON.stringify(S)); }catch(e){}
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify(S)); } catch(e){}
   _dirty = true;
   if(!isConnected()) return;
-  // debounce remote saves by 1.5s so rapid changes batch together
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(pushToSheets, 1500);
 }
 
 async function pushToSheets(){
-  if(!isConnected()||!S) return;
-  if(_syncing) return;
+  if(!isConnected() || !S || _syncing) return;
   _syncing = true;
-  setSyncStatus('busy','Saving…');
+  setSyncStatus('busy', 'Saving…');
   try{
     await apiCall('save', S);
     _dirty = false;
-    setSyncStatus('ok','Saved ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}));
+    setSyncStatus('ok', 'Saved ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
   } catch(err){
-    setSyncStatus('err','Save failed — stored locally');
-    console.warn('save error', err);
+    setSyncStatus('err', 'Save failed — stored locally');
+    console.warn('pushToSheets error:', err);
   }
   _syncing = false;
 }
 
 async function forcePush(){
   clearTimeout(_saveTimer);
+  const msg = document.getElementById('settings-msg');
+  if(msg) msg.textContent = 'Pushing…';
   await pushToSheets();
-  document.getElementById('settings-msg').textContent = _dirty ? '⚠ Save failed — check URL and key.' : '✓ Data pushed to Google Sheets successfully.';
+  if(msg) msg.textContent = _dirty ? '⚠ Push failed. Check Vercel env vars.' : '✓ Data pushed to Google Sheets.';
 }
 
-// ── Settings / Setup UI ────────────────────────────────────────
+// ── Settings / connection test ────────────────────────────────
 function openSettings(){
-  const c = getConn();
-  document.getElementById('settings-url').value = c ? c.url : '';
-  document.getElementById('settings-key').value = c ? c.key : '';
   document.getElementById('settings-msg').textContent = '';
   document.getElementById('settings-modal').style.display = 'flex';
 }
-function closeSettings(){ document.getElementById('settings-modal').style.display = 'none'; }
-
-async function saveSettings(){
-  const url = document.getElementById('settings-url').value.trim();
-  const key = document.getElementById('settings-key').value.trim();
-  const msg = document.getElementById('settings-msg');
-  if(!url||!key){ msg.textContent = 'Both fields are required.'; return; }
-  msg.innerHTML = '⏳ Testing connection…';
-  setConn(url, key);
-  try{
-    await jsonpCall(url, { action:'ping' });
-    const r = await apiCall('load');
-    if(r.data){ S = r.data; localStorage.setItem(CACHE_KEY, JSON.stringify(S)); }
-    setSyncStatus('ok','Connected');
-    msg.innerHTML = '✓ Connected! Data loaded from Google Sheets.';
-    refreshAllPanels();
-  } catch(err){
-    clearConn();
-    setSyncStatus('err','Connection failed');
-    let m = err.message;
-    if(m.includes('Invalid API key')) m = 'Wrong API key — must match line 10 of BandBoosterBackend.gs exactly (case-sensitive).';
-    msg.innerHTML = '✗ ' + m;
-  }
+function closeSettings(){
+  document.getElementById('settings-modal').style.display = 'none';
+}
+function disconnectSheets(){
+  if(!confirm('This will clear your local cache. Are you sure?')) return;
+  localStorage.removeItem(CACHE_KEY);
+  location.reload();
 }
 
 async function testAndSaveConnection(){
-  const url = document.getElementById('setup-url').value.trim();
-  const key = document.getElementById('setup-key').value.trim();
   const errEl = document.getElementById('setup-error');
-  if(!url){ errEl.textContent = '✗ URL is required.'; return; }
-  if(!key){ errEl.textContent = '✗ API key is required.'; return; }
-  if(!url.includes('script.google.com')){
-    errEl.textContent = '✗ URL should be from script.google.com — copy the full deployment URL ending in /exec.';
-    return;
-  }
-
-  // Temporarily store conn so jsonpCall can use it
-  setConn(url, key);
-
-  // Step 1: ping (no key, just checks script is live)
-  errEl.innerHTML = '⏳ Step 1/2: Checking script is reachable…';
+  errEl.innerHTML = '⏳ Testing connection to /api/sync…';
   try{
-    await jsonpCall(url, { action:'ping' });
-  } catch(err){
-    clearConn();
-    setSyncStatus('err','Connection failed');
-    errEl.innerHTML = '<strong>✗ Step 1 failed — script not reachable.</strong><br><br>'
-      + 'Error: <code>' + err.message + '</code><br><br>'
-      + '• Make sure "Who has access" = <strong>Anyone</strong> (not "Anyone with Google account")<br>'
-      + '• Make sure the URL ends in <strong>/exec</strong><br>'
-      + '• Try opening the URL in a new tab — you should see <code>{"ok":true}</code>';
-    return;
-  }
-
-  // Step 2: authenticated load
-  errEl.innerHTML = '⏳ Step 2/2: Authenticating with API key…';
-  try{
-    const r = await apiCall('load');
+    const r = await Promise.race([
+      apiCall('load'),
+      new Promise((_,rej) => setTimeout(() => rej(new Error('Timed out — is APPS_SCRIPT_URL set in Vercel env vars?')), 10000))
+    ]);
     if(r.data){
       S = r.data;
       localStorage.setItem(CACHE_KEY, JSON.stringify(S));
     }
-    setSyncStatus('ok','Connected');
+    setSyncStatus('ok', 'Connected');
     errEl.innerHTML = '';
     document.getElementById('setup-overlay').style.display = 'none';
     refreshAllPanels();
   } catch(err){
-    clearConn();
-    setSyncStatus('err','Connection failed');
-    let extra = '';
-    if(err.message.includes('Invalid API key')){
-      extra = 'The API key must match exactly what you set on line 10 of BandBoosterBackend.gs (case-sensitive).';
+    setSyncStatus('err', 'Connection failed');
+    let extra = err.message;
+    if(err.message.includes('not configured')){
+      extra = 'Vercel environment variables are not set. See setup instructions below.';
     } else if(err.message.includes('Timed out')){
-      extra = 'The request timed out — try again, or redeploy the script.';
-    } else {
-      extra = 'Error: <code>' + err.message + '</code>';
+      extra = 'Timed out — make sure APPS_SCRIPT_URL and API_KEY are set in Vercel dashboard → Settings → Environment Variables.';
     }
-    errEl.innerHTML = '<strong>✗ Step 2 failed — authentication error.</strong><br><br>' + extra;
+    errEl.innerHTML = '<strong>✗ Connection failed:</strong> ' + extra;
   }
 }
 
-function disconnectSheets(){
-  if(!confirm('Disconnect from Google Sheets? Your local data is preserved but will no longer sync.')) return;
-  clearConn();
-  setSyncStatus('offline','Not connected');
-  document.getElementById('settings-msg').textContent = 'Disconnected. Data is saved locally only.';
+async function saveSettings(){
+  const msg = document.getElementById('settings-msg');
+  msg.innerHTML = '⏳ Testing…';
+  try{
+    const r = await apiCall('load');
+    if(r.data){ S = r.data; localStorage.setItem(CACHE_KEY, JSON.stringify(S)); }
+    setSyncStatus('ok', 'Connected');
+    msg.innerHTML = '✓ Connected and synced.';
+    refreshAllPanels();
+  } catch(err){
+    setSyncStatus('err', 'Failed');
+    msg.innerHTML = '✗ ' + err.message;
+  }
 }
 
 // ════════════════════════════════════════════════════════════
