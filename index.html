@@ -346,15 +346,22 @@
 
 <script>
 // ════════════════════════════════════════════════════════════
+//  GLOBALS
+// ════════════════════════════════════════════════════════════
+let S = null;           // live app state
+let _dirty   = false;
+let _syncing = false;
+let _saveTimer = null;
+let _csvParsed = null;
+let _csvSelectedSchedId = null;
+
+// ════════════════════════════════════════════════════════════
 //  SYNC LAYER  — talks to /api/sync (Vercel proxy, same origin)
 //  No CORS issues because it's the same domain as the app.
 //  The proxy forwards requests to Google Apps Script server-side.
 // ════════════════════════════════════════════════════════════
 const CONN_KEY  = 'bbs_connection';
 const CACHE_KEY = 'bbs_cache_v8';
-
-let _dirty   = false;
-let _syncing = false;
 
 // ── Connection config ─────────────────────────────────────────
 // With the proxy approach the URL and key live in Vercel env vars,
@@ -424,7 +431,6 @@ async function loadData(){
 }
 
 // ── Save (debounced, writes to Sheets via proxy) ─────────────
-let _saveTimer = null;
 function save(){
   try{ localStorage.setItem(CACHE_KEY, JSON.stringify(S)); } catch(e){}
   _dirty = true;
@@ -449,7 +455,7 @@ async function pushToSheets(){
 }
 
 async function doForcePush(){
-  // Called from header button — gives feedback via sync bar
+  if(!S){ alert('App not ready yet — please wait a moment and try again.'); return; }
   clearTimeout(_saveTimer);
   setSyncStatus('busy','Pushing…');
   try{
@@ -944,7 +950,6 @@ function parseCSVLine(line){
   for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){cols.push(cur.trim());cur='';}else cur+=ch;}
   cols.push(cur.trim());return cols;
 }
-let _csvParsed=null,_csvSelectedSchedId=null;
 function importCSV(e){
   const file=e.target.files[0];if(!file)return;
   const reader=new FileReader();
