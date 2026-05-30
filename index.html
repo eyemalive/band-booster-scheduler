@@ -528,9 +528,32 @@ async function testAndSaveConnection(){
   errEl.innerHTML = '⏳ Testing connection…';
   setConn(url, key);
   try{
+    // Step 1: verify the URL is reachable at all (GET request, no key needed)
+    errEl.innerHTML = '⏳ Step 1/2: Checking URL is reachable…';
+    let pingOk = false;
+    try{
+      const ping = await Promise.race([
+        fetch(url, { method:'GET' }),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
+      ]);
+      pingOk = ping.ok || ping.status === 0 || ping.type === 'opaque';
+    } catch(pingErr){
+      clearConn();
+      errEl.innerHTML = '<strong>✗ Step 1 failed — URL is not reachable.</strong><br><br>'
+        + 'Raw error: <code>' + pingErr.message + '</code><br><br>'
+        + 'Things to check:<br>'
+        + '• In Apps Script: Deploy → Manage deployments → make sure "Who has access" is <strong>Anyone</strong> (not "Anyone with Google account")<br>'
+        + '• Make sure you copied the <strong>Web app URL</strong> (ends in /exec), not the editor URL<br>'
+        + '• Try opening the URL in a new tab — you should see <code>{"ok":true}</code>';
+      setSyncStatus('err','Connection failed');
+      return;
+    }
+
+    // Step 2: try the actual API call
+    errEl.innerHTML = '⏳ Step 2/2: Authenticating…';
     const r = await Promise.race([
       apiCall('load'),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timed out after 10 seconds. Check your deployment URL.')),10000))
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timed out after 10 seconds')),10000))
     ]);
     if(r.data){
       S = r.data;
@@ -540,19 +563,27 @@ async function testAndSaveConnection(){
     errEl.innerHTML = '';
     document.getElementById('setup-overlay').style.display = 'none';
     refreshAllPanels();
+
   } catch(err){
     clearConn();
     setSyncStatus('err','Connection failed');
     let msg = err.message;
-    if(msg.includes('Failed to fetch') || msg.includes('NetworkError')){
-      msg = 'Could not reach the URL. Make sure you deployed as a Web App with access set to "Anyone".';
+    let extra = '';
+    if(msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')){
+      msg = 'Browser blocked the request (CORS or network error).';
+      extra = 'This usually means the Apps Script deployment has "Who has access" set to something other than <strong>Anyone</strong>. '
+        + 'Go to Apps Script → Deploy → Manage deployments → edit → set access to <strong>Anyone</strong> → create a new version and redeploy.';
     } else if(msg.includes('Invalid API key')){
-      msg = 'Wrong API key — make sure it matches exactly what you set in the Apps Script (line 8).';
+      msg = 'Wrong API key.';
+      extra = 'It must match exactly what you typed on line 3 of BandBoosterBackend.gs (case-sensitive, no extra spaces).';
     } else if(msg.includes('Timed out')){
-      msg = 'Request timed out. The deployment URL may be wrong, or the script may not be deployed yet.';
+      msg = 'Request timed out.';
+      extra = 'The script URL may be stale. Go to Apps Script → Deploy → New deployment and use the new URL.';
+    } else {
+      extra = 'Raw error: <code>' + msg + '</code>';
     }
     errEl.innerHTML = '<strong>✗ Connection failed:</strong> ' + msg
-      + '<br><br><small>Tip: paste your URL into a new browser tab — you should see <code>{"ok":true,"status":"Band Booster backend is running."}</code></small>';
+      + (extra ? '<br><br>' + extra : '');
   }
 }
 
