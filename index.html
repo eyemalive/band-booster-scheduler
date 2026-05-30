@@ -1132,7 +1132,7 @@ function printSchedule(){
   S.jobs.forEach(j=>{
     const asgn=(sc.assignments[j.id]||[]);if(!asgn.length)return;
     html+=`<div style="margin-bottom:18px;break-inside:avoid">
-      <div style="font-weight:600;font-size:13px;background:#f1efe8;padding:5px 8px;border-radius:4px;margin-bottom:5px">${j.name}</div>
+      <div style="font-weight:600;font-size:13px;background:#f1efe8;padding:5px 8px;border-radius:4px;margin-bottom:5px">${j.name}${j.desc?` <span style="font-weight:400;color:#666;font-size:12px">— ${j.desc}</span>`:''}</div>
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="border-bottom:1px solid #ddd">
           <th style="text-align:left;padding:4px 8px;color:#666;font-weight:500;width:14%">Position</th>
