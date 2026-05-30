@@ -893,7 +893,6 @@ function importCSV(e){
   const file=e.target.files[0];if(!file)return;
   const reader=new FileReader();
   reader.onload=ev=>{
-    document.getElementById('csv-file').value='';
     const allLines=ev.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
     if(allLines.length<3){document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">File has too few lines.</span>';return;}
     const dataLines=allLines.slice(1,allLines.length-1);
@@ -906,6 +905,8 @@ function importCSV(e){
       _csvParsed.push({fname,lname,rawPhone:(cols[6]||'').trim(),email:(cols[7]||'').trim()});
     });
     if(!_csvParsed.length){document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">No valid rows found.</span>';return;}
+    // Reset file input here — after we have the data safely in _csvParsed
+    try{ e.target.value=''; }catch(_){}
     openCsvModal();
   };
   reader.readAsText(file);
