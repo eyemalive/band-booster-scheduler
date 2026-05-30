@@ -179,10 +179,11 @@
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn sm primary" onclick="saveSettings()"><i class="ti ti-refresh"></i> Test &amp; resync</button>
         <button class="btn sm" onclick="forcePush()"><i class="ti ti-cloud-upload"></i> Force push local data</button>
+        <button class="btn sm" onclick="runDiagnostic()"><i class="ti ti-stethoscope"></i> Diagnose</button>
         <button class="btn sm danger" onclick="disconnectSheets()"><i class="ti ti-trash"></i> Clear local cache</button>
         <button class="btn sm" onclick="closeSettings()">Close</button>
       </div>
-      <div id="settings-msg" style="font-size:12px;margin-top:.75rem"></div>
+      <div id="settings-msg" style="font-size:12px;margin-top:.75rem;line-height:1.6"></div>
     </div>
   </div>
 
@@ -494,6 +495,43 @@ async function testAndSaveConnection(){
       extra = 'Timed out — make sure APPS_SCRIPT_URL and API_KEY are set in Vercel dashboard → Settings → Environment Variables.';
     }
     errEl.innerHTML = '<strong>✗ Connection failed:</strong> ' + extra;
+  }
+}
+
+async function runDiagnostic(){
+  const msg = document.getElementById('settings-msg');
+  msg.innerHTML = '⏳ Running diagnostics…';
+  try{
+    // 1. Check if /api/sync is reachable
+    const diagRes = await fetch('/api/sync?diag=1');
+    const diag = await diagRes.json();
+    if(!diag.configured){
+      msg.innerHTML = '✗ <strong>Vercel env vars not set.</strong><br>'
+        + `APPS_SCRIPT_URL: ${diag.hasUrl ? '✓ set' : '✗ missing'}<br>`
+        + `API_KEY: ${diag.hasKey ? '✓ set' : '✗ missing'}<br><br>`
+        + 'Go to <strong>Vercel → your project → Settings → Environment Variables</strong> and add both values, then click <strong>Deployments → Redeploy</strong>.';
+      return;
+    }
+    msg.innerHTML = '✓ Proxy reachable. APPS_SCRIPT_URL and API_KEY are set.<br>⏳ Testing Apps Script connection…';
+    // 2. Try actual load
+    const r = await fetch('/api/sync', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'load'})
+    });
+    const data = await r.json();
+    if(data.ok === false){
+      msg.innerHTML = `✗ <strong>Proxy reached Apps Script but got an error:</strong><br><code>${data.error}</code><br><br>`
+        + 'Check that your Apps Script is deployed as a Web App with access set to <strong>Anyone</strong>.';
+    } else {
+      markConnected();
+      setSyncStatus('ok','Connected');
+      msg.innerHTML = '✓ Everything is working! Connected to Google Sheets.';
+      if(data.data){ S = data.data; localStorage.setItem(CACHE_KEY, JSON.stringify(S)); refreshAllPanels(); }
+    }
+  } catch(err){
+    msg.innerHTML = '✗ <strong>Could not reach /api/sync.</strong><br>Error: <code>' + err.message + '</code><br><br>'
+      + 'Make sure the Vercel deployment is live and <code>api/sync.js</code> is in your GitHub repo.';
   }
 }
 
