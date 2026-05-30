@@ -387,15 +387,21 @@ function setSyncStatus(state, label){
 }
 
 // ── API calls ─────────────────────────────────────────────────
-async function apiCall(action, data){
+// Uses URL-encoded form POST — avoids CORS preflight that breaks Apps Script
+async function apiCall(action, payload){
   const c = getConn();
   if(!c) throw new Error('Not connected');
-  const body = { action, key: c.key };
-  if(data !== undefined) body.data = data;
+
+  const params = new URLSearchParams();
+  params.append('action', action);
+  params.append('key', c.key);
+  if(payload !== undefined) params.append('payload', JSON.stringify(payload));
+
   const res = await fetch(c.url, {
     method: 'POST',
-    body: JSON.stringify(body),
-    headers: {'Content-Type':'application/json'}
+    body: params
+    // No Content-Type header — browser sets it to application/x-www-form-urlencoded
+    // automatically, which does NOT trigger a CORS preflight
   });
   if(!res.ok) throw new Error('HTTP ' + res.status);
   const json = await res.json();
@@ -486,17 +492,26 @@ async function saveSettings(){
   const key = document.getElementById('settings-key').value.trim();
   const msg = document.getElementById('settings-msg');
   if(!url||!key){ msg.textContent = 'Both fields are required.'; return; }
-  msg.textContent = 'Testing connection…';
+  msg.innerHTML = '⏳ Testing connection…';
   setConn(url, key);
   try{
-    const r = await apiCall('load');
+    const r = await Promise.race([
+      apiCall('load'),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timed out after 10 seconds')),10000))
+    ]);
     if(r.data){ S = r.data; localStorage.setItem(CACHE_KEY, JSON.stringify(S)); }
     setSyncStatus('ok','Connected');
-    msg.textContent = '✓ Connected! Data loaded from Google Sheets.';
+    msg.innerHTML = '✓ Connected! Data loaded from Google Sheets.';
     refreshAllPanels();
   } catch(err){
-    msg.textContent = '✗ Connection failed: ' + err.message + '. Check URL and key.';
+    clearConn();
     setSyncStatus('err','Connection failed');
+    let m = err.message;
+    if(m.includes('Failed to fetch')||m.includes('NetworkError'))
+      m = 'Could not reach URL. Check deployment settings — execute as Me, access Anyone.';
+    else if(m.includes('Invalid API key'))
+      m = 'Wrong API key — must match line 8 of BandBoosterBackend.gs exactly.';
+    msg.innerHTML = '✗ ' + m + '<br><small>Tip: open the URL in a new tab — should show <code>{"ok":true}</code></small>';
   }
 }
 
@@ -504,18 +519,40 @@ async function testAndSaveConnection(){
   const url = document.getElementById('setup-url').value.trim();
   const key = document.getElementById('setup-key').value.trim();
   const errEl = document.getElementById('setup-error');
-  if(!url||!key){ errEl.textContent = 'Both fields are required.'; return; }
-  errEl.textContent = 'Testing…';
+  if(!url){ errEl.textContent = '✗ URL is required.'; return; }
+  if(!key){ errEl.textContent = '✗ API key is required.'; return; }
+  if(!url.includes('script.google.com')){
+    errEl.textContent = '✗ URL should come from script.google.com — did you copy the full deployment URL?';
+    return;
+  }
+  errEl.innerHTML = '⏳ Testing connection…';
   setConn(url, key);
   try{
-    const r = await apiCall('load');
-    if(r.data){ S = r.data; localStorage.setItem(CACHE_KEY, JSON.stringify(S)); }
+    const r = await Promise.race([
+      apiCall('load'),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timed out after 10 seconds. Check your deployment URL.')),10000))
+    ]);
+    if(r.data){
+      S = r.data;
+      localStorage.setItem(CACHE_KEY, JSON.stringify(S));
+    }
     setSyncStatus('ok','Connected');
+    errEl.innerHTML = '';
     document.getElementById('setup-overlay').style.display = 'none';
     refreshAllPanels();
   } catch(err){
-    errEl.textContent = '✗ ' + err.message + '. Double-check the URL and key.';
     clearConn();
+    setSyncStatus('err','Connection failed');
+    let msg = err.message;
+    if(msg.includes('Failed to fetch') || msg.includes('NetworkError')){
+      msg = 'Could not reach the URL. Make sure you deployed as a Web App with access set to "Anyone".';
+    } else if(msg.includes('Invalid API key')){
+      msg = 'Wrong API key — make sure it matches exactly what you set in the Apps Script (line 8).';
+    } else if(msg.includes('Timed out')){
+      msg = 'Request timed out. The deployment URL may be wrong, or the script may not be deployed yet.';
+    }
+    errEl.innerHTML = '<strong>✗ Connection failed:</strong> ' + msg
+      + '<br><br><small>Tip: paste your URL into a new browser tab — you should see <code>{"ok":true,"status":"Band Booster backend is running."}</code></small>';
   }
 }
 
