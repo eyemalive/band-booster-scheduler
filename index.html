@@ -129,6 +129,36 @@
 </head>
 <body>
 <div class="app-wrap no-print">
+  <!-- SETUP WIZARD OVERLAY -->
+  <div id="setup-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:center;justify-content:center">
+    <div style="background:var(--surface);border-radius:var(--radius-lg);padding:2rem;max-width:540px;width:93%;box-shadow:0 10px 40px rgba(0,0,0,.3);max-height:90vh;overflow-y:auto">
+      <div style="font-size:18px;font-weight:500;margin-bottom:1.25rem">Connect to Google Sheets</div>
+      <div id="setup-step-1" class="setup-step active">
+        <p style="font-size:13px;margin-bottom:1rem">This connects your scheduler to Google Sheets so data syncs across all your devices. Complete these steps once:</p>
+        <ol style="font-size:13px;line-height:2.2;padding-left:1.25rem;margin-bottom:1.25rem">
+          <li>Go to <strong>sheets.google.com</strong> and create a new blank spreadsheet named <em>Band Booster Scheduler</em>.</li>
+          <li>In the spreadsheet click <strong>Extensions &rarr; Apps Script</strong>.</li>
+          <li>Delete all default code, then paste in the entire contents of <strong>BandBoosterBackend.gs</strong>.</li>
+          <li>On line 8, replace <span style="font-family:monospace;background:var(--surface2);padding:1px 5px;border-radius:3px">CHANGE_ME_TO_SOMETHING_RANDOM</span> with your own passphrase.</li>
+          <li>Click <strong>Deploy &rarr; New deployment</strong>. Type = <strong>Web app</strong>, execute as <strong>Me</strong>, access = <strong>Anyone</strong>. Click Deploy, approve permissions, and copy the URL.</li>
+        </ol>
+        <button class="btn primary" onclick="document.getElementById('setup-step-1').classList.remove('active');document.getElementById('setup-step-2').classList.add('active')">Next <i class="ti ti-arrow-right"></i></button>
+        <button class="btn" style="margin-left:8px" onclick="document.getElementById('setup-overlay').style.display='none'">Skip for now (local only)</button>
+      </div>
+      <div id="setup-step-2" class="setup-step">
+        <p style="font-size:13px;margin-bottom:1rem">Paste your deployment URL and API key:</p>
+        <div style="margin-bottom:.75rem"><label class="lbl">Apps Script deployment URL</label><input type="text" id="setup-url" placeholder="https://script.google.com/macros/s/.../exec"></div>
+        <div style="margin-bottom:1.25rem"><label class="lbl">API key (the passphrase you set in the script)</label><input type="text" id="setup-key" placeholder="e.g. BandBooster2025!"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" onclick="document.getElementById('setup-step-2').classList.remove('active');document.getElementById('setup-step-1').classList.add('active')"><i class="ti ti-arrow-left"></i> Back</button>
+          <button class="btn primary" onclick="testAndSaveConnection()"><i class="ti ti-plug"></i> Connect &amp; test</button>
+        </div>
+        <div id="setup-error" style="font-size:12px;color:var(--danger-text);margin-top:.75rem"></div>
+      </div>
+    </div>
+  </div>
+
+
   <div class="app-header">
     <div>
       <div class="app-title">Band <span>Booster</span> Scheduler</div>
