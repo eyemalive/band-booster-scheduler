@@ -401,23 +401,16 @@ async function apiCall(action, payload){
 
 // ── Load data (cache-first, then sync) ───────────────────────
 async function loadData(){
-  // Always load cache first so app is instant
-  try{
-    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-    if(cached) S = cached;
-  } catch(e){}
-  if(!S) S = defaultState();
-
+  // Used by Settings resync button — pull fresh data from Sheets
   if(!isConnected()){
     setSyncStatus('offline', 'Local only');
     return;
   }
-
   setSyncStatus('busy', 'Syncing…');
   try{
     const r = await Promise.race([
       apiCall('load'),
-      new Promise((_,rej) => setTimeout(() => rej(new Error('Timeout')), 10000))
+      new Promise((_,rej) => setTimeout(() => rej(new Error('Timeout after 5s — check Vercel env vars')), 5000))
     ]);
     if(r.data){
       S = r.data;
@@ -425,7 +418,6 @@ async function loadData(){
     }
     setSyncStatus('ok', 'Synced');
   } catch(err){
-    // Not fatal — we already have local data
     setSyncStatus('err', 'Sync failed — using local data');
     console.warn('loadData error:', err);
   }
@@ -1114,21 +1106,41 @@ function hideLoadingOverlay(){
 }
 
 (async function init(){
-  try {
-    await loadData();
-  } catch(e) {
-    console.warn('loadData failed, using defaults:', e);
-  }
+  // 1. Load from local cache instantly — never block on network
+  try{
+    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    if(cached) S = cached;
+  } catch(e){}
   if(!S) S = defaultState();
 
+  // 2. Hide loading overlay immediately — app is ready
   hideLoadingOverlay();
 
-  // Show setup overlay only if no connection is configured
+  // 3. Show setup overlay if not on a proper hosted origin
   if(!isConnected()){
     document.getElementById('setup-overlay').style.display='flex';
   }
+
   autoSavePastEvents();
   renderSchedules();
+
+  // 4. Sync with Sheets in the background (non-blocking)
+  if(isConnected()){
+    setSyncStatus('busy','Syncing…');
+    apiCall('load')
+      .then(r => {
+        if(r.data){
+          S = r.data;
+          localStorage.setItem(CACHE_KEY, JSON.stringify(S));
+          refreshAllPanels();
+        }
+        setSyncStatus('ok','Synced');
+      })
+      .catch(err => {
+        setSyncStatus('err','Sync failed — using local data');
+        console.warn('Background sync error:', err);
+      });
+  }
   // Reload from Sheets every 2 minutes in case another device made changes
   setInterval(async()=>{
     if(!isConnected()||_dirty||_syncing) return;
