@@ -387,26 +387,102 @@ function setSyncStatus(state, label){
 }
 
 // ── API calls ─────────────────────────────────────────────────
-// Uses URL-encoded form POST — avoids CORS preflight that breaks Apps Script
+// LOAD uses JSONP (GET + <script> tag) — completely bypasses CORS
+// SAVE uses a hidden form POST — no CORS preflight on same-origin form posts
+//   but Apps Script redirects POSTs, so we use an iframe trick to fire-and-forget
+
+let _jsonpCounter = 0;
+
+function jsonpCall(url, params){
+  // Injects a <script> tag; Apps Script wraps response in callback(...)
+  // which the browser executes, resolving our promise.
+  return new Promise((resolve, reject) => {
+    const cbName = '_bbs_cb_' + (++_jsonpCounter);
+    const timeout = setTimeout(() => {
+      delete window[cbName];
+      if(script.parentNode) script.parentNode.removeChild(script);
+      reject(new Error('Timed out after 10 seconds'));
+    }, 10000);
+
+    window[cbName] = function(data){
+      clearTimeout(timeout);
+      delete window[cbName];
+      if(script.parentNode) script.parentNode.removeChild(script);
+      if(data && data.ok === false) reject(new Error(data.error || 'Unknown error'));
+      else resolve(data);
+    };
+
+    const qs = new URLSearchParams(params);
+    qs.append('callback', cbName);
+    const script = document.createElement('script');
+    script.src = url + '?' + qs.toString();
+    script.onerror = () => {
+      clearTimeout(timeout);
+      delete window[cbName];
+      reject(new Error('Script load failed — check deployment URL'));
+    };
+    document.head.appendChild(script);
+  });
+}
+
+function formPostCall(url, params){
+  // Submits a hidden form to a hidden iframe — fire and forget (no response needed)
+  // We pair this with a follow-up JSONP load to confirm the save went through
+  return new Promise((resolve, reject) => {
+    const iframeName = '_bbs_iframe_' + (++_jsonpCounter);
+    const iframe = document.createElement('iframe');
+    iframe.name = iframeName;
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    form.target = iframeName;
+    form.style.display = 'none';
+
+    Object.entries(params).forEach(([k,v]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = k;
+      input.value = v;
+      form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+
+    iframe.onload = () => {
+      setTimeout(() => {
+        if(form.parentNode) form.parentNode.removeChild(form);
+        if(iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      }, 1000);
+      resolve({ ok: true });
+    };
+
+    setTimeout(() => {
+      if(form.parentNode) form.parentNode.removeChild(form);
+      if(iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      reject(new Error('Save timed out'));
+    }, 12000);
+
+    form.submit();
+  });
+}
+
 async function apiCall(action, payload){
   const c = getConn();
   if(!c) throw new Error('Not connected');
 
-  const params = new URLSearchParams();
-  params.append('action', action);
-  params.append('key', c.key);
-  if(payload !== undefined) params.append('payload', JSON.stringify(payload));
-
-  const res = await fetch(c.url, {
-    method: 'POST',
-    body: params
-    // No Content-Type header — browser sets it to application/x-www-form-urlencoded
-    // automatically, which does NOT trigger a CORS preflight
-  });
-  if(!res.ok) throw new Error('HTTP ' + res.status);
-  const json = await res.json();
-  if(!json.ok) throw new Error(json.error || 'Unknown error');
-  return json;
+  if(action === 'save'){
+    // Save via form POST (fire-and-forget into hidden iframe)
+    const params = { action, key: c.key };
+    if(payload !== undefined) params.payload = JSON.stringify(payload);
+    return await formPostCall(c.url, params);
+  } else {
+    // Load/ping via JSONP GET
+    const params = { action, key: c.key };
+    return await jsonpCall(c.url, params);
+  }
 }
 
 // ── Load from Sheets (with local cache fallback) ──────────────
@@ -495,10 +571,8 @@ async function saveSettings(){
   msg.innerHTML = '⏳ Testing connection…';
   setConn(url, key);
   try{
-    const r = await Promise.race([
-      apiCall('load'),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timed out after 10 seconds')),10000))
-    ]);
+    await jsonpCall(url, { action:'ping' });
+    const r = await apiCall('load');
     if(r.data){ S = r.data; localStorage.setItem(CACHE_KEY, JSON.stringify(S)); }
     setSyncStatus('ok','Connected');
     msg.innerHTML = '✓ Connected! Data loaded from Google Sheets.';
@@ -507,11 +581,8 @@ async function saveSettings(){
     clearConn();
     setSyncStatus('err','Connection failed');
     let m = err.message;
-    if(m.includes('Failed to fetch')||m.includes('NetworkError'))
-      m = 'Could not reach URL. Check deployment settings — execute as Me, access Anyone.';
-    else if(m.includes('Invalid API key'))
-      m = 'Wrong API key — must match line 8 of BandBoosterBackend.gs exactly.';
-    msg.innerHTML = '✗ ' + m + '<br><small>Tip: open the URL in a new tab — should show <code>{"ok":true}</code></small>';
+    if(m.includes('Invalid API key')) m = 'Wrong API key — must match line 10 of BandBoosterBackend.gs exactly (case-sensitive).';
+    msg.innerHTML = '✗ ' + m;
   }
 }
 
@@ -522,39 +593,32 @@ async function testAndSaveConnection(){
   if(!url){ errEl.textContent = '✗ URL is required.'; return; }
   if(!key){ errEl.textContent = '✗ API key is required.'; return; }
   if(!url.includes('script.google.com')){
-    errEl.textContent = '✗ URL should come from script.google.com — did you copy the full deployment URL?';
+    errEl.textContent = '✗ URL should be from script.google.com — copy the full deployment URL ending in /exec.';
     return;
   }
-  errEl.innerHTML = '⏳ Testing connection…';
-  setConn(url, key);
-  try{
-    // Step 1: verify the URL is reachable at all (GET request, no key needed)
-    errEl.innerHTML = '⏳ Step 1/2: Checking URL is reachable…';
-    let pingOk = false;
-    try{
-      const ping = await Promise.race([
-        fetch(url, { method:'GET' }),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
-      ]);
-      pingOk = ping.ok || ping.status === 0 || ping.type === 'opaque';
-    } catch(pingErr){
-      clearConn();
-      errEl.innerHTML = '<strong>✗ Step 1 failed — URL is not reachable.</strong><br><br>'
-        + 'Raw error: <code>' + pingErr.message + '</code><br><br>'
-        + 'Things to check:<br>'
-        + '• In Apps Script: Deploy → Manage deployments → make sure "Who has access" is <strong>Anyone</strong> (not "Anyone with Google account")<br>'
-        + '• Make sure you copied the <strong>Web app URL</strong> (ends in /exec), not the editor URL<br>'
-        + '• Try opening the URL in a new tab — you should see <code>{"ok":true}</code>';
-      setSyncStatus('err','Connection failed');
-      return;
-    }
 
-    // Step 2: try the actual API call
-    errEl.innerHTML = '⏳ Step 2/2: Authenticating…';
-    const r = await Promise.race([
-      apiCall('load'),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timed out after 10 seconds')),10000))
-    ]);
+  // Temporarily store conn so jsonpCall can use it
+  setConn(url, key);
+
+  // Step 1: ping (no key, just checks script is live)
+  errEl.innerHTML = '⏳ Step 1/2: Checking script is reachable…';
+  try{
+    await jsonpCall(url, { action:'ping' });
+  } catch(err){
+    clearConn();
+    setSyncStatus('err','Connection failed');
+    errEl.innerHTML = '<strong>✗ Step 1 failed — script not reachable.</strong><br><br>'
+      + 'Error: <code>' + err.message + '</code><br><br>'
+      + '• Make sure "Who has access" = <strong>Anyone</strong> (not "Anyone with Google account")<br>'
+      + '• Make sure the URL ends in <strong>/exec</strong><br>'
+      + '• Try opening the URL in a new tab — you should see <code>{"ok":true}</code>';
+    return;
+  }
+
+  // Step 2: authenticated load
+  errEl.innerHTML = '⏳ Step 2/2: Authenticating with API key…';
+  try{
+    const r = await apiCall('load');
     if(r.data){
       S = r.data;
       localStorage.setItem(CACHE_KEY, JSON.stringify(S));
@@ -563,27 +627,18 @@ async function testAndSaveConnection(){
     errEl.innerHTML = '';
     document.getElementById('setup-overlay').style.display = 'none';
     refreshAllPanels();
-
   } catch(err){
     clearConn();
     setSyncStatus('err','Connection failed');
-    let msg = err.message;
     let extra = '';
-    if(msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')){
-      msg = 'Browser blocked the request (CORS or network error).';
-      extra = 'This usually means the Apps Script deployment has "Who has access" set to something other than <strong>Anyone</strong>. '
-        + 'Go to Apps Script → Deploy → Manage deployments → edit → set access to <strong>Anyone</strong> → create a new version and redeploy.';
-    } else if(msg.includes('Invalid API key')){
-      msg = 'Wrong API key.';
-      extra = 'It must match exactly what you typed on line 3 of BandBoosterBackend.gs (case-sensitive, no extra spaces).';
-    } else if(msg.includes('Timed out')){
-      msg = 'Request timed out.';
-      extra = 'The script URL may be stale. Go to Apps Script → Deploy → New deployment and use the new URL.';
+    if(err.message.includes('Invalid API key')){
+      extra = 'The API key must match exactly what you set on line 10 of BandBoosterBackend.gs (case-sensitive).';
+    } else if(err.message.includes('Timed out')){
+      extra = 'The request timed out — try again, or redeploy the script.';
     } else {
-      extra = 'Raw error: <code>' + msg + '</code>';
+      extra = 'Error: <code>' + err.message + '</code>';
     }
-    errEl.innerHTML = '<strong>✗ Connection failed:</strong> ' + msg
-      + (extra ? '<br><br>' + extra : '');
+    errEl.innerHTML = '<strong>✗ Step 2 failed — authentication error.</strong><br><br>' + extra;
   }
 }
 
