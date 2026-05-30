@@ -1,9 +1,13 @@
-// Vercel serverless function — acts as a proxy between the app and Google Apps Script
-// This lives on the same domain as index.html so there are NO CORS issues at all.
-// The browser talks to /api/sync (same origin), which then talks to Apps Script server-to-server.
+// Vercel serverless proxy — forwards requests to Google Apps Script.
+// Runs server-side so there are no CORS issues.
+
+export const config = {
+  api: {
+    bodyParser: true,   // ensure req.body is parsed
+  },
+};
 
 export default async function handler(req, res) {
-  // Allow requests from the same origin
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -12,50 +16,84 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Read config from Vercel environment variables (set these in Vercel dashboard)
   const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
   const API_KEY         = process.env.API_KEY;
+
+  // ── Diagnostic endpoint ─────────────────────────────────────
+  // Visit /api/sync?diag=1 in your browser to check configuration
+  if (req.method === 'GET' && req.query.diag) {
+    return res.status(200).json({
+      ok: true,
+      configured: !!(APPS_SCRIPT_URL && API_KEY),
+      hasUrl: !!APPS_SCRIPT_URL,
+      hasKey: !!API_KEY,
+      urlPreview: APPS_SCRIPT_URL ? APPS_SCRIPT_URL.slice(0, 60) + '…' : null,
+    });
+  }
 
   if (!APPS_SCRIPT_URL || !API_KEY) {
     return res.status(500).json({
       ok: false,
-      error: 'Server not configured. Set APPS_SCRIPT_URL and API_KEY in Vercel environment variables.'
+      error: 'Vercel env vars not set. Add APPS_SCRIPT_URL and API_KEY in Vercel → Settings → Environment Variables, then redeploy.',
     });
   }
 
   try {
+    // Read action and payload from request body (POST) or query string (GET)
     let action, payload;
-
     if (req.method === 'GET') {
       action  = req.query.action || 'load';
+      payload = req.query.payload;
     } else {
-      // POST
       const body = req.body || {};
       action  = body.action;
       payload = body.payload;
     }
 
-    // Forward to Apps Script as a URL-encoded POST
+    if (!action) {
+      return res.status(400).json({ ok: false, error: 'No action specified.' });
+    }
+
+    // Forward to Apps Script as URL-encoded POST (avoids Apps Script CORS issues)
     const params = new URLSearchParams();
-    params.append('action',  action);
-    params.append('key',     API_KEY);
-    if (payload !== undefined) params.append('payload', typeof payload === 'string' ? payload : JSON.stringify(payload));
+    params.append('action', action);
+    params.append('key',    API_KEY);
+    if (payload !== undefined) {
+      params.append('payload', typeof payload === 'string' ? payload : JSON.stringify(payload));
+    }
 
     const gsRes = await fetch(APPS_SCRIPT_URL, {
       method:  'POST',
-      body:    params,
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body:    params.toString(),
       redirect: 'follow',
     });
 
     if (!gsRes.ok) {
-      return res.status(502).json({ ok: false, error: 'Apps Script returned HTTP ' + gsRes.status });
+      const text = await gsRes.text().catch(() => '');
+      return res.status(502).json({
+        ok: false,
+        error: `Apps Script returned HTTP ${gsRes.status}. Response: ${text.slice(0, 200)}`,
+      });
     }
 
-    const data = await gsRes.json();
+    const text = await gsRes.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      return res.status(502).json({
+        ok: false,
+        error: `Apps Script returned non-JSON: ${text.slice(0, 200)}`,
+      });
+    }
+
     return res.status(200).json(data);
 
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({
+      ok: false,
+      error: `Proxy error: ${err.message}`,
+    });
   }
 }
