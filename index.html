@@ -335,6 +335,19 @@
     </div>
   </div>
 
+  <!-- ADD TO ROSTER MODAL -->
+  <div id="add-roster-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:center;justify-content:center">
+    <div style="background:var(--surface);border-radius:var(--radius-lg);padding:1.5rem;max-width:420px;width:92%;box-shadow:0 8px 32px rgba(0,0,0,.25)">
+      <div style="font-size:16px;font-weight:500;margin-bottom:.25rem">Add volunteer to this week</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Pick from master roster volunteers not already on this schedule.</div>
+      <input type="text" id="add-roster-search" placeholder="Search by name…" oninput="renderAddRosterList()" style="margin-bottom:.65rem">
+      <div id="add-roster-list" style="display:flex;flex-direction:column;gap:5px;max-height:260px;overflow-y:auto;margin-bottom:1rem"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn sm" onclick="closeAddRosterModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- HISTORY -->
   <div class="panel" id="panel-history">
     <div style="font-size:12px;color:var(--text2);margin-bottom:1rem">Events are automatically saved to history the day after they occur. Click any field to edit inline.</div>
@@ -698,6 +711,9 @@ function renderSchedules(){
   const grid=document.getElementById('sched-grid');grid.innerHTML='';
   if(!S.schedules.length){grid.innerHTML='<div style="font-size:13px;color:var(--text2);padding:.5rem 0">No schedules yet. Create one above.</div>';return;}
   const td=today();
+  // Find the closest upcoming (or today's) schedule to badge as "This week"
+  const upcoming=S.schedules.filter(sc=>sc.date>=td).sort((a,b)=>a.date.localeCompare(b.date));
+  const thisWeekSchedId=upcoming.length?upcoming[0].id:null;
   S.schedules.forEach(sc=>{
     const isActive=sc.id===S.activeSchedId;
     const isPast=sc.date<td;
@@ -708,6 +724,7 @@ function renderSchedules(){
       ?sc.activeVolunteerIds.map(id=>S.volunteers.find(v=>v.id===id)).filter(Boolean)
       :S.volunteers.filter(v=>v.active);
     const emptyJobs=S.jobs.filter(j=>!(sc.assignments&&sc.assignments[j.id]&&sc.assignments[j.id].length)).length;
+    const isThisWeek=sc.id===thisWeekSchedId;
     const div=document.createElement('div');
     div.className='sched-card'+(isActive?' active-sched':'');
     div.innerHTML=`
@@ -716,7 +733,7 @@ function renderSchedules(){
           <div class="sched-card-name">${esc(sc.name)}</div>
           <div class="sched-card-date"><i class="ti ti-calendar" style="font-size:11px"></i> ${dateLabel}</div>
         </div>
-        ${isPast?'<span class="badge gray">Past</span>':isActive?'<span class="badge blue">Active</span>':''}
+        ${isPast?'<span class="badge gray">Past</span>':isThisWeek?'<span class="badge teal">This week</span>':''}
       </div>
       <div class="sched-card-stats">
         <span class="tag" style="font-size:11px"><i class="ti ti-users" style="font-size:11px"></i>${schedVols.length} volunteers</span>
@@ -739,6 +756,7 @@ function renderAssign(){
     p.innerHTML='<div class="card" style="text-align:center;padding:2rem;color:var(--text2)"><i class="ti ti-calendar-off" style="font-size:32px;display:block;margin-bottom:.5rem"></i>No schedule selected. Go to <strong>Schedules</strong> and open one.</div>';
     return;
   }
+  const hasRoster=sc.activeVolunteerIds&&sc.activeVolunteerIds.length>0;
   p.innerHTML=`
     <div class="row" style="justify-content:space-between;margin-bottom:.5rem;flex-wrap:wrap;gap:8px">
       <div>
@@ -751,7 +769,14 @@ function renderAssign(){
       </div>
     </div>
     <div id="assign-stats" style="margin-bottom:.75rem"></div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:.4rem">Drag from pool or any position row — drop onto a job to append, onto a row to insert, or back to pool to unassign.</div>
+    ${!hasRoster?`<div style="background:var(--amber-lt);border:.5px solid var(--warning);border-radius:var(--radius);padding:10px 14px;margin-bottom:.75rem;font-size:13px;color:var(--amber-dk)">
+      <strong><i class="ti ti-alert-triangle"></i> No roster loaded for this event.</strong>
+      Import a CSV from the <strong>Master Roster</strong> tab to set this week's volunteers, or add them individually below.
+    </div>`:''}
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:.4rem">
+      <div style="font-size:12px;color:var(--text2)">Drag from pool or any position row — drop onto a job to append, onto a row to insert, or back to pool to unassign.</div>
+      <button class="btn sm" onclick="openAddRosterModal()"><i class="ti ti-user-plus"></i> Add volunteer</button>
+    </div>
     <div class="pool" id="pool" ondragover="dragOver(event,null,null)" ondrop="drop(event,null,null)" ondragleave="dragLeave(event)"></div>
     <div class="jobs-board" id="jobs-board"></div>`;
   renderBoard();
@@ -806,11 +831,17 @@ function scheduleVolunteers(sc){
 function renderPool(){
   const pool=document.getElementById('pool');if(!pool)return;pool.innerHTML='';
   const sc=activeSched();if(!sc){pool.innerHTML='<span style="font-size:12px;color:var(--text3);align-self:center">No schedule selected.</span>';return;}
+  const hasRoster=sc.activeVolunteerIds&&sc.activeVolunteerIds.length>0;
   const assigned=new Set(Object.values(sc.assignments||{}).flat());
   const avail=scheduleVolunteers(sc).filter(v=>!assigned.has(v.id));
   avail.forEach(v=>pool.appendChild(makePoolChip(v)));
-  const total=scheduleVolunteers(sc).length;
-  if(!pool.children.length)pool.innerHTML=`<span style="font-size:12px;color:var(--text3);align-self:center">${total===0?'No volunteers for this schedule — import a CSV or activate volunteers in Master Roster':'All volunteers assigned'}</span>`;
+  if(!pool.children.length){
+    if(!hasRoster){
+      pool.innerHTML=`<span style="font-size:12px;color:var(--text3);align-self:center">No roster loaded — use "Add volunteer" above or import a CSV.</span>`;
+    } else {
+      pool.innerHTML=`<span style="font-size:12px;color:var(--text3);align-self:center">All volunteers assigned</span>`;
+    }
+  }
 }
 function renderJobSlots(){
   const board=document.getElementById('jobs-board');if(!board)return;board.innerHTML='';
@@ -1159,6 +1190,46 @@ function printSchedule(){
   document.querySelector('.app-wrap').style.display='none';
   window.print();
   document.querySelector('.app-wrap').style.display='block';pv.style.display='none';
+}
+
+/* ── ADD TO ROSTER MODAL ── */
+function openAddRosterModal(){
+  const sc=activeSched();if(!sc)return;
+  document.getElementById('add-roster-search').value='';
+  renderAddRosterList();
+  document.getElementById('add-roster-modal').style.display='flex';
+}
+function closeAddRosterModal(){
+  document.getElementById('add-roster-modal').style.display='none';
+}
+function renderAddRosterList(){
+  const sc=activeSched();if(!sc)return;
+  const q=(document.getElementById('add-roster-search').value||'').toLowerCase();
+  const onRoster=new Set(sc.activeVolunteerIds||[]);
+  const list=document.getElementById('add-roster-list');list.innerHTML='';
+  const eligible=S.volunteers
+    .filter(v=>!onRoster.has(v.id))
+    .filter(v=>!q||(v.fname+' '+v.lname).toLowerCase().includes(q))
+    .sort((a,b)=>a.lname.localeCompare(b.lname));
+  if(!eligible.length){
+    list.innerHTML='<div style="font-size:13px;color:var(--text2);padding:.5rem">No volunteers to add — everyone is already on this schedule\'s roster.</div>';
+    return;
+  }
+  eligible.forEach(v=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);font-size:13px';
+    row.innerHTML=`<span>${esc(fullName(v))}</span><button class="btn xs primary" onclick="addVolunteerToRoster('${v.id}')"><i class="ti ti-plus"></i> Add</button>`;
+    list.appendChild(row);
+  });
+}
+function addVolunteerToRoster(vid){
+  const sc=activeSched();if(!sc)return;
+  sc.activeVolunteerIds=sc.activeVolunteerIds||[];
+  if(!sc.activeVolunteerIds.includes(vid))sc.activeVolunteerIds.push(vid);
+  save();
+  renderAddRosterList(); // refresh list so added volunteer disappears
+  renderBoard();         // update pool and stats immediately
+  renderAssign();        // re-render to update the no-roster warning if needed
 }
 
 /* ── INIT ── */
