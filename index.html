@@ -331,8 +331,8 @@
       <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Job roster</div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Click any cell to edit inline. Position #1 is always the lead.</div>
       <table class="jtable">
-        <colgroup><col style="width:32%"><col style="width:44%"><col style="width:12%"><col style="width:12%"></colgroup>
-        <thead><tr><th>Job title</th><th>Notes</th><th>Slots</th><th></th></tr></thead>
+        <colgroup><col style="width:28%"><col style="width:36%"><col style="width:10%"><col class="bus-col" style="width:14%"><col style="width:12%"></colgroup>
+        <thead><tr><th>Job title</th><th>Notes</th><th>Slots</th><th class="bus-col">Bus-eligible</th><th></th></tr></thead>
         <tbody id="job-body"></tbody>
       </table>
     </div>
@@ -731,6 +731,10 @@ function defaultState(mode){
       {id:'gj3',name:'Information booth',desc:'Answer attendee questions',slots:2},
       {id:'gj4',name:'Ticket sales',desc:'',slots:2},
       {id:'gj5',name:'Cleanup crew',desc:'Post-event cleanup',slots:3},
+      {id:'gj6',name:'Colorguard',desc:'',slots:2,busEligible:true},
+      {id:'gj7',name:'Uniforms',desc:'',slots:2,busEligible:true},
+      {id:'gj8',name:'Percussion',desc:'',slots:2,busEligible:true},
+      {id:'gj9',name:'Photographers',desc:'',slots:2,busEligible:true},
     ] : [
       {id:'j1',name:'Gate entry',desc:'Scan tickets at main gate',slots:2},
       {id:'j2',name:'Concessions lead',desc:'Oversee concession stand',slots:1},
@@ -746,10 +750,6 @@ function defaultState(mode){
     halftimeJobs: isGeneral ? [
       {id:'gh1',name:'Concessions support'},
       {id:'gh2',name:'Stands usher'},
-      {id:'gh3',name:'Colorguard'},
-      {id:'gh4',name:'Uniforms'},
-      {id:'gh5',name:'Percussion'},
-      {id:'gh6',name:'Photographers'},
     ] : [
       {id:'h1',name:'Water station'},
       {id:'h2',name:'Props crew'},
@@ -793,6 +793,7 @@ async function initData(){
     if(cached) setAS(cached);
   } catch(e){}
   if(!AS()) setAS(defaultState(_mode));
+  if(_mode==='general') migrateGeneralBusJobs();
 
   autoSavePastEvents();
   showTab('schedules');
@@ -807,6 +808,29 @@ async function initData(){
       })
       .catch(err=>{ setSyncStatus('err','Sync failed — using local data'); console.warn(err); });
   }
+}
+
+function migrateGeneralBusJobs(){
+  if(!AS())return;
+  const specialNames=['Colorguard','Uniforms','Percussion','Photographers'];
+  AS().jobs=AS().jobs||[];
+  let changed=false;
+  specialNames.forEach(name=>{
+    let j=AS().jobs.find(j=>j.name.toLowerCase()===name.toLowerCase());
+    if(!j){ AS().jobs.push({id:uid(),name,desc:'',slots:2,busEligible:true}); changed=true; }
+    else if(!j.busEligible){ j.busEligible=true; changed=true; }
+  });
+  if(AS().halftimeJobs){
+    const before=AS().halftimeJobs.length;
+    AS().halftimeJobs=AS().halftimeJobs.filter(h=>!specialNames.some(n=>n.toLowerCase()===h.name.toLowerCase()));
+    if(AS().halftimeJobs.length!==before)changed=true;
+  }
+  if(AS().maxBuses===undefined){AS().maxBuses=15;changed=true;}
+  if(!AS().halfJobs||!AS().halfJobs.length){
+    AS().halfJobs=[{id:uid(),name:"Women's Restroom"},{id:uid(),name:"Men's Restroom"},{id:uid(),name:'Concourse'},{id:uid(),name:'Float'}];
+    changed=true;
+  }
+  if(changed)save();
 }
 
 /* ── AUTO-SAVE PAST EVENTS ── */
@@ -974,7 +998,10 @@ function renderAssign(){
     </details>
     <div class="pool" id="pool" ondragover="dragOver(event,null,null)" ondrop="drop(event,null,null)" ondragleave="dragLeave(event)"></div>
     <div class="jobs-board" id="jobs-board"></div>
-    ${_mode==='general'?`<div id="general-vol-table-wrap" style="margin-top:1.25rem"></div>`:''}`;
+    ${_mode==='general'?`
+      <div style="font-size:14px;font-weight:500;margin:1.25rem 0 .5rem"><i class="ti ti-bus" style="font-size:13px"></i> Buses <span style="font-weight:400;font-size:12px;color:var(--text2)">— 2 slots each; drag directly, or assign via Colorguard/Uniforms/Percussion/Photographers above</span></div>
+      <div class="jobs-board" id="bus-board"></div>
+      <div id="general-vol-table-wrap" style="margin-top:1.25rem"></div>`:''}`;
   renderBoard();
 }
 function fmtDate(iso){if(!iso)return'';const d=new Date(iso+'T00:00:00');return d.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});}
@@ -1002,14 +1029,17 @@ function drop(e,jid,insertIdx){
   const vid=dragVid,fromJob=dragFrom;dragVid=null;dragFrom=null;
   if(fromJob)sc.assignments[fromJob]=(sc.assignments[fromJob]||[]).filter(x=>x!==vid);
   if(jid){
-    const j=eventJobs(sc).find(j=>j.id===jid);if(!j)return;
+    const isBus=jid.indexOf('bus')===0;
+    const slots=isBus?BUS_SLOTS:(eventJobs(sc).find(j=>j.id===jid)||{}).slots;
+    if(slots===undefined)return;
     const arr=sc.assignments[jid]||[];
     if(arr.includes(vid)){
       const oi=arr.indexOf(vid);arr.splice(oi,1);
       let ni=insertIdx!=null?insertIdx:arr.length;if(ni>arr.length)ni=arr.length;
       arr.splice(ni,0,vid);sc.assignments[jid]=arr;
     } else {
-      if(arr.length>=j.slots){alert('This job slot is full!');renderBoard();return;}
+      const effectiveCount=isBus?busEffectiveCount(sc,jid):arr.length;
+      if(effectiveCount>=slots){alert(isBus?'This bus is full!':'This job slot is full!');renderBoard();return;}
       const na=[...arr];let ni=insertIdx!=null?insertIdx:na.length;if(ni>na.length)ni=na.length;
       na.splice(ni,0,vid);sc.assignments[jid]=na;
     }
@@ -1018,7 +1048,26 @@ function drop(e,jid,insertIdx){
 }
 
 /* ── BOARD ── */
-function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJobsTable();if(_mode==='general')renderGeneralVolTable();}
+const BUS_SLOTS = 2;
+// Returns the job list for a specific schedule — per-event if set, else global
+function eventJobs(sc){ return (sc&&sc.jobs&&sc.jobs.length)?sc.jobs:AS().jobs; }
+// Bus helpers (General mode)
+function busIds(){ const n=(AS()&&AS().maxBuses)||15; return Array.from({length:n},(_,i)=>'bus'+(i+1)); }
+function busLabelFromId(bid){ return 'Bus '+String(bid).replace('bus',''); }
+function busDirectVols(sc,bid){ return (sc.assignments&&sc.assignments[bid])||[]; }
+function busIndirectVols(sc,bid){ const via=sc.busViaSpecial||{}; return Object.keys(via).filter(vid=>via[vid]===bid); }
+function busEffectiveCount(sc,bid){ return busDirectVols(sc,bid).length + busIndirectVols(sc,bid).length; }
+function busIsFull(sc,bid,excludeVid){
+  let indirect=busIndirectVols(sc,bid);
+  if(excludeVid)indirect=indirect.filter(v=>v!==excludeVid);
+  return busDirectVols(sc,bid).length+indirect.length>=BUS_SLOTS;
+}
+function getVolunteerBus(sc,vid){
+  for(const bid of busIds()){ if(busDirectVols(sc,bid).includes(vid))return bid; }
+  if(sc.busViaSpecial&&sc.busViaSpecial[vid])return sc.busViaSpecial[vid];
+  return null;
+}
+function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJobsTable();if(_mode==='general'){renderBusBoard();renderGeneralVolTable();}}
 
 function renderEventJobsTable(){
   const sc=activeSched();if(!sc)return;
@@ -1108,12 +1157,20 @@ function renderJobSlots(){
       const htKey=j.id+'_'+v.id;
       const htVal=(sc.halftimeAssignments&&sc.halftimeAssignments[htKey])||'';
       const opts=htOpts.replace(`value="${htVal}"`,`value="${htVal}" selected`);
+      let busSelectHtml='';
+      if(_mode==='general'&&j.busEligible){
+        const curBus=(sc.busViaSpecial&&sc.busViaSpecial[v.id])||'';
+        const availBuses=busIds().filter(bid=>!busIsFull(sc,bid,v.id));
+        const busOptsHtml='<option value="">— assign bus —</option>'+availBuses.map(bid=>`<option value="${bid}"${bid===curBus?' selected':''}>${busLabelFromId(bid)}</option>`).join('');
+        busSelectHtml=`<select class="pos-ht-select" style="max-width:110px" onchange="setSpecialBusAssign('${v.id}',this.value)" title="Assign to bus">${busOptsHtml}</select>`;
+      }
       const row=document.createElement('div');
       row.className='pos-row'+(isLead?' is-lead-row':'');row.draggable=true;row.dataset.insert=idx;
       row.innerHTML=`<span class="pos-num"><i class="ti ti-grip-vertical" style="font-size:11px;cursor:grab"></i></span>
         <span class="pos-num" style="margin-left:-4px">${isLead?'<i class="ti ti-star" style="font-size:10px"></i>':idx+1}</span>
         <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}</span>
         <select class="pos-ht-select" onchange="setHalftime('${j.id}','${v.id}',this.value)">${opts}</select>
+        ${busSelectHtml}
         <span class="pos-remove" onclick="removePos('${j.id}','${v.id}')" title="Remove">×</span>`;
       row.addEventListener('dragstart',e=>{dragVid=v.id;dragFrom=j.id;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',v.id);setTimeout(()=>row.classList.add('dragging'),0);});
       row.addEventListener('dragend',()=>row.classList.remove('dragging'));
@@ -1142,6 +1199,14 @@ function removePos(jid,vid){
   const sc=activeSched();if(!sc)return;
   sc.assignments[jid]=(sc.assignments[jid]||[]).filter(x=>x!==vid);
   if(sc.halftimeAssignments)delete sc.halftimeAssignments[jid+'_'+vid];
+  const j=eventJobs(sc).find(j=>j.id===jid);
+  if(j&&j.busEligible&&sc.busViaSpecial&&sc.busViaSpecial[vid])delete sc.busViaSpecial[vid];
+  save();renderBoard();
+}
+function setSpecialBusAssign(vid,busId){
+  const sc=activeSched();if(!sc)return;
+  sc.busViaSpecial=sc.busViaSpecial||{};
+  if(busId)sc.busViaSpecial[vid]=busId;else delete sc.busViaSpecial[vid];
   save();renderBoard();
 }
 function setHalftime(jid,vid,htId){
@@ -1150,6 +1215,57 @@ function setHalftime(jid,vid,htId){
   const key=jid+'_'+vid;
   if(htId)sc.halftimeAssignments[key]=htId;else delete sc.halftimeAssignments[key];
   save();
+}
+function renderBusBoard(){
+  const wrap=document.getElementById('bus-board');if(!wrap)return;wrap.innerHTML='';
+  const sc=activeSched();if(!sc)return;
+  busIds().forEach(bid=>{
+    const direct=busDirectVols(sc,bid);
+    const indirect=busIndirectVols(sc,bid);
+    const total=direct.length+indirect.length;
+    const full=total>=BUS_SLOTS;
+    const slot=document.createElement('div');slot.className='job-slot';slot.dataset.jid=bid;
+    const badge=full?'<span class="badge green">Full</span>':total>0?`<span class="badge amber">${total}/${BUS_SLOTS}</span>`:`<span class="badge gray">0/${BUS_SLOTS}</span>`;
+    const posWrap=document.createElement('div');posWrap.className='slot-positions';
+    direct.forEach((vid,idx)=>{
+      const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
+      const row=document.createElement('div');
+      row.className='pos-row';row.draggable=true;row.dataset.insert=idx;
+      row.innerHTML=`<span class="pos-num"><i class="ti ti-grip-vertical" style="font-size:11px;cursor:grab"></i></span>
+        <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}</span>
+        <span class="pos-remove" onclick="removePos('${bid}','${vid}')" title="Remove">×</span>`;
+      row.addEventListener('dragstart',e=>{dragVid=vid;dragFrom=bid;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',vid);setTimeout(()=>row.classList.add('dragging'),0);});
+      row.addEventListener('dragend',()=>row.classList.remove('dragging'));
+      row.addEventListener('dragover',e=>dragOver(e,bid,idx));
+      row.addEventListener('dragleave',e=>{if(!row.contains(e.relatedTarget))row.classList.remove('drag-over');});
+      row.addEventListener('drop',e=>drop(e,bid,idx));
+      posWrap.appendChild(row);
+    });
+    indirect.forEach(vid=>{
+      const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
+      const srcJob=eventJobs(sc).find(j=>j.busEligible&&(sc.assignments[j.id]||[]).includes(vid));
+      const row=document.createElement('div');
+      row.className='pos-row';row.style.background='var(--purple-lt)';
+      row.innerHTML=`<span class="pos-num"><i class="ti ti-link" style="font-size:11px"></i></span>
+        <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}</span>
+        <span style="font-size:10px;color:var(--text2);white-space:nowrap">via ${esc(srcJob?srcJob.name:'group')}</span>`;
+      posWrap.appendChild(row);
+    });
+    for(let i=total;i<BUS_SLOTS;i++){
+      const empty=document.createElement('div');empty.className='pos-row';empty.style.opacity='.35';empty.dataset.insert=i;
+      empty.innerHTML=`<span class="pos-num">${i+1}</span><span class="pos-name" style="color:var(--text3);font-weight:400">Empty — drop here</span>`;
+      empty.addEventListener('dragover',e=>dragOver(e,bid,i));
+      empty.addEventListener('dragleave',e=>{if(!empty.contains(e.relatedTarget))empty.classList.remove('drag-over');});
+      empty.addEventListener('drop',e=>drop(e,bid,i));
+      posWrap.appendChild(empty);
+    }
+    slot.innerHTML=`<div class="slot-header"><span class="slot-title">${busLabelFromId(bid)}</span>${badge}</div>`;
+    slot.appendChild(posWrap);
+    slot.addEventListener('dragover',e=>{if(e.target===slot||e.target.classList.contains('slot-header')||e.target.classList.contains('slot-title'))dragOver(e,bid,null);});
+    slot.addEventListener('drop',e=>{if(e.target===slot||e.target.classList.contains('slot-header')||e.target.classList.contains('slot-title'))drop(e,bid,null);});
+    slot.addEventListener('dragleave',e=>dragLeave(e));
+    wrap.appendChild(slot);
+  });
 }
 function renderStats(){
   const el=document.getElementById('assign-stats');if(!el)return;
@@ -1327,11 +1443,16 @@ function removeJob(id){
 }
 function editJobField(id,field,val){
   const j=AS().jobs.find(j=>j.id===id);if(!j)return;
-  if(field==='slots'){const n=parseInt(val);if(n>=1&&n<=10)j.slots=n;}else j[field]=val.trim();save();
+  if(field==='slots'){const n=parseInt(val);if(n>=1&&n<=10)j.slots=n;}
+  else if(field==='busEligible'){j.busEligible=!!val;}
+  else j[field]=val.trim();
+  save();
 }
 function renderJobsTable(){
   const tb=document.getElementById('job-body');if(!tb||!AS())return;tb.innerHTML='';
-  if(!AS().jobs.length){tb.innerHTML='<tr><td colspan="4" style="padding:1rem;font-size:13px;color:var(--text2)">No jobs yet.</td></tr>';return;}
+  const isGen=_mode==='general';
+  document.querySelectorAll('.bus-col').forEach(el=>el.style.display=isGen?'':'none');
+  if(!AS().jobs.length){tb.innerHTML=`<tr><td colspan="${isGen?5:4}" style="padding:1rem;font-size:13px;color:var(--text2)">No jobs yet.</td></tr>`;return;}
   AS().jobs.forEach(j=>{
     const tr=document.createElement('tr');
     tr.innerHTML=`
@@ -1340,6 +1461,7 @@ function renderJobsTable(){
       <td><select style="font-size:12px;padding:3px 6px;width:56px" onchange="editJobField('${j.id}','slots',this.value)">
         ${Array.from({length:10},(_,i)=>`<option value="${i+1}"${j.slots===i+1?' selected':''}>${i+1}</option>`).join('')}
       </select></td>
+      <td class="bus-col" style="text-align:center;display:${isGen?'':'none'}"><input type="checkbox" ${j.busEligible?'checked':''} onchange="editJobField('${j.id}','busEligible',this.checked)" title="Volunteers in this job can also be assigned to a bus"></td>
       <td><button class="btn xs danger" onclick="removeJob('${j.id}')"><i class="ti ti-trash"></i></button></td>`;
     tb.appendChild(tr);
   });
@@ -1526,34 +1648,30 @@ function renderGeneralVolTable(){
   const sc=activeSched();if(!sc){wrap.innerHTML='';return;}
   const vols=scheduleVolunteers(sc);
   if(!vols.length){wrap.innerHTML='';return;}
-  const maxBuses=AS().maxBuses||15;
   const halfJobs=AS().halfJobs||[];
   const htJobs=AS().halftimeJobs||[];
-
-  const busOpts='<option value="">— none —</option>'+Array.from({length:maxBuses},(_,i)=>`<option value="bus${i+1}">Bus ${i+1}</option>`).join('');
   const halfOpts='<option value="">— none —</option>'+halfJobs.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
   const htOpts='<option value="">— none —</option>'+htJobs.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
 
   const sorted=[...vols].sort((a,b)=>{
-    const ba=(sc.busAssignments&&sc.busAssignments[a.id])||'zzz';
-    const bb=(sc.busAssignments&&sc.busAssignments[b.id])||'zzz';
+    const ba=getVolunteerBus(sc,a.id)||'zzz';
+    const bb=getVolunteerBus(sc,b.id)||'zzz';
     if(ba!==bb)return ba.localeCompare(bb,undefined,{numeric:true});
     return a.lname.localeCompare(b.lname);
   });
 
   let rows='';
   sorted.forEach(v=>{
-    const busVal=(sc.busAssignments&&sc.busAssignments[v.id])||'';
+    const bus=getVolunteerBus(sc,v.id);
     const h1Val=(sc.firstHalfAssignments&&sc.firstHalfAssignments[v.id])||'';
     const htVal=(sc.halftimeAssignments&&sc.halftimeAssignments[v.id])||'';
     const h2Val=(sc.secondHalfAssignments&&sc.secondHalfAssignments[v.id])||'';
-    const bSel=busOpts.replace(`value="${busVal}"`,`value="${busVal}" selected`);
     const h1Sel=halfOpts.replace(`value="${h1Val}"`,`value="${h1Val}" selected`);
     const htSel=htOpts.replace(`value="${htVal}"`,`value="${htVal}" selected`);
     const h2Sel=halfOpts.replace(`value="${h2Val}"`,`value="${h2Val}" selected`);
     rows+=`<tr>
       <td style="font-size:13px;font-weight:500;white-space:nowrap">${esc(fullName(v))}</td>
-      <td><select class="pos-ht-select" style="width:100%" onchange="setGenAssign('${v.id}','bus',this.value)">${bSel}</select></td>
+      <td style="font-size:12px;color:${bus?'var(--text)':'var(--text3)'}">${bus?busLabelFromId(bus):'— unassigned —'}</td>
       <td><select class="pos-ht-select" style="width:100%" onchange="setGenAssign('${v.id}','h1',this.value)">${h1Sel}</select></td>
       <td><select class="pos-ht-select" style="width:100%" onchange="setGenAssign('${v.id}','ht',this.value)">${htSel}</select></td>
       <td><select class="pos-ht-select" style="width:100%" onchange="setGenAssign('${v.id}','h2',this.value)">${h2Sel}</select></td>
@@ -1562,13 +1680,13 @@ function renderGeneralVolTable(){
 
   wrap.innerHTML=`
     <div style="font-size:14px;font-weight:500;margin-bottom:.6rem"><i class="ti ti-layout-rows" style="font-size:13px"></i> Volunteer assignments</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">Assign each volunteer a bus and jobs for each period. Sorted by bus number.</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">Bus is set via the Buses board above. Assign 1st half, halftime, and 2nd half jobs here.</div>
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead>
         <tr style="background:var(--surface2)">
           <th style="text-align:left;padding:7px 8px;border-bottom:.5px solid var(--border);font-weight:500;min-width:140px">Volunteer</th>
-          <th style="text-align:left;padding:7px 8px;border-bottom:.5px solid var(--border);font-weight:500;min-width:100px">Bus</th>
+          <th style="text-align:left;padding:7px 8px;border-bottom:.5px solid var(--border);font-weight:500;min-width:80px">Bus</th>
           <th style="text-align:left;padding:7px 8px;border-bottom:.5px solid var(--border);font-weight:500;min-width:140px">1st Half</th>
           <th style="text-align:left;padding:7px 8px;border-bottom:.5px solid var(--border);font-weight:500;min-width:140px">Halftime</th>
           <th style="text-align:left;padding:7px 8px;border-bottom:.5px solid var(--border);font-weight:500;min-width:140px">2nd Half</th>
@@ -1581,13 +1699,11 @@ function renderGeneralVolTable(){
 
 function setGenAssign(vid,field,val){
   const sc=activeSched();if(!sc)return;
-  const fieldMap={bus:'busAssignments',h1:'firstHalfAssignments',ht:'halftimeAssignments',h2:'secondHalfAssignments'};
+  const fieldMap={h1:'firstHalfAssignments',ht:'halftimeAssignments',h2:'secondHalfAssignments'};
   const key=fieldMap[field];if(!key)return;
   sc[key]=sc[key]||{};
   if(val)sc[key][vid]=val;else delete sc[key][vid];
   save();
-  // Re-sort table without full re-render (just re-render the table section)
-  if(field==='bus')renderGeneralVolTable();
 }
 
 /* ── PRINT ── */
@@ -1639,11 +1755,9 @@ function printGeneralSchedule(sc){
   const htJobs=AS().halftimeJobs||[];
   function halfName(id){return id?(halfJobs.find(h=>h.id===id)||{name:'—'}).name:'—';}
   function htName(id){return id?(htJobs.find(h=>h.id===id)||{name:'—'}).name:'—';}
-  function busLabel(val){return val?'Bus '+val.replace('bus',''):'—';}
-  // Group by bus, sort numerically
   const byBus={};
   vols.forEach(v=>{
-    const bus=(sc.busAssignments&&sc.busAssignments[v.id])||'unassigned';
+    const bus=getVolunteerBus(sc,v.id)||'unassigned';
     (byBus[bus]=byBus[bus]||[]).push(v);
   });
   const busKeys=Object.keys(byBus).sort((a,b)=>{
@@ -1666,14 +1780,15 @@ function printGeneralSchedule(sc){
     const busVols=[...byBus[bus]].sort((a,b)=>a.lname.localeCompare(b.lname));
     const hdrBg=bus==='unassigned'?'#f9f0e8':'#e8f3fb';
     const hdrBorder=bus==='unassigned'?'#ddd':'#aac8e0';
-    html+=`<tr style="background:${hdrBg}"><td colspan="5" style="padding:4px 8px;font-weight:600;font-size:12px;border-top:1.5px solid ${hdrBorder};color:${bus==='unassigned'?'#888':'#1a1a18'}">${bus==='unassigned'?'No bus assigned':busLabel(bus)}</td></tr>`;
+    const label=bus==='unassigned'?'No bus assigned':busLabelFromId(bus);
+    html+=`<tr style="background:${hdrBg}"><td colspan="5" style="padding:4px 8px;font-weight:600;font-size:12px;border-top:1.5px solid ${hdrBorder};color:${bus==='unassigned'?'#888':'#1a1a18'}">${label}</td></tr>`;
     busVols.forEach((v,i)=>{
       const h1=(sc.firstHalfAssignments&&sc.firstHalfAssignments[v.id])||'';
       const ht=(sc.halftimeAssignments&&sc.halftimeAssignments[v.id])||'';
       const h2=(sc.secondHalfAssignments&&sc.secondHalfAssignments[v.id])||'';
       html+=`<tr style="background:${i%2===0?'#fff':'#fafaf8'};border-bottom:.5px solid #eee">
         <td style="padding:5px 8px;font-weight:500">${fullName(v)}</td>
-        <td style="padding:5px 8px;color:#555">${busLabel(bus)}</td>
+        <td style="padding:5px 8px;color:#555">${bus==='unassigned'?'—':busLabelFromId(bus)}</td>
         <td style="padding:5px 8px">${halfName(h1)}</td>
         <td style="padding:5px 8px">${htName(ht)}</td>
         <td style="padding:5px 8px">${halfName(h2)}</td>
