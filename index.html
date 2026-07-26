@@ -353,7 +353,7 @@
       </table>
     </div>
 
-    <div class="card" style="margin-top:1.5rem;border-color:var(--border-med)">
+    <div class="card pw-admin-only" style="margin-top:1.5rem;border-color:var(--border-med)">
       <div style="font-size:15px;font-weight:500;margin-bottom:.25rem"><i class="ti ti-lock" style="font-size:14px"></i> Password management</div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Passwords are stored in the <strong>AppPasswords</strong> tab of your Google Sheet. Load current passwords to edit, then save back to the sheet. Leave a field blank to keep the existing password unchanged.</div>
       <div id="pw-load-area">
@@ -494,8 +494,11 @@ function applyMode(mode){
     indicator.innerHTML = `<span class="mode-pill ${cls}"><i class="ti ti-${mode==='logistics'?'truck':'users'}"></i> ${label}</span>`;
   }
 
-  // Config tab — only admin
-  document.querySelectorAll('.config-tab').forEach(t => t.style.display = _role==='admin' ? '' : 'none');
+  // Password card — only admin
+  document.querySelectorAll('.pw-admin-only').forEach(el => el.style.display = _role==='admin' ? '' : 'none');
+
+  // CSS for config tab — visible to all roles
+  document.querySelectorAll('.config-tab').forEach(t => t.style.display = '');
 
   // Subtitle
   document.getElementById('app-subtitle').textContent =
@@ -1176,9 +1179,10 @@ function confirmCsvImport(){
       let ch=false;
       if(email&&!vol.email){vol.email=email;ch=true;}
       if(rawPhone&&vol.phone==='unknown'){vol.phone=rawPhone;ch=true;}
+      if(!vol.active){vol.active=true;ch=true;}
       if(ch)rosterUpdated++;
     } else {
-      vol={id:uid(),fname,lname,email:email||'',phone,active:false};
+      vol={id:uid(),fname,lname,email:email||'',phone,active:true};
       AS().volunteers.push(vol);added++;
     }
     schedVolIds.push(vol.id);
