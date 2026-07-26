@@ -331,8 +331,8 @@
       <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Job roster</div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Click any cell to edit inline. Position #1 is always the lead.</div>
       <table class="jtable">
-        <colgroup><col style="width:28%"><col style="width:36%"><col style="width:10%"><col class="bus-col" style="width:14%"><col style="width:12%"></colgroup>
-        <thead><tr><th>Job title</th><th>Notes</th><th>Slots</th><th class="bus-col">Bus-eligible</th><th></th></tr></thead>
+        <colgroup><col style="width:32%"><col style="width:44%"><col style="width:12%"><col style="width:12%"></colgroup>
+        <thead><tr><th>Job title</th><th>Notes</th><th>Slots</th><th></th></tr></thead>
         <tbody id="job-body"></tbody>
       </table>
     </div>
@@ -731,10 +731,10 @@ function defaultState(mode){
       {id:'gj3',name:'Information booth',desc:'Answer attendee questions',slots:2},
       {id:'gj4',name:'Ticket sales',desc:'',slots:2},
       {id:'gj5',name:'Cleanup crew',desc:'Post-event cleanup',slots:3},
-      {id:'gj6',name:'Colorguard',desc:'',slots:2,busEligible:true},
-      {id:'gj7',name:'Uniforms',desc:'',slots:2,busEligible:true},
-      {id:'gj8',name:'Percussion',desc:'',slots:2,busEligible:true},
-      {id:'gj9',name:'Photographers',desc:'',slots:2,busEligible:true},
+      {id:'gj6',name:'Colorguard',desc:'',slots:2},
+      {id:'gj7',name:'Uniforms',desc:'',slots:2},
+      {id:'gj8',name:'Percussion',desc:'',slots:2},
+      {id:'gj9',name:'Photographers',desc:'',slots:2},
     ] : [
       {id:'j1',name:'Gate entry',desc:'Scan tickets at main gate',slots:2},
       {id:'j2',name:'Concessions lead',desc:'Oversee concession stand',slots:1},
@@ -817,8 +817,7 @@ function migrateGeneralBusJobs(){
   let changed=false;
   specialNames.forEach(name=>{
     let j=AS().jobs.find(j=>j.name.toLowerCase()===name.toLowerCase());
-    if(!j){ AS().jobs.push({id:uid(),name,desc:'',slots:2,busEligible:true}); changed=true; }
-    else if(!j.busEligible){ j.busEligible=true; changed=true; }
+    if(!j){ AS().jobs.push({id:uid(),name,desc:'',slots:2}); changed=true; }
   });
   if(AS().halftimeJobs){
     const before=AS().halftimeJobs.length;
@@ -971,7 +970,7 @@ function renderAssign(){
       Import a CSV from the <strong>Master Roster</strong> tab to set this week's volunteers, or add them individually below.
     </div>`:''}
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:.4rem">
-      <div style="font-size:12px;color:var(--text2)">Drag from pool or any position row — drop onto a job to append, onto a row to insert, or back to pool to unassign.</div>
+      <div style="font-size:12px;color:var(--text2)">Drag from pool or any position row — drop onto a job or bus to append, onto a row to insert, or back to pool to unassign.${_mode==='general'?' Buses appear alongside jobs below.':''}</div>
       <button class="btn sm" onclick="openAddRosterModal()"><i class="ti ti-user-plus"></i> Add volunteer</button>
     </div>
     <details id="event-jobs-editor" style="margin-bottom:.75rem;background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius-lg)">
@@ -998,10 +997,7 @@ function renderAssign(){
     </details>
     <div class="pool" id="pool" ondragover="dragOver(event,null,null)" ondrop="drop(event,null,null)" ondragleave="dragLeave(event)"></div>
     <div class="jobs-board" id="jobs-board"></div>
-    ${_mode==='general'?`
-      <div style="font-size:14px;font-weight:500;margin:1.25rem 0 .5rem"><i class="ti ti-bus" style="font-size:13px"></i> Buses <span style="font-weight:400;font-size:12px;color:var(--text2)">— 2 slots each; drag directly, or assign via Colorguard/Uniforms/Percussion/Photographers above</span></div>
-      <div class="jobs-board" id="bus-board"></div>
-      <div id="general-vol-table-wrap" style="margin-top:1.25rem"></div>`:''}`;
+    ${_mode==='general'?`<div id="general-vol-table-wrap" style="margin-top:1.25rem"></div>`:''}`;
   renderBoard();
 }
 function fmtDate(iso){if(!iso)return'';const d=new Date(iso+'T00:00:00');return d.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});}
@@ -1067,7 +1063,7 @@ function getVolunteerBus(sc,vid){
   if(sc.busViaSpecial&&sc.busViaSpecial[vid])return sc.busViaSpecial[vid];
   return null;
 }
-function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJobsTable();if(_mode==='general'){renderBusBoard();renderGeneralVolTable();}}
+function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJobsTable();if(_mode==='general')renderGeneralVolTable();}
 
 function renderEventJobsTable(){
   const sc=activeSched();if(!sc)return;
@@ -1146,6 +1142,8 @@ function renderJobSlots(){
   const board=document.getElementById('jobs-board');if(!board)return;board.innerHTML='';
   const sc=activeSched();if(!sc)return;
   const htOpts='<option value="">— none —</option>'+AS().halftimeJobs.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
+  const isGen=_mode==='general';
+
   eventJobs(sc).forEach(j=>{
     const asgn=(sc.assignments[j.id]||[]);const full=asgn.length>=j.slots;
     const slot=document.createElement('div');slot.className='job-slot';slot.dataset.jid=j.id;
@@ -1154,11 +1152,15 @@ function renderJobSlots(){
     const posWrap=document.createElement('div');posWrap.className='slot-positions';
     volObjs.forEach((v,idx)=>{
       const isLead=idx===0;
-      const htKey=j.id+'_'+v.id;
-      const htVal=(sc.halftimeAssignments&&sc.halftimeAssignments[htKey])||'';
-      const opts=htOpts.replace(`value="${htVal}"`,`value="${htVal}" selected`);
+      let htSelectHtml='';
+      if(!isGen){
+        const htKey=j.id+'_'+v.id;
+        const htVal=(sc.halftimeAssignments&&sc.halftimeAssignments[htKey])||'';
+        const opts=htOpts.replace(`value="${htVal}"`,`value="${htVal}" selected`);
+        htSelectHtml=`<select class="pos-ht-select" onchange="setHalftime('${j.id}','${v.id}',this.value)">${opts}</select>`;
+      }
       let busSelectHtml='';
-      if(_mode==='general'&&j.busEligible){
+      if(isGen){
         const curBus=(sc.busViaSpecial&&sc.busViaSpecial[v.id])||'';
         const availBuses=busIds().filter(bid=>!busIsFull(sc,bid,v.id));
         const busOptsHtml='<option value="">— assign bus —</option>'+availBuses.map(bid=>`<option value="${bid}"${bid===curBus?' selected':''}>${busLabelFromId(bid)}</option>`).join('');
@@ -1169,7 +1171,7 @@ function renderJobSlots(){
       row.innerHTML=`<span class="pos-num"><i class="ti ti-grip-vertical" style="font-size:11px;cursor:grab"></i></span>
         <span class="pos-num" style="margin-left:-4px">${isLead?'<i class="ti ti-star" style="font-size:10px"></i>':idx+1}</span>
         <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}</span>
-        <select class="pos-ht-select" onchange="setHalftime('${j.id}','${v.id}',this.value)">${opts}</select>
+        ${htSelectHtml}
         ${busSelectHtml}
         <span class="pos-remove" onclick="removePos('${j.id}','${v.id}')" title="Remove">×</span>`;
       row.addEventListener('dragstart',e=>{dragVid=v.id;dragFrom=j.id;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',v.id);setTimeout(()=>row.classList.add('dragging'),0);});
@@ -1194,13 +1196,63 @@ function renderJobSlots(){
     slot.addEventListener('dragleave',e=>dragLeave(e));
     board.appendChild(slot);
   });
+
+  // General mode: buses render as cards in the same board, right alongside jobs
+  if(isGen){
+    busIds().forEach(bid=>{
+      const direct=busDirectVols(sc,bid);
+      const indirect=busIndirectVols(sc,bid);
+      const total=direct.length+indirect.length;
+      const full=total>=BUS_SLOTS;
+      const slot=document.createElement('div');slot.className='job-slot';slot.dataset.jid=bid;
+      const badge=full?'<span class="badge green">Full</span>':total>0?`<span class="badge amber">${total}/${BUS_SLOTS}</span>`:`<span class="badge gray">0/${BUS_SLOTS}</span>`;
+      const posWrap=document.createElement('div');posWrap.className='slot-positions';
+      direct.forEach((vid,idx)=>{
+        const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
+        const row=document.createElement('div');
+        row.className='pos-row';row.draggable=true;row.dataset.insert=idx;
+        row.innerHTML=`<span class="pos-num"><i class="ti ti-grip-vertical" style="font-size:11px;cursor:grab"></i></span>
+          <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}</span>
+          <span class="pos-remove" onclick="removePos('${bid}','${vid}')" title="Remove">×</span>`;
+        row.addEventListener('dragstart',e=>{dragVid=vid;dragFrom=bid;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',vid);setTimeout(()=>row.classList.add('dragging'),0);});
+        row.addEventListener('dragend',()=>row.classList.remove('dragging'));
+        row.addEventListener('dragover',e=>dragOver(e,bid,idx));
+        row.addEventListener('dragleave',e=>{if(!row.contains(e.relatedTarget))row.classList.remove('drag-over');});
+        row.addEventListener('drop',e=>drop(e,bid,idx));
+        posWrap.appendChild(row);
+      });
+      indirect.forEach(vid=>{
+        const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
+        const srcJob=eventJobs(sc).find(j=>(sc.assignments[j.id]||[]).includes(vid));
+        const row=document.createElement('div');
+        row.className='pos-row';row.style.background='var(--purple-lt)';
+        row.innerHTML=`<span class="pos-num"><i class="ti ti-link" style="font-size:11px"></i></span>
+          <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}</span>
+          <span style="font-size:10px;color:var(--text2);white-space:nowrap">via ${esc(srcJob?srcJob.name:'job')}</span>`;
+        posWrap.appendChild(row);
+      });
+      for(let i=total;i<BUS_SLOTS;i++){
+        const empty=document.createElement('div');empty.className='pos-row';empty.style.opacity='.35';empty.dataset.insert=i;
+        empty.innerHTML=`<span class="pos-num">${i+1}</span><span class="pos-name" style="color:var(--text3);font-weight:400">Empty — drop here</span>`;
+        empty.addEventListener('dragover',e=>dragOver(e,bid,i));
+        empty.addEventListener('dragleave',e=>{if(!empty.contains(e.relatedTarget))empty.classList.remove('drag-over');});
+        empty.addEventListener('drop',e=>drop(e,bid,i));
+        posWrap.appendChild(empty);
+      }
+      slot.innerHTML=`<div class="slot-header"><span class="slot-title"><i class="ti ti-bus" style="font-size:12px"></i> ${busLabelFromId(bid)}</span>${badge}</div>`;
+      slot.appendChild(posWrap);
+      slot.addEventListener('dragover',e=>{if(e.target===slot||e.target.classList.contains('slot-header')||e.target.classList.contains('slot-title'))dragOver(e,bid,null);});
+      slot.addEventListener('drop',e=>{if(e.target===slot||e.target.classList.contains('slot-header')||e.target.classList.contains('slot-title'))drop(e,bid,null);});
+      slot.addEventListener('dragleave',e=>dragLeave(e));
+      board.appendChild(slot);
+    });
+  }
 }
 function removePos(jid,vid){
   const sc=activeSched();if(!sc)return;
   sc.assignments[jid]=(sc.assignments[jid]||[]).filter(x=>x!==vid);
   if(sc.halftimeAssignments)delete sc.halftimeAssignments[jid+'_'+vid];
-  const j=eventJobs(sc).find(j=>j.id===jid);
-  if(j&&j.busEligible&&sc.busViaSpecial&&sc.busViaSpecial[vid])delete sc.busViaSpecial[vid];
+  if(sc.busViaSpecial&&sc.busViaSpecial[vid])delete sc.busViaSpecial[vid];
   save();renderBoard();
 }
 function setSpecialBusAssign(vid,busId){
@@ -1215,57 +1267,6 @@ function setHalftime(jid,vid,htId){
   const key=jid+'_'+vid;
   if(htId)sc.halftimeAssignments[key]=htId;else delete sc.halftimeAssignments[key];
   save();
-}
-function renderBusBoard(){
-  const wrap=document.getElementById('bus-board');if(!wrap)return;wrap.innerHTML='';
-  const sc=activeSched();if(!sc)return;
-  busIds().forEach(bid=>{
-    const direct=busDirectVols(sc,bid);
-    const indirect=busIndirectVols(sc,bid);
-    const total=direct.length+indirect.length;
-    const full=total>=BUS_SLOTS;
-    const slot=document.createElement('div');slot.className='job-slot';slot.dataset.jid=bid;
-    const badge=full?'<span class="badge green">Full</span>':total>0?`<span class="badge amber">${total}/${BUS_SLOTS}</span>`:`<span class="badge gray">0/${BUS_SLOTS}</span>`;
-    const posWrap=document.createElement('div');posWrap.className='slot-positions';
-    direct.forEach((vid,idx)=>{
-      const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
-      const row=document.createElement('div');
-      row.className='pos-row';row.draggable=true;row.dataset.insert=idx;
-      row.innerHTML=`<span class="pos-num"><i class="ti ti-grip-vertical" style="font-size:11px;cursor:grab"></i></span>
-        <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}</span>
-        <span class="pos-remove" onclick="removePos('${bid}','${vid}')" title="Remove">×</span>`;
-      row.addEventListener('dragstart',e=>{dragVid=vid;dragFrom=bid;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',vid);setTimeout(()=>row.classList.add('dragging'),0);});
-      row.addEventListener('dragend',()=>row.classList.remove('dragging'));
-      row.addEventListener('dragover',e=>dragOver(e,bid,idx));
-      row.addEventListener('dragleave',e=>{if(!row.contains(e.relatedTarget))row.classList.remove('drag-over');});
-      row.addEventListener('drop',e=>drop(e,bid,idx));
-      posWrap.appendChild(row);
-    });
-    indirect.forEach(vid=>{
-      const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
-      const srcJob=eventJobs(sc).find(j=>j.busEligible&&(sc.assignments[j.id]||[]).includes(vid));
-      const row=document.createElement('div');
-      row.className='pos-row';row.style.background='var(--purple-lt)';
-      row.innerHTML=`<span class="pos-num"><i class="ti ti-link" style="font-size:11px"></i></span>
-        <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}</span>
-        <span style="font-size:10px;color:var(--text2);white-space:nowrap">via ${esc(srcJob?srcJob.name:'group')}</span>`;
-      posWrap.appendChild(row);
-    });
-    for(let i=total;i<BUS_SLOTS;i++){
-      const empty=document.createElement('div');empty.className='pos-row';empty.style.opacity='.35';empty.dataset.insert=i;
-      empty.innerHTML=`<span class="pos-num">${i+1}</span><span class="pos-name" style="color:var(--text3);font-weight:400">Empty — drop here</span>`;
-      empty.addEventListener('dragover',e=>dragOver(e,bid,i));
-      empty.addEventListener('dragleave',e=>{if(!empty.contains(e.relatedTarget))empty.classList.remove('drag-over');});
-      empty.addEventListener('drop',e=>drop(e,bid,i));
-      posWrap.appendChild(empty);
-    }
-    slot.innerHTML=`<div class="slot-header"><span class="slot-title">${busLabelFromId(bid)}</span>${badge}</div>`;
-    slot.appendChild(posWrap);
-    slot.addEventListener('dragover',e=>{if(e.target===slot||e.target.classList.contains('slot-header')||e.target.classList.contains('slot-title'))dragOver(e,bid,null);});
-    slot.addEventListener('drop',e=>{if(e.target===slot||e.target.classList.contains('slot-header')||e.target.classList.contains('slot-title'))drop(e,bid,null);});
-    slot.addEventListener('dragleave',e=>dragLeave(e));
-    wrap.appendChild(slot);
-  });
 }
 function renderStats(){
   const el=document.getElementById('assign-stats');if(!el)return;
@@ -1444,15 +1445,12 @@ function removeJob(id){
 function editJobField(id,field,val){
   const j=AS().jobs.find(j=>j.id===id);if(!j)return;
   if(field==='slots'){const n=parseInt(val);if(n>=1&&n<=10)j.slots=n;}
-  else if(field==='busEligible'){j.busEligible=!!val;}
   else j[field]=val.trim();
   save();
 }
 function renderJobsTable(){
   const tb=document.getElementById('job-body');if(!tb||!AS())return;tb.innerHTML='';
-  const isGen=_mode==='general';
-  document.querySelectorAll('.bus-col').forEach(el=>el.style.display=isGen?'':'none');
-  if(!AS().jobs.length){tb.innerHTML=`<tr><td colspan="${isGen?5:4}" style="padding:1rem;font-size:13px;color:var(--text2)">No jobs yet.</td></tr>`;return;}
+  if(!AS().jobs.length){tb.innerHTML='<tr><td colspan="4" style="padding:1rem;font-size:13px;color:var(--text2)">No jobs yet.</td></tr>';return;}
   AS().jobs.forEach(j=>{
     const tr=document.createElement('tr');
     tr.innerHTML=`
@@ -1461,7 +1459,6 @@ function renderJobsTable(){
       <td><select style="font-size:12px;padding:3px 6px;width:56px" onchange="editJobField('${j.id}','slots',this.value)">
         ${Array.from({length:10},(_,i)=>`<option value="${i+1}"${j.slots===i+1?' selected':''}>${i+1}</option>`).join('')}
       </select></td>
-      <td class="bus-col" style="text-align:center;display:${isGen?'':'none'}"><input type="checkbox" ${j.busEligible?'checked':''} onchange="editJobField('${j.id}','busEligible',this.checked)" title="Volunteers in this job can also be assigned to a bus"></td>
       <td><button class="btn xs danger" onclick="removeJob('${j.id}')"><i class="ti ti-trash"></i></button></td>`;
     tb.appendChild(tr);
   });
