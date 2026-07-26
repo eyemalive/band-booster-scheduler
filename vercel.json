@@ -1,8 +1,1 @@
-{
-  "functions": {
-    "api/sync.js": {
-      "memory": 128,
-      "maxDuration": 15
-    }
-  }
-}
+{}
