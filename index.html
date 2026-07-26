@@ -794,7 +794,7 @@ function autoSavePastEvents(){
 
 function buildEntries(sc){
   const entries=[];
-  AS().jobs.forEach(j=>{
+  eventJobs(sc).forEach(j=>{
     const asgn=(sc.assignments&&sc.assignments[j.id])||[];if(!asgn.length)return;
     asgn.forEach((vid,idx)=>{
       const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
@@ -826,7 +826,9 @@ function createSchedule(){
   if(!name){alert('Event name required.');return;}
   if(!date){alert('Event date required.');return;}
   const id=uid();
-  AS().schedules.push({id,name,date,assignments:{},halftimeAssignments:{},autoSaved:false});
+  // Snapshot current global jobs as this event's starting point
+  const jobsSnapshot = AS().jobs.map(j=>({...j, id: j.id}));
+  AS().schedules.push({id,name,date,assignments:{},halftimeAssignments:{},jobs:jobsSnapshot,autoSaved:false});
   AS().schedules.sort((a,b)=>a.date.localeCompare(b.date));
   document.getElementById('ns-name').value='';document.getElementById('ns-date').value='';
   save();renderSchedules();
@@ -857,7 +859,7 @@ function renderSchedules(){
     const schedVols=sc.activeVolunteerIds&&sc.activeVolunteerIds.length
       ?sc.activeVolunteerIds.map(id=>AS().volunteers.find(v=>v.id===id)).filter(Boolean)
       :AS().volunteers.filter(v=>v.active);
-    const emptyJobs=AS().jobs.filter(j=>!(sc.assignments&&sc.assignments[j.id]&&sc.assignments[j.id].length)).length;
+    const emptyJobs=eventJobs(sc).filter(j=>!(sc.assignments&&sc.assignments[j.id]&&sc.assignments[j.id].length)).length;
     const isThisWeek=sc.id===thisWeekSchedId;
     const div=document.createElement('div');
     div.className='sched-card'+(isActive?' active-sched':'');
@@ -911,6 +913,28 @@ function renderAssign(){
       <div style="font-size:12px;color:var(--text2)">Drag from pool or any position row — drop onto a job to append, onto a row to insert, or back to pool to unassign.</div>
       <button class="btn sm" onclick="openAddRosterModal()"><i class="ti ti-user-plus"></i> Add volunteer</button>
     </div>
+    <details id="event-jobs-editor" style="margin-bottom:.75rem;background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius-lg)">
+      <summary style="padding:.6rem 1rem;font-size:13px;font-weight:500;cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:6px">
+        <i class="ti ti-briefcase" style="font-size:13px"></i> Jobs for this event
+        <span id="event-jobs-count" class="badge gray" style="margin-left:4px"></span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text2)">click to expand</span>
+      </summary>
+      <div style="padding:.75rem 1rem;border-top:.5px solid var(--border)">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:.65rem">These jobs are specific to this event. Changes here don't affect the global template or other events.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px;align-items:end;margin-bottom:.5rem">
+          <div><label class="lbl">Job title</label><input type="text" id="ej-name" placeholder="Job title"></div>
+          <div><label class="lbl">Notes</label><input type="text" id="ej-desc" placeholder="Optional"></div>
+          <div><label class="lbl">Slots</label><select id="ej-slots" style="width:70px">${Array.from({length:10},(_,i)=>`<option>${i+1}</option>`).join('')}</select></div>
+          <button class="btn sm primary" onclick="addEventJob()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
+        </div>
+        <table class="jtable" id="event-jobs-table">
+          <colgroup><col style="width:30%"><col style="width:38%"><col style="width:12%"><col style="width:12%"><col style="width:8%"></colgroup>
+          <thead><tr><th>Job title</th><th>Notes</th><th>Slots</th><th>Assigned</th><th></th></tr></thead>
+          <tbody id="event-jobs-body"></tbody>
+        </table>
+        <button class="btn sm" style="margin-top:.5rem" onclick="resetEventJobs()"><i class="ti ti-refresh"></i> Reset to global template</button>
+      </div>
+    </details>
     <div class="pool" id="pool" ondragover="dragOver(event,null,null)" ondrop="drop(event,null,null)" ondragleave="dragLeave(event)"></div>
     <div class="jobs-board" id="jobs-board"></div>`;
   renderBoard();
@@ -940,7 +964,7 @@ function drop(e,jid,insertIdx){
   const vid=dragVid,fromJob=dragFrom;dragVid=null;dragFrom=null;
   if(fromJob)sc.assignments[fromJob]=(sc.assignments[fromJob]||[]).filter(x=>x!==vid);
   if(jid){
-    const j=AS().jobs.find(j=>j.id===jid);if(!j)return;
+    const j=eventJobs(sc).find(j=>j.id===jid);if(!j)return;
     const arr=sc.assignments[jid]||[];
     if(arr.includes(vid)){
       const oi=arr.indexOf(vid);arr.splice(oi,1);
@@ -956,7 +980,65 @@ function drop(e,jid,insertIdx){
 }
 
 /* ── BOARD ── */
-function renderBoard(){renderPool();renderJobSlots();renderStats();}
+function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJobsTable();}
+
+function renderEventJobsTable(){
+  const sc=activeSched();if(!sc)return;
+  const jobs=eventJobs(sc);
+  const countEl=document.getElementById('event-jobs-count');
+  if(countEl)countEl.textContent=jobs.length+' jobs';
+  const tb=document.getElementById('event-jobs-body');if(!tb)return;tb.innerHTML='';
+  jobs.forEach(j=>{
+    const assignedCount=(sc.assignments&&sc.assignments[j.id]?sc.assignments[j.id].length:0);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><input class="inline-edit" value="${esc(j.name)}" onblur="editEventJob('${j.id}','name',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><input class="inline-edit" value="${esc(j.desc||'')}" onblur="editEventJob('${j.id}','desc',this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder="—"></td>
+      <td><select style="font-size:12px;padding:3px 6px;width:56px" onchange="editEventJob('${j.id}','slots',this.value)">
+        ${Array.from({length:10},(_,i)=>`<option value="${i+1}"${j.slots===i+1?' selected':''}>${i+1}</option>`).join('')}
+      </select></td>
+      <td style="font-size:12px;color:var(--text2)">${assignedCount}</td>
+      <td><button class="btn xs danger" onclick="removeEventJob('${j.id}')" title="Remove job"><i class="ti ti-trash"></i></button></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function addEventJob(){
+  const sc=activeSched();if(!sc)return;
+  const name=document.getElementById('ej-name').value.trim();
+  if(!name){alert('Job title required.');return;}
+  if(!sc.jobs)sc.jobs=eventJobs(sc).map(j=>({...j}));
+  sc.jobs.push({id:uid(),name,desc:document.getElementById('ej-desc').value.trim(),slots:parseInt(document.getElementById('ej-slots').value)||1});
+  document.getElementById('ej-name').value='';document.getElementById('ej-desc').value='';
+  save();renderBoard();
+}
+
+function editEventJob(jid,field,val){
+  const sc=activeSched();if(!sc)return;
+  if(!sc.jobs)sc.jobs=eventJobs(sc).map(j=>({...j}));
+  const j=sc.jobs.find(j=>j.id===jid);if(!j)return;
+  if(field==='slots'){const n=parseInt(val);if(n>=1&&n<=10)j.slots=n;}
+  else j[field]=val.trim();
+  save();renderBoard();
+}
+
+function removeEventJob(jid){
+  const sc=activeSched();if(!sc)return;
+  const assignedCount=(sc.assignments&&sc.assignments[jid]?sc.assignments[jid].length:0);
+  if(assignedCount>0&&!confirm(`This job has ${assignedCount} volunteer(s) assigned. Remove it anyway?`))return;
+  if(!sc.jobs)sc.jobs=eventJobs(sc).map(j=>({...j}));
+  sc.jobs=sc.jobs.filter(j=>j.id!==jid);
+  if(sc.assignments)delete sc.assignments[jid];
+  if(sc.halftimeAssignments)Object.keys(sc.halftimeAssignments).forEach(k=>{if(k.startsWith(jid+'_'))delete sc.halftimeAssignments[k];});
+  save();renderBoard();
+}
+
+function resetEventJobs(){
+  const sc=activeSched();if(!sc)return;
+  if(!confirm('Reset this event\'s jobs to the global template? This will clear any per-event job customizations (but not assignments already made).'))return;
+  sc.jobs=AS().jobs.map(j=>({...j}));
+  save();renderBoard();
+}
 function scheduleVolunteers(sc){
   if(sc.activeVolunteerIds&&sc.activeVolunteerIds.length)
     return sc.activeVolunteerIds.map(id=>AS().volunteers.find(v=>v.id===id)).filter(Boolean);
@@ -977,7 +1059,7 @@ function renderJobSlots(){
   const board=document.getElementById('jobs-board');if(!board)return;board.innerHTML='';
   const sc=activeSched();if(!sc)return;
   const htOpts='<option value="">— none —</option>'+AS().halftimeJobs.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
-  AS().jobs.forEach(j=>{
+  eventJobs(sc).forEach(j=>{
     const asgn=(sc.assignments[j.id]||[]);const full=asgn.length>=j.slots;
     const slot=document.createElement('div');slot.className='job-slot';slot.dataset.jid=j.id;
     const badge=full?'<span class="badge green">Full</span>':asgn.length>0?`<span class="badge amber">${asgn.length}/${j.slots}</span>`:`<span class="badge gray">0/${j.slots}</span>`;
@@ -1037,7 +1119,7 @@ function renderStats(){
   const active=scheduleVolunteers(sc);
   const assigned=new Set(Object.values(sc.assignments||{}).flat());
   const activeAssigned=[...assigned].filter(id=>active.find(v=>v.id===id)).length;
-  const emptyJobs=AS().jobs.filter(j=>!(sc.assignments[j.id]&&sc.assignments[j.id].length)).length;
+  const emptyJobs=eventJobs(sc).filter(j=>!(sc.assignments[j.id]&&sc.assignments[j.id].length)).length;
   el.innerHTML=`
     <span class="tag"><i class="ti ti-users" style="font-size:13px"></i>${active.length} for this event</span>
     <span class="tag"><i class="ti ti-check" style="font-size:13px"></i>${activeAssigned} assigned</span>
@@ -1049,10 +1131,10 @@ function autoAssign(){
   const assigned=new Set(Object.values(sc.assignments||{}).flat());
   let pool=[...scheduleVolunteers(sc).filter(v=>!assigned.has(v.id))].sort((a,b)=>a.lname.localeCompare(b.lname));
   if(!pool.length){alert('No unassigned volunteers.');return;}
-  const emptyJobs=AS().jobs.filter(j=>!(sc.assignments[j.id]&&sc.assignments[j.id].length));
+  const emptyJobs=eventJobs(sc).filter(j=>!(sc.assignments[j.id]&&sc.assignments[j.id].length));
   for(const j of emptyJobs){if(!pool.length)break;sc.assignments[j.id]=[pool.shift().id];}
   let go=true;
-  while(pool.length&&go){go=false;for(const j of AS().jobs){if(!pool.length)break;const cur=(sc.assignments[j.id]||[]).length;if(cur<j.slots){sc.assignments[j.id]=sc.assignments[j.id]||[];sc.assignments[j.id].push(pool.shift().id);go=true;}}}
+  while(pool.length&&go){go=false;for(const j of eventJobs(sc)){if(!pool.length)break;const cur=(sc.assignments[j.id]||[]).length;if(cur<j.slots){sc.assignments[j.id]=sc.assignments[j.id]||[];sc.assignments[j.id].push(pool.shift().id);go=true;}}}
   save();renderBoard();
 }
 function clearAssignments(){
@@ -1364,7 +1446,7 @@ function printSchedule(){
   let html=`<h1 style="font-size:18px;font-weight:500;margin-bottom:4px;font-family:Georgia,serif">${sc.name}</h1>
     <p style="font-size:13px;color:#555;margin-bottom:4px">${fmtDate(sc.date)}</p>
     <p style="font-size:11px;color:#888;margin-bottom:20px">${modeLabel}</p>`;
-  AS().jobs.forEach(j=>{
+  eventJobs(sc).forEach(j=>{
     const asgn=(sc.assignments[j.id]||[]);if(!asgn.length)return;
     html+=`<div style="margin-bottom:18px;break-inside:avoid">
       <div style="font-weight:600;font-size:13px;background:#f1efe8;padding:5px 8px;border-radius:4px;margin-bottom:5px">${j.name}${j.desc?` <span style="font-weight:400;color:#666;font-size:12px">— ${j.desc}</span>`:''}</div>
@@ -1387,8 +1469,7 @@ function printSchedule(){
     });
     html+=`</tbody></table></div>`;
   });
-  const unassigned=scheduleVolunteers(sc).filter(v=>!new Set(Object.values(sc.assignments||{}).flat()).has(v.id));
-  if(unassigned.length)html+=`<div style="margin-top:16px;padding:8px;border:1px dashed #ccc;border-radius:4px;font-size:12px;color:#777"><strong style="color:#555">Unassigned:</strong> ${unassigned.map(v=>fullName(v)).join(', ')}</div>`;
+  const unassigned=scheduleVolunteers(sc).filter(v=>!new Set(Object.values(sc.assignments||{}).flat()).has(v.id));  if(unassigned.length)html+=`<div style="margin-top:16px;padding:8px;border:1px dashed #ccc;border-radius:4px;font-size:12px;color:#777"><strong style="color:#555">Unassigned:</strong> ${unassigned.map(v=>fullName(v)).join(', ')}</div>`;
   html+=`<p style="margin-top:20px;font-size:10px;color:#aaa">Printed ${new Date().toLocaleString()}</p>`;
   pv.innerHTML=html;pv.style.display='block';
   document.getElementById('app-main').style.display='none';
