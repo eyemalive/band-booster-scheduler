@@ -969,6 +969,10 @@ function renderAssign(){
       <strong><i class="ti ti-alert-triangle"></i> No roster loaded for this event.</strong>
       Import a CSV from the <strong>Master Roster</strong> tab to set this week's volunteers, or add them individually below.
     </div>`:''}
+    ${_mode==='general'?`<div class="card" style="margin-bottom:.75rem;padding:.75rem 1rem">
+      <label class="lbl">Admin notes <span style="font-weight:400;color:var(--text3)">— printed on the assignment sheet</span></label>
+      <textarea id="admin-notes" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:8px;border:.5px solid var(--border-med);border-radius:var(--radius);resize:vertical" placeholder="e.g. leadership contacts, security lead, ropes duty..." onblur="saveAdminNotes(this.value)">${esc(sc.adminNotes||'')}</textarea>
+    </div>`:''}
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:.4rem">
       <div style="font-size:12px;color:var(--text2)">Drag from pool or any position row — drop onto a job or bus to append, onto a row to insert, or back to pool to unassign.${_mode==='general'?' Buses appear alongside jobs below.':''}</div>
       <button class="btn sm" onclick="openAddRosterModal()"><i class="ti ti-user-plus"></i> Add volunteer</button>
@@ -1260,6 +1264,10 @@ function setSpecialBusAssign(vid,busId){
   sc.busViaSpecial=sc.busViaSpecial||{};
   if(busId)sc.busViaSpecial[vid]=busId;else delete sc.busViaSpecial[vid];
   save();renderBoard();
+}
+function saveAdminNotes(val){
+  const sc=activeSched();if(!sc)return;
+  sc.adminNotes=val;save();
 }
 function setHalftime(jid,vid,htId){
   const sc=activeSched();if(!sc)return;
@@ -1752,15 +1760,21 @@ function printGeneralSchedule(sc){
   const htJobs=AS().halftimeJobs||[];
   function halfName(id){return id?(halfJobs.find(h=>h.id===id)||{name:'—'}).name:'—';}
   function htName(id){return id?(htJobs.find(h=>h.id===id)||{name:'—'}).name:'—';}
-  const byBus={};
+
+  // Flat list sorted by bus number, unassigned last, alphabetical within group
+  const withBus=[],withoutBus=[];
   vols.forEach(v=>{
-    const bus=getVolunteerBus(sc,v.id)||'unassigned';
-    (byBus[bus]=byBus[bus]||[]).push(v);
+    const bus=getVolunteerBus(sc,v.id);
+    if(bus)withBus.push({v,bus});else withoutBus.push({v,bus:null});
   });
-  const busKeys=Object.keys(byBus).sort((a,b)=>{
-    if(a==='unassigned')return 1;if(b==='unassigned')return -1;
-    return parseInt(a.replace('bus',''))-parseInt(b.replace('bus',''));
+  withBus.sort((a,b)=>{
+    const na=parseInt(a.bus.replace('bus','')),nb=parseInt(b.bus.replace('bus',''));
+    if(na!==nb)return na-nb;
+    return a.v.lname.localeCompare(b.v.lname);
   });
+  withoutBus.sort((a,b)=>a.v.lname.localeCompare(b.v.lname));
+  const rows=[...withBus,...withoutBus];
+
   let html=`<div style="font-family:Georgia,serif">
     <h1 style="font-size:18px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h1>
     <p style="font-size:13px;color:#555;margin-bottom:2px">${fmtDate(sc.date)}</p>
@@ -1768,32 +1782,51 @@ function printGeneralSchedule(sc){
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="background:#f1efe8;border-bottom:1.5px solid #ccc">
         <th style="text-align:left;padding:6px 8px;font-weight:600">Volunteer</th>
-        <th style="text-align:left;padding:6px 8px;font-weight:600">Bus</th>
         <th style="text-align:left;padding:6px 8px;font-weight:600">1st Half</th>
         <th style="text-align:left;padding:6px 8px;font-weight:600">Halftime</th>
         <th style="text-align:left;padding:6px 8px;font-weight:600">2nd Half</th>
       </tr></thead><tbody>`;
-  busKeys.forEach(bus=>{
-    const busVols=[...byBus[bus]].sort((a,b)=>a.lname.localeCompare(b.lname));
-    const hdrBg=bus==='unassigned'?'#f9f0e8':'#e8f3fb';
-    const hdrBorder=bus==='unassigned'?'#ddd':'#aac8e0';
-    const label=bus==='unassigned'?'No bus assigned':busLabelFromId(bus);
-    html+=`<tr style="background:${hdrBg}"><td colspan="5" style="padding:4px 8px;font-weight:600;font-size:12px;border-top:1.5px solid ${hdrBorder};color:${bus==='unassigned'?'#888':'#1a1a18'}">${label}</td></tr>`;
-    busVols.forEach((v,i)=>{
-      const h1=(sc.firstHalfAssignments&&sc.firstHalfAssignments[v.id])||'';
-      const ht=(sc.halftimeAssignments&&sc.halftimeAssignments[v.id])||'';
-      const h2=(sc.secondHalfAssignments&&sc.secondHalfAssignments[v.id])||'';
-      html+=`<tr style="background:${i%2===0?'#fff':'#fafaf8'};border-bottom:.5px solid #eee">
-        <td style="padding:5px 8px;font-weight:500">${fullName(v)}</td>
-        <td style="padding:5px 8px;color:#555">${bus==='unassigned'?'—':busLabelFromId(bus)}</td>
-        <td style="padding:5px 8px">${halfName(h1)}</td>
-        <td style="padding:5px 8px">${htName(ht)}</td>
-        <td style="padding:5px 8px">${halfName(h2)}</td>
+  rows.forEach(({v,bus},i)=>{
+    const h1=(sc.firstHalfAssignments&&sc.firstHalfAssignments[v.id])||'';
+    const ht=(sc.halftimeAssignments&&sc.halftimeAssignments[v.id])||'';
+    const h2=(sc.secondHalfAssignments&&sc.secondHalfAssignments[v.id])||'';
+    const nameLabel=bus?`${fullName(v)} - ${busLabelFromId(bus)}`:fullName(v);
+    html+=`<tr style="background:${i%2===0?'#fff':'#fafaf8'};border-bottom:.5px solid #eee">
+      <td style="padding:5px 8px;font-weight:500">${esc(nameLabel)}</td>
+      <td style="padding:5px 8px">${halfName(h1)}</td>
+      <td style="padding:5px 8px">${htName(ht)}</td>
+      <td style="padding:5px 8px">${halfName(h2)}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table>`;
+
+  // Job assignments legend (Colorguard, Uniforms, Percussion, Photographers, etc — anything that doesn't fit the half-based columns)
+  const jobs=eventJobs(sc).filter(j=>(sc.assignments[j.id]||[]).length>0);
+  if(jobs.length){
+    html+=`<div style="margin-top:18px;break-inside:avoid">
+      <div style="font-weight:600;font-size:12px;background:#f1efe8;padding:5px 8px;border-radius:4px;margin-bottom:6px">Job Assignments</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">`;
+    jobs.forEach(j=>{
+      const names=(sc.assignments[j.id]||[]).map(vid=>{
+        const v=AS().volunteers.find(v=>v.id===vid);return v?fullName(v):null;
+      }).filter(Boolean).join(', ');
+      html+=`<tr style="border-bottom:.5px solid #eee">
+        <td style="padding:4px 8px;font-weight:600;width:26%;vertical-align:top">${esc(j.name)}</td>
+        <td style="padding:4px 8px;color:#333">${esc(names)||'—'}</td>
       </tr>`;
     });
-  });
-  html+=`</tbody></table>
-    <p style="font-size:10px;color:#aaa;margin-top:8px">Printed ${new Date().toLocaleString()}</p></div>`;
+    html+=`</table></div>`;
+  }
+
+  // Admin notes box
+  if(sc.adminNotes&&sc.adminNotes.trim()){
+    html+=`<div style="margin-top:18px;break-inside:avoid;border:1px solid #ccc;border-radius:4px;padding:10px 12px">
+      <div style="font-weight:600;font-size:12px;margin-bottom:4px;letter-spacing:.5px;color:#555">ADMIN</div>
+      <div style="font-size:12px;white-space:pre-wrap;color:#333">${esc(sc.adminNotes)}</div>
+    </div>`;
+  }
+
+  html+=`<p style="font-size:10px;color:#aaa;margin-top:16px">Printed ${new Date().toLocaleString()}</p></div>`;
   showPrint(pv,html);
 }
 
