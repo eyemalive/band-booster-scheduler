@@ -731,7 +731,7 @@ function uid(){ return '_'+Math.random().toString(36).slice(2,9); }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function fullName(v){ return (v.fname+' '+v.lname).trim(); }
 function today(){ return new Date().toISOString().slice(0,10); }
-function activeSched(){ return AS().schedules.find(sc=>sc.id===AS().activeSchedId)||null; }
+function activeSched(){ return AS()&&AS().schedules?AS().schedules.find(sc=>sc.id===AS().activeSchedId)||null:null; }
 
 function refreshAllPanels(){
   const active = document.querySelector('.tab.active');
@@ -771,6 +771,7 @@ async function initData(){
 
 /* ── AUTO-SAVE PAST EVENTS ── */
 function autoSavePastEvents(){
+  if(!AS())return;
   const td=today(); let saved=[];
   AS().schedules.forEach(sc=>{
     if(!sc.date||sc.date>=td||sc.autoSaved)return;
@@ -838,7 +839,8 @@ function selectSchedule(id){
   AS().activeSchedId=id;save();renderSchedules();showTab('assign');
 }
 function renderSchedules(){
-  const grid=document.getElementById('sched-grid');grid.innerHTML='';
+  const grid=document.getElementById('sched-grid');if(!grid)return;grid.innerHTML='';
+  if(!AS()){grid.innerHTML='<div style="font-size:13px;color:var(--text2);padding:.5rem 0">Loading…</div>';return;}
   if(!AS().schedules.length){grid.innerHTML='<div style="font-size:13px;color:var(--text2);padding:.5rem 0">No schedules yet. Create one above.</div>';return;}
   const td=today();
   const upcoming=AS().schedules.filter(sc=>sc.date>=td).sort((a,b)=>a.date.localeCompare(b.date));
@@ -1079,7 +1081,7 @@ function removeVolunteer(id){
 function toggleActive(id,val){const v=AS().volunteers.find(v=>v.id===id);if(v){v.active=val;save();renderVolunteers();}}
 function editVolField(id,field,val){const v=AS().volunteers.find(v=>v.id===id);if(v&&val.trim()){v[field]=val.trim();save();}}
 function renderVolunteers(){
-  const tbody=document.getElementById('vol-body');tbody.innerHTML='';
+  const tbody=document.getElementById('vol-body');if(!tbody||!AS())return;tbody.innerHTML='';
   const showInactive=document.getElementById('show-inactive').checked;
   const q=(document.getElementById('v-search').value||'').toLowerCase();
   const sc=activeSched();
@@ -1204,7 +1206,7 @@ function editJobField(id,field,val){
   if(field==='slots'){const n=parseInt(val);if(n>=1&&n<=10)j.slots=n;}else j[field]=val.trim();save();
 }
 function renderJobsTable(){
-  const tb=document.getElementById('job-body');tb.innerHTML='';
+  const tb=document.getElementById('job-body');if(!tb||!AS())return;tb.innerHTML='';
   if(!AS().jobs.length){tb.innerHTML='<tr><td colspan="4" style="padding:1rem;font-size:13px;color:var(--text2)">No jobs yet.</td></tr>';return;}
   AS().jobs.forEach(j=>{
     const tr=document.createElement('tr');
@@ -1233,7 +1235,7 @@ function removeHalftimeJob(id){
 }
 function editHalftimeField(id,val){const h=AS().halftimeJobs.find(h=>h.id===id);if(h&&val.trim())h.name=val.trim();save();}
 function renderHalftimeTable(){
-  const tb=document.getElementById('ht-body');tb.innerHTML='';
+  const tb=document.getElementById('ht-body');if(!tb||!AS())return;tb.innerHTML='';
   if(!AS().halftimeJobs.length){tb.innerHTML='<tr><td colspan="2" style="padding:1rem;font-size:13px;color:var(--text2)">No halftime jobs yet.</td></tr>';return;}
   AS().halftimeJobs.forEach(h=>{
     const tr=document.createElement('tr');
@@ -1306,7 +1308,7 @@ async function savePasswords(){
 
 /* ── HISTORY ── */
 function renderHistory(){
-  const list=document.getElementById('hist-list');list.innerHTML='';
+  const list=document.getElementById('hist-list');if(!list||!AS())return;list.innerHTML='';
   if(!AS().history.length){list.innerHTML='<div style="font-size:13px;color:var(--text2);padding:.5rem 0">No history yet. Events are auto-saved the day after they occur.</div>';return;}
   AS().history.forEach((rec,ri)=>{
     const d=new Date(rec.date+'T00:00:00');
