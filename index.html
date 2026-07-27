@@ -228,7 +228,8 @@
   <div class="panel active" id="panel-schedules">
     <div id="autosave-banner" class="autosave-banner"></div>
     <div class="card">
-      <div style="font-size:15px;font-weight:500;margin-bottom:.75rem">Create new schedule</div>
+      <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Create new schedule</div>
+      <div id="create-sched-note" style="font-size:12px;color:var(--text2);margin-bottom:.5rem"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
         <div><label class="lbl">Event name</label><input type="text" id="ns-name" placeholder="e.g. Friday Night Game"></div>
         <div><label class="lbl">Event date</label><input type="date" id="ns-date"></div>
@@ -526,7 +527,9 @@ function launchApp(mode){
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-main').style.display = 'block';
   applyMode(mode);
+  loadEventsFromCache();
   initData();
+  refreshEvents().then(()=>{ if(document.getElementById('panel-schedules').classList.contains('active')) renderSchedules(); });
 }
 
 function applyMode(mode){
@@ -579,6 +582,7 @@ function switchMode(mode){
 // ════════════════════════════════════════════════════════════
 let S  = null;   // logistics state
 let SG = null;   // general state
+let EVENTS = null; // shared event registry: [{id,name,date}] — visible to both modes
 let _dirty    = false;
 let _syncing  = false;
 let _saveTimer = null;
@@ -595,9 +599,13 @@ function setAS(val){ if(_mode === 'general') SG = val; else S = val; }
 const CONN_KEY         = 'bbs_connection';
 const CACHE_KEY_LOG    = 'bbs_cache_v8';
 const CACHE_KEY_GEN    = 'bbs_cache_general_v1';
+const CACHE_KEY_EVENTS = 'bbs_cache_events_v1';
+const EVENTS_TAB       = 'AppEvents';
 
 function cacheKey(){ return _mode === 'general' ? CACHE_KEY_GEN : CACHE_KEY_LOG; }
 function sheetTab(){ return _mode === 'general' ? 'AppDataGeneral' : 'AppData'; }
+function cacheKeyFor(mode){ return mode === 'general' ? CACHE_KEY_GEN : CACHE_KEY_LOG; }
+function sheetTabFor(mode){ return mode === 'general' ? 'AppDataGeneral' : 'AppData'; }
 
 function isConnected(){ return localStorage.getItem('bbs_synced') === 'yes'; }
 function markConnected(){ localStorage.setItem('bbs_synced','yes'); }
@@ -612,8 +620,8 @@ function setSyncStatus(state, label){
   if(status) status.style.display = 'flex';
 }
 
-async function apiCall(action, payload){
-  const body = { action, tab: sheetTab() };
+async function apiCall(action, payload, tabOverride){
+  const body = { action, tab: tabOverride || sheetTab() };
   if(payload !== undefined) body.payload = payload;
   const res = await fetch('/api/sync', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   if(!res.ok) throw new Error('HTTP ' + res.status);
@@ -635,6 +643,91 @@ async function loadData(){
   } catch(err){
     setSyncStatus('err','Sync failed — using local data');
     console.warn('loadData error:',err);
+  }
+}
+
+/* ── SHARED EVENT REGISTRY (visible to both Logistics and General) ── */
+function loadEventsFromCache(){
+  try{ EVENTS = JSON.parse(localStorage.getItem(CACHE_KEY_EVENTS)||'null'); }catch(e){ EVENTS=null; }
+  if(!EVENTS) EVENTS=[];
+}
+async function refreshEvents(){
+  loadEventsFromCache();
+  if(onHttpsHost()&&isConnected()){
+    try{
+      const r=await apiCall('load',undefined,EVENTS_TAB);
+      if(r.data&&Array.isArray(r.data)){ EVENTS=r.data; localStorage.setItem(CACHE_KEY_EVENTS,JSON.stringify(EVENTS)); }
+    }catch(e){ console.warn('refreshEvents failed:',e); }
+  }
+}
+async function saveEvents(){
+  try{ localStorage.setItem(CACHE_KEY_EVENTS,JSON.stringify(EVENTS)); }catch(e){}
+  if(onHttpsHost()&&isConnected()){
+    try{ await apiCall('save',EVENTS,EVENTS_TAB); }catch(e){ console.warn('saveEvents failed:',e); }
+  }
+}
+// Ensures a schedule shell for a shared event exists in the given mode's data — in memory (if loaded),
+// in localStorage cache, and pushed to that mode's own sheet tab. Used when admin creates/deletes a shared event.
+async function pushEventShellToMode(mode,shell){
+  const target = mode==='general'?SG:S;
+  if(target){
+    target.schedules=target.schedules||[];
+    if(!target.schedules.find(s=>s.id===shell.id)){
+      const jobsSnapshot=(target.jobs||[]).map(j=>({...j}));
+      target.schedules.push({...shell,assignments:{},halftimeAssignments:{},jobs:jobsSnapshot,autoSaved:false,shared:true});
+      target.schedules.sort((a,b)=>a.date.localeCompare(b.date));
+    }
+    try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(target)); }catch(e){}
+    if(onHttpsHost()&&isConnected()){
+      try{ await apiCall('save',target,sheetTabFor(mode)); }catch(e){ console.warn('pushEventShellToMode save failed:',e); }
+    }
+    return;
+  }
+  // That mode isn't loaded into memory this session — patch its server/cache copy directly
+  let data=null;
+  if(onHttpsHost()&&isConnected()){
+    try{ const r=await apiCall('load',undefined,sheetTabFor(mode)); data=r.data; }catch(e){ console.warn(e); }
+  }
+  if(!data){
+    try{ data=JSON.parse(localStorage.getItem(cacheKeyFor(mode))||'null'); }catch(e){}
+  }
+  if(!data) data=defaultState(mode);
+  data.schedules=data.schedules||[];
+  if(!data.schedules.find(s=>s.id===shell.id)){
+    const jobsSnapshot=(data.jobs||[]).map(j=>({...j}));
+    data.schedules.push({...shell,assignments:{},halftimeAssignments:{},jobs:jobsSnapshot,autoSaved:false,shared:true});
+    data.schedules.sort((a,b)=>a.date.localeCompare(b.date));
+  }
+  try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
+  if(onHttpsHost()&&isConnected()){
+    try{ await apiCall('save',data,sheetTabFor(mode)); }catch(e){ console.warn('pushEventShellToMode save failed:',e); }
+  }
+}
+// Removes a shared event's schedule (and any history referencing it) from the given mode
+async function removeEventFromMode(mode,eventId){
+  const target = mode==='general'?SG:S;
+  if(target){
+    target.schedules=(target.schedules||[]).filter(s=>s.id!==eventId);
+    target.history=(target.history||[]).filter(h=>h.schedId!==eventId);
+    if(target.activeSchedId===eventId)target.activeSchedId=null;
+    try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(target)); }catch(e){}
+    if(onHttpsHost()&&isConnected()){
+      try{ await apiCall('save',target,sheetTabFor(mode)); }catch(e){ console.warn('removeEventFromMode save failed:',e); }
+    }
+    return;
+  }
+  let data=null;
+  if(onHttpsHost()&&isConnected()){
+    try{ const r=await apiCall('load',undefined,sheetTabFor(mode)); data=r.data; }catch(e){ console.warn(e); }
+  }
+  if(!data){ try{ data=JSON.parse(localStorage.getItem(cacheKeyFor(mode))||'null'); }catch(e){} }
+  if(!data)return;
+  data.schedules=(data.schedules||[]).filter(s=>s.id!==eventId);
+  data.history=(data.history||[]).filter(h=>h.schedId!==eventId);
+  if(data.activeSchedId===eventId)data.activeSchedId=null;
+  try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
+  if(onHttpsHost()&&isConnected()){
+    try{ await apiCall('save',data,sheetTabFor(mode)); }catch(e){ console.warn('removeEventFromMode save failed:',e); }
   }
 }
 
@@ -915,25 +1008,58 @@ function createSchedule(){
   const date=document.getElementById('ns-date').value;
   if(!name){alert('Event name required.');return;}
   if(!date){alert('Event date required.');return;}
-  const id=uid();
-  // Snapshot current global jobs as this event's starting point
-  const jobsSnapshot = AS().jobs.map(j=>({...j, id: j.id}));
-  AS().schedules.push({id,name,date,assignments:{},halftimeAssignments:{},jobs:jobsSnapshot,autoSaved:false});
-  AS().schedules.sort((a,b)=>a.date.localeCompare(b.date));
   document.getElementById('ns-name').value='';document.getElementById('ns-date').value='';
-  save();renderSchedules();
+
+  if(_role==='admin'){
+    // Shared event — visible in both Logistics and General
+    const id=uid();
+    EVENTS=EVENTS||[];
+    EVENTS.push({id,name,date});
+    EVENTS.sort((a,b)=>a.date.localeCompare(b.date));
+    saveEvents();
+    const shell={id,name,date};
+    pushEventShellToMode('logistics',shell);
+    pushEventShellToMode('general',shell);
+    renderSchedules();
+  } else {
+    // Legacy behavior: schedule visible only within the current mode
+    const id=uid();
+    const jobsSnapshot=AS().jobs.map(j=>({...j}));
+    AS().schedules.push({id,name,date,assignments:{},halftimeAssignments:{},jobs:jobsSnapshot,autoSaved:false});
+    AS().schedules.sort((a,b)=>a.date.localeCompare(b.date));
+    save();renderSchedules();
+  }
 }
 function deleteSchedule(id){
-  if(!confirm('Delete this schedule?'))return;
-  AS().schedules=AS().schedules.filter(sc=>sc.id!==id);
-  if(AS().activeSchedId===id)AS().activeSchedId=null;
-  AS().history=AS().history.filter(h=>h.schedId!==id);
-  save();renderSchedules();
+  const sc=AS().schedules.find(s=>s.id===id);
+  if(!sc)return;
+  if(sc.shared){
+    if(_role!=='admin'){alert('This event is shared with the other module — only an admin can delete it.');return;}
+    if(!confirm('Delete this shared event from both Logistics and General?'))return;
+    EVENTS=(EVENTS||[]).filter(e=>e.id!==id);
+    saveEvents();
+    removeEventFromMode('logistics',id);
+    removeEventFromMode('general',id);
+    // Reflect removal immediately in the currently-loaded mode(s)
+    if(S){S.schedules=(S.schedules||[]).filter(s=>s.id!==id);S.history=(S.history||[]).filter(h=>h.schedId!==id);if(S.activeSchedId===id)S.activeSchedId=null;}
+    if(SG){SG.schedules=(SG.schedules||[]).filter(s=>s.id!==id);SG.history=(SG.history||[]).filter(h=>h.schedId!==id);if(SG.activeSchedId===id)SG.activeSchedId=null;}
+    renderSchedules();
+  } else {
+    if(!confirm('Delete this schedule?'))return;
+    AS().schedules=AS().schedules.filter(sc=>sc.id!==id);
+    if(AS().activeSchedId===id)AS().activeSchedId=null;
+    AS().history=AS().history.filter(h=>h.schedId!==id);
+    save();renderSchedules();
+  }
 }
 function selectSchedule(id){
   AS().activeSchedId=id;save();renderSchedules();showTab('assign');
 }
 function renderSchedules(){
+  const noteEl=document.getElementById('create-sched-note');
+  if(noteEl)noteEl.textContent=_role==='admin'
+    ?'As admin, new events are shared automatically with both Logistics and General.'
+    :'This event will only be visible in this module. Ask an admin to create a shared event if the other module needs it too.';
   const grid=document.getElementById('sched-grid');if(!grid)return;grid.innerHTML='';
   if(!AS()){grid.innerHTML='<div style="font-size:13px;color:var(--text2);padding:.5rem 0">Loading…</div>';return;}
   if(!AS().schedules.length){grid.innerHTML='<div style="font-size:13px;color:var(--text2);padding:.5rem 0">No schedules yet. Create one above.</div>';return;}
@@ -951,12 +1077,13 @@ function renderSchedules(){
       :AS().volunteers.filter(v=>v.active);
     const emptyJobs=eventJobs(sc).filter(j=>!(sc.assignments&&sc.assignments[j.id]&&sc.assignments[j.id].length)).length;
     const isThisWeek=sc.id===thisWeekSchedId;
+    const canDelete=!sc.shared||_role==='admin';
     const div=document.createElement('div');
     div.className='sched-card'+(isActive?' active-sched':'');
     div.innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
-          <div class="sched-card-name">${esc(sc.name)}</div>
+          <div class="sched-card-name">${esc(sc.name)}${sc.shared?' <span class="badge purple" style="font-size:10px;vertical-align:middle" title="Shared with the other module">Shared</span>':''}</div>
           <div class="sched-card-date"><i class="ti ti-calendar" style="font-size:11px"></i> ${dateLabel}</div>
         </div>
         ${isPast?'<span class="badge gray">Past</span>':isThisWeek?'<span class="badge teal">This week</span>':''}
@@ -968,7 +1095,7 @@ function renderSchedules(){
       </div>
       <div class="sched-card-actions">
         <button class="btn sm primary" onclick="selectSchedule('${sc.id}')"><i class="ti ti-layout-board"></i> ${isActive?'Edit':'Open'}</button>
-        <button class="btn sm danger" onclick="deleteSchedule('${sc.id}')"><i class="ti ti-trash"></i></button>
+        ${canDelete?`<button class="btn sm danger" onclick="deleteSchedule('${sc.id}')"><i class="ti ti-trash"></i></button>`:''}
       </div>`;
     grid.appendChild(div);
   });
