@@ -193,7 +193,7 @@
         <i class="ti ti-refresh" style="font-size:13px"></i><span id="sync-status-text"></span>
       </div>
       <button class="btn sm" onclick="doForcePush()" title="Push local data to Google Sheets"><i class="ti ti-cloud-upload"></i> Sync now</button>
-      <button class="btn sm" onclick="printSchedule()"><i class="ti ti-printer"></i> Print current</button>
+      <button class="btn sm" onclick="openPrintPicker()"><i class="ti ti-printer"></i> Print Assignments</button>
       <button class="btn sm" onclick="openSettings()"><i class="ti ti-settings"></i> Settings</button>
       <button class="btn sm danger" onclick="doLogout()" title="Sign out"><i class="ti ti-logout"></i></button>
     </div>
@@ -437,6 +437,21 @@
       <div id="add-roster-list" style="display:flex;flex-direction:column;gap:5px;max-height:260px;overflow-y:auto;margin-bottom:1rem"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="btn sm" onclick="closeAddRosterModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRINT PICKER MODAL -->
+  <div id="print-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:center;justify-content:center">
+    <div style="background:var(--surface);border-radius:var(--radius-lg);padding:1.5rem;max-width:420px;width:92%;box-shadow:0 8px 32px rgba(0,0,0,.25)">
+      <div style="font-size:16px;font-weight:500;margin-bottom:.4rem">Print assignments</div>
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2);margin-bottom:.75rem;cursor:pointer">
+        <input type="checkbox" id="print-picker-future-only" checked onchange="renderPrintPickerList()">
+        Only display current and future events
+      </label>
+      <div id="print-picker-list" style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto;margin-bottom:1rem"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn sm" onclick="closePrintPicker()">Cancel</button>
       </div>
     </div>
   </div>
@@ -1775,6 +1790,48 @@ function setGenAssign(vid,field,val){
   sc[key]=sc[key]||{};
   if(val)sc[key][vid]=val;else delete sc[key][vid];
   save();
+}
+
+/* ── PRINT PICKER ── */
+function openPrintPicker(){
+  document.getElementById('print-picker-future-only').checked=true;
+  renderPrintPickerList();
+  document.getElementById('print-picker-modal').style.display='flex';
+}
+function closePrintPicker(){
+  document.getElementById('print-picker-modal').style.display='none';
+}
+function renderPrintPickerList(){
+  const list=document.getElementById('print-picker-list');if(!list||!AS())return;
+  const futureOnly=document.getElementById('print-picker-future-only').checked;
+  const td=today();
+  let scheds=[...AS().schedules].sort((a,b)=>a.date.localeCompare(b.date));
+  if(futureOnly)scheds=scheds.filter(sc=>sc.date>=td);
+  list.innerHTML='';
+  if(!scheds.length){
+    list.innerHTML='<div style="font-size:13px;color:var(--text2);padding:.5rem">No events to show.</div>';
+    return;
+  }
+  scheds.forEach(sc=>{
+    const isPast=sc.date<td;
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:.5px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:background .15s';
+    row.innerHTML=`<div>
+        <div style="font-size:13px;font-weight:500">${esc(sc.name)}</div>
+        <div style="font-size:11px;color:var(--text2)">${fmtDate(sc.date)}${isPast?' · Past':''}</div>
+      </div>
+      <i class="ti ti-printer" style="font-size:15px;color:var(--text2)"></i>`;
+    row.addEventListener('mouseenter',()=>row.style.background='var(--surface2)');
+    row.addEventListener('mouseleave',()=>row.style.background='');
+    row.addEventListener('click',()=>{ closePrintPicker(); printScheduleById(sc.id); });
+    list.appendChild(row);
+  });
+}
+function printScheduleById(schedId){
+  const sc=AS().schedules.find(s=>s.id===schedId);
+  if(!sc){alert('Schedule not found.');return;}
+  if(_mode==='general') printGeneralSchedule(sc);
+  else printLogisticsSchedule(sc);
 }
 
 /* ── PRINT ── */
