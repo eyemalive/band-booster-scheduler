@@ -1835,58 +1835,56 @@ function printGeneralSchedule(sc){
     return a.v.lname.localeCompare(b.v.lname);
   });
   withoutBus.sort((a,b)=>a.v.lname.localeCompare(b.v.lname));
-  const colVolunteers=[...withBus,...withoutBus].map(({v,bus})=>bus?`${fullName(v)} - ${busLabelFromId(bus)}`:fullName(v));
+  const volunteerLines=[...withBus,...withoutBus].map(({v,bus})=>bus?`${fullName(v)} - ${busLabelFromId(bus)}`:fullName(v));
 
-  // Columns 2-4: just names of anyone with a 1st half / halftime / 2nd half assignment
-  const colFirstHalf=vols.filter(v=>sc.firstHalfAssignments&&sc.firstHalfAssignments[v.id])
-    .sort((a,b)=>a.lname.localeCompare(b.lname)).map(v=>fullName(v));
-  const colHalftime=vols.filter(v=>sc.halftimeAssignments&&sc.halftimeAssignments[v.id])
-    .sort((a,b)=>a.lname.localeCompare(b.lname)).map(v=>fullName(v));
-  const colSecondHalf=vols.filter(v=>sc.secondHalfAssignments&&sc.secondHalfAssignments[v.id])
-    .sort((a,b)=>a.lname.localeCompare(b.lname)).map(v=>fullName(v));
+  const halfJobs=AS().halfJobs||[];
+  const htJobs=AS().halftimeJobs||[];
+
+  // Build a role-grouped column: for each role in jobsList, list names assigned to it for this period
+  function roleGroupedHtml(jobsList,assignField){
+    let out='';
+    jobsList.forEach(job=>{
+      const names=vols.filter(v=>sc[assignField]&&sc[assignField][v.id]===job.id)
+        .sort((a,b)=>a.lname.localeCompare(b.lname)).map(v=>fullName(v));
+      if(!names.length)return;
+      out+=`<div style="font-weight:600;font-size:11px;margin-top:8px">${esc(job.name)}</div>`;
+      names.forEach(n=>{ out+=`<div style="font-size:12px;padding-left:4px">${esc(n)}</div>`; });
+    });
+    return out||`<div style="font-size:11px;color:#999">—</div>`;
+  }
+  const firstHalfHtml=roleGroupedHtml(halfJobs,'firstHalfAssignments');
+  const halftimeHtml=roleGroupedHtml(htJobs,'halftimeAssignments');
+  const secondHalfHtml=roleGroupedHtml(halfJobs,'secondHalfAssignments');
 
   // Column 5: checked-off admin/board members
   const colAdmin=(sc.adminAttendees||[]).map(bid=>{
     const b=(AS().boardMembers||[]).find(b=>b.id===bid);return b?b.name:null;
   }).filter(Boolean).sort();
 
-  const halfJobs=AS().halfJobs||[];
-  const htJobs=AS().halftimeJobs||[];
-  const maxRows=Math.max(colVolunteers.length,colFirstHalf.length,colHalftime.length,colSecondHalf.length,colAdmin.length,1);
-
   let html=`<div style="font-family:Georgia,serif">
     <h1 style="font-size:18px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h1>
     <p style="font-size:13px;color:#555;margin-bottom:2px">${fmtDate(sc.date)}</p>
-    <p style="font-size:11px;color:#888;margin-bottom:10px">General Volunteers</p>`;
-
-  // Legend of job categories under each column heading
-  const legendItems=[...halfJobs.map(h=>h.name)];
-  const htLegend=htJobs.map(h=>h.name);
-  if(legendItems.length||htLegend.length){
-    html+=`<div style="font-size:10px;color:#888;margin-bottom:12px">
-      ${legendItems.length?`<strong>1st/2nd Half categories:</strong> ${legendItems.map(n=>esc(n)).join(', ')}<br>`:''}
-      ${htLegend.length?`<strong>Halftime categories:</strong> ${htLegend.map(n=>esc(n)).join(', ')}`:''}
-    </div>`;
-  }
-
-  html+=`<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <p style="font-size:11px;color:#888;margin-bottom:12px">General Volunteers</p>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="background:#f1efe8;border-bottom:1.5px solid #ccc">
-        <th style="text-align:left;padding:6px 8px;font-weight:600;width:26%">VOLUNTEERS</th>
-        <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%">1st Half</th>
-        <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%">Halftime</th>
-        <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%">2nd Half</th>
-        <th style="text-align:left;padding:6px 8px;font-weight:600;width:17%">ADMIN</th>
-      </tr></thead><tbody>`;
-  for(let i=0;i<maxRows;i++){
-    html+=`<tr style="background:${i%2===0?'#fff':'#fafaf8'};border-bottom:.5px solid #eee">
-      <td style="padding:4px 8px">${esc(colVolunteers[i]||'')}</td>
-      <td style="padding:4px 8px">${esc(colFirstHalf[i]||'')}</td>
-      <td style="padding:4px 8px">${esc(colHalftime[i]||'')}</td>
-      <td style="padding:4px 8px">${esc(colSecondHalf[i]||'')}</td>
-      <td style="padding:4px 8px">${esc(colAdmin[i]||'')}</td>
-    </tr>`;
-  }
-  html+=`</tbody></table>`;
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:26%;vertical-align:top">VOLUNTEERS</th>
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">1st Half</th>
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">Halftime</th>
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">2nd Half</th>
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:17%;vertical-align:top">ADMIN</th>
+      </tr></thead>
+      <tbody><tr>
+        <td style="padding:6px 8px;vertical-align:top;border-right:.5px solid #eee">
+          ${volunteerLines.map(n=>`<div style="font-size:12px;padding:1px 0">${esc(n)}</div>`).join('')}
+        </td>
+        <td style="padding:6px 8px;vertical-align:top;border-right:.5px solid #eee">${firstHalfHtml}</td>
+        <td style="padding:6px 8px;vertical-align:top;border-right:.5px solid #eee">${halftimeHtml}</td>
+        <td style="padding:6px 8px;vertical-align:top;border-right:.5px solid #eee">${secondHalfHtml}</td>
+        <td style="padding:6px 8px;vertical-align:top">
+          ${colAdmin.length?colAdmin.map(n=>`<div style="font-size:12px;padding:1px 0">${esc(n)}</div>`).join(''):'<div style="font-size:11px;color:#999">—</div>'}
+        </td>
+      </tr></tbody>
+    </table>`;
 
   // Job assignments legend (Colorguard, Uniforms, Percussion, Photographers, etc — anything that doesn't fit the half-based columns)
   const jobs=eventJobs(sc).filter(j=>(sc.assignments[j.id]||[]).length>0);
