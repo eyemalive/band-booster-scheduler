@@ -227,7 +227,7 @@
   <!-- SCHEDULES -->
   <div class="panel active" id="panel-schedules">
     <div id="autosave-banner" class="autosave-banner"></div>
-    <div class="card">
+    <div class="card" id="create-sched-card">
       <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Create new schedule</div>
       <div id="create-sched-note" style="font-size:12px;color:var(--text2);margin-bottom:.5rem"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
@@ -1004,31 +1004,23 @@ function showTab(t){
 
 /* ── SCHEDULES ── */
 function createSchedule(){
+  if(_role!=='admin'){alert('Only an admin can create new schedules.');return;}
   const name=document.getElementById('ns-name').value.trim();
   const date=document.getElementById('ns-date').value;
   if(!name){alert('Event name required.');return;}
   if(!date){alert('Event date required.');return;}
   document.getElementById('ns-name').value='';document.getElementById('ns-date').value='';
 
-  if(_role==='admin'){
-    // Shared event — visible in both Logistics and General
-    const id=uid();
-    EVENTS=EVENTS||[];
-    EVENTS.push({id,name,date});
-    EVENTS.sort((a,b)=>a.date.localeCompare(b.date));
-    saveEvents();
-    const shell={id,name,date};
-    pushEventShellToMode('logistics',shell);
-    pushEventShellToMode('general',shell);
-    renderSchedules();
-  } else {
-    // Legacy behavior: schedule visible only within the current mode
-    const id=uid();
-    const jobsSnapshot=AS().jobs.map(j=>({...j}));
-    AS().schedules.push({id,name,date,assignments:{},halftimeAssignments:{},jobs:jobsSnapshot,autoSaved:false});
-    AS().schedules.sort((a,b)=>a.date.localeCompare(b.date));
-    save();renderSchedules();
-  }
+  // Shared event — visible in both Logistics and General
+  const id=uid();
+  EVENTS=EVENTS||[];
+  EVENTS.push({id,name,date});
+  EVENTS.sort((a,b)=>a.date.localeCompare(b.date));
+  saveEvents();
+  const shell={id,name,date};
+  pushEventShellToMode('logistics',shell);
+  pushEventShellToMode('general',shell);
+  renderSchedules();
 }
 function deleteSchedule(id){
   const sc=AS().schedules.find(s=>s.id===id);
@@ -1056,10 +1048,10 @@ function selectSchedule(id){
   AS().activeSchedId=id;save();renderSchedules();showTab('assign');
 }
 function renderSchedules(){
+  const card=document.getElementById('create-sched-card');
+  if(card)card.style.display=_role==='admin'?'':'none';
   const noteEl=document.getElementById('create-sched-note');
-  if(noteEl)noteEl.textContent=_role==='admin'
-    ?'As admin, new events are shared automatically with both Logistics and General.'
-    :'This event will only be visible in this module. Ask an admin to create a shared event if the other module needs it too.';
+  if(noteEl)noteEl.textContent='New events are shared automatically with both Logistics and General.';
   const grid=document.getElementById('sched-grid');if(!grid)return;grid.innerHTML='';
   if(!AS()){grid.innerHTML='<div style="font-size:13px;color:var(--text2);padding:.5rem 0">Loading…</div>';return;}
   if(!AS().schedules.length){grid.innerHTML='<div style="font-size:13px;color:var(--text2);padding:.5rem 0">No schedules yet. Create one above.</div>';return;}
