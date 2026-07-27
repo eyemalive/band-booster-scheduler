@@ -1822,12 +1822,8 @@ function printLogisticsSchedule(sc){
 function printGeneralSchedule(sc){
   const pv=document.getElementById('print-view');
   const vols=scheduleVolunteers(sc);
-  const halfJobs=AS().halfJobs||[];
-  const htJobs=AS().halftimeJobs||[];
-  function halfName(id){return id?(halfJobs.find(h=>h.id===id)||{name:'—'}).name:'—';}
-  function htName(id){return id?(htJobs.find(h=>h.id===id)||{name:'—'}).name:'—';}
 
-  // Flat list sorted by bus number, unassigned last, alphabetical within group
+  // Column 1: Volunteers with bus, sorted by bus number, unassigned last
   const withBus=[],withoutBus=[];
   vols.forEach(v=>{
     const bus=getVolunteerBus(sc,v.id);
@@ -1839,31 +1835,57 @@ function printGeneralSchedule(sc){
     return a.v.lname.localeCompare(b.v.lname);
   });
   withoutBus.sort((a,b)=>a.v.lname.localeCompare(b.v.lname));
-  const rows=[...withBus,...withoutBus];
+  const colVolunteers=[...withBus,...withoutBus].map(({v,bus})=>bus?`${fullName(v)} - ${busLabelFromId(bus)}`:fullName(v));
+
+  // Columns 2-4: just names of anyone with a 1st half / halftime / 2nd half assignment
+  const colFirstHalf=vols.filter(v=>sc.firstHalfAssignments&&sc.firstHalfAssignments[v.id])
+    .sort((a,b)=>a.lname.localeCompare(b.lname)).map(v=>fullName(v));
+  const colHalftime=vols.filter(v=>sc.halftimeAssignments&&sc.halftimeAssignments[v.id])
+    .sort((a,b)=>a.lname.localeCompare(b.lname)).map(v=>fullName(v));
+  const colSecondHalf=vols.filter(v=>sc.secondHalfAssignments&&sc.secondHalfAssignments[v.id])
+    .sort((a,b)=>a.lname.localeCompare(b.lname)).map(v=>fullName(v));
+
+  // Column 5: checked-off admin/board members
+  const colAdmin=(sc.adminAttendees||[]).map(bid=>{
+    const b=(AS().boardMembers||[]).find(b=>b.id===bid);return b?b.name:null;
+  }).filter(Boolean).sort();
+
+  const halfJobs=AS().halfJobs||[];
+  const htJobs=AS().halftimeJobs||[];
+  const maxRows=Math.max(colVolunteers.length,colFirstHalf.length,colHalftime.length,colSecondHalf.length,colAdmin.length,1);
 
   let html=`<div style="font-family:Georgia,serif">
     <h1 style="font-size:18px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h1>
     <p style="font-size:13px;color:#555;margin-bottom:2px">${fmtDate(sc.date)}</p>
-    <p style="font-size:11px;color:#888;margin-bottom:16px">General Volunteers</p>
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <p style="font-size:11px;color:#888;margin-bottom:10px">General Volunteers</p>`;
+
+  // Legend of job categories under each column heading
+  const legendItems=[...halfJobs.map(h=>h.name)];
+  const htLegend=htJobs.map(h=>h.name);
+  if(legendItems.length||htLegend.length){
+    html+=`<div style="font-size:10px;color:#888;margin-bottom:12px">
+      ${legendItems.length?`<strong>1st/2nd Half categories:</strong> ${legendItems.map(n=>esc(n)).join(', ')}<br>`:''}
+      ${htLegend.length?`<strong>Halftime categories:</strong> ${htLegend.map(n=>esc(n)).join(', ')}`:''}
+    </div>`;
+  }
+
+  html+=`<table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="background:#f1efe8;border-bottom:1.5px solid #ccc">
-        <th style="text-align:left;padding:6px 8px;font-weight:600">Volunteer</th>
-        <th style="text-align:left;padding:6px 8px;font-weight:600">1st Half</th>
-        <th style="text-align:left;padding:6px 8px;font-weight:600">Halftime</th>
-        <th style="text-align:left;padding:6px 8px;font-weight:600">2nd Half</th>
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:26%">VOLUNTEERS</th>
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%">1st Half</th>
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%">Halftime</th>
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%">2nd Half</th>
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:17%">ADMIN</th>
       </tr></thead><tbody>`;
-  rows.forEach(({v,bus},i)=>{
-    const h1=(sc.firstHalfAssignments&&sc.firstHalfAssignments[v.id])||'';
-    const ht=(sc.halftimeAssignments&&sc.halftimeAssignments[v.id])||'';
-    const h2=(sc.secondHalfAssignments&&sc.secondHalfAssignments[v.id])||'';
-    const nameLabel=bus?`${fullName(v)} - ${busLabelFromId(bus)}`:fullName(v);
+  for(let i=0;i<maxRows;i++){
     html+=`<tr style="background:${i%2===0?'#fff':'#fafaf8'};border-bottom:.5px solid #eee">
-      <td style="padding:5px 8px;font-weight:500">${esc(nameLabel)}</td>
-      <td style="padding:5px 8px">${halfName(h1)}</td>
-      <td style="padding:5px 8px">${htName(ht)}</td>
-      <td style="padding:5px 8px">${halfName(h2)}</td>
+      <td style="padding:4px 8px">${esc(colVolunteers[i]||'')}</td>
+      <td style="padding:4px 8px">${esc(colFirstHalf[i]||'')}</td>
+      <td style="padding:4px 8px">${esc(colHalftime[i]||'')}</td>
+      <td style="padding:4px 8px">${esc(colSecondHalf[i]||'')}</td>
+      <td style="padding:4px 8px">${esc(colAdmin[i]||'')}</td>
     </tr>`;
-  });
+  }
   html+=`</tbody></table>`;
 
   // Job assignments legend (Colorguard, Uniforms, Percussion, Photographers, etc — anything that doesn't fit the half-based columns)
@@ -1884,17 +1906,8 @@ function printGeneralSchedule(sc){
     html+=`</table></div>`;
   }
 
-  // Admin box — checked board members
-  const attendingIds=sc.adminAttendees||[];
-  if(attendingIds.length){
-    const names=attendingIds.map(bid=>{
-      const b=(AS().boardMembers||[]).find(b=>b.id===bid);return b?b.name:null;
-    }).filter(Boolean).sort();
-    html+=`<div style="margin-top:18px;break-inside:avoid;border:1px solid #ccc;border-radius:4px;padding:10px 12px">
-      <div style="font-weight:600;font-size:12px;margin-bottom:4px;letter-spacing:.5px;color:#555">ADMIN</div>
-      <div style="font-size:12px;color:#333">${names.map(n=>esc(n)).join(', ')}</div>
-    </div>`;
-  }
+  html+=`<p style="font-size:10px;color:#aaa;margin-top:16px">Printed ${new Date().toLocaleString()}</p></div>`;
+  showPrint(pv,html);
 
   html+=`<p style="font-size:10px;color:#aaa;margin-top:16px">Printed ${new Date().toLocaleString()}</p></div>`;
   showPrint(pv,html);
