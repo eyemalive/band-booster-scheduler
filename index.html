@@ -1971,8 +1971,17 @@ function printGeneralSchedule(sc){
 function showPrint(pv,html){
   pv.innerHTML=html;pv.style.display='block';
   document.getElementById('app-main').style.display='none';
+  let restored=false;
+  const restore=()=>{
+    if(restored)return;restored=true;
+    document.getElementById('app-main').style.display='block';
+    pv.style.display='none';
+    window.removeEventListener('afterprint',restore);
+  };
+  window.addEventListener('afterprint',restore);
+  // Safety net in case a browser doesn't fire afterprint reliably
+  setTimeout(restore,60000);
   window.print();
-  document.getElementById('app-main').style.display='block';pv.style.display='none';
 }
 
 /* ── ADD TO ROSTER MODAL ── */
