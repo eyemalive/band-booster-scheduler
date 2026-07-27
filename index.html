@@ -1288,7 +1288,7 @@ function renderAdminChecklist(){
   const attending=new Set(sc.adminAttendees||[]);
   const sorted=[...members].sort((a,b)=>a.name.localeCompare(b.name));
   card.innerHTML=`
-    <label class="lbl">Board members covering this event <span style="font-weight:400;color:var(--text3)">— printed in the Admin section</span></label>
+    <label class="lbl">Admin covering this event <span style="font-weight:400;color:var(--text3)">— List is populated from Board members on Config page — printed in the Admin section</span></label>
     <div style="display:flex;flex-wrap:wrap;gap:6px 16px">
       ${sorted.map(b=>`
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
