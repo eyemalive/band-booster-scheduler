@@ -563,7 +563,7 @@ function applyMode(mode){
 
   // CSV description
   document.getElementById('csv-description').textContent = mode === 'logistics'
-    ? 'Skips first and last lines; imports rows where column 36 is "Logistics Volunteer" — first name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the master roster automatically.'
+    ? 'Skips first and last lines; imports rows where column 36 is "Logistics Volunteers" — first name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the master roster automatically.'
     : 'Skips first and last lines; imports rows where column 36 is "General Volunteers" — first name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the master roster automatically.';
 
   showTab('schedules');
@@ -1603,7 +1603,7 @@ function parseCSVLine(line){
   cols.push(cur.trim());return cols;
 }
 function csvFilterValue(){
-  return _mode === 'general' ? 'general volunteers' : 'logistics volunteer';
+  return _mode === 'general' ? 'general volunteers' : 'logistics volunteers';
 }
 function importCSV(e){
   const file=e.target.files[0];if(!file)return;
