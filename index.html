@@ -246,7 +246,8 @@
         <div id="assign-event-name" style="font-size:16px;font-weight:500"></div>
         <div id="assign-event-date" style="font-size:12px;color:var(--text2);margin-top:1px"></div>
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn sm" onclick="copyFromPreviousEvent()"><i class="ti ti-copy"></i> Copy from previous event</button>
         <button class="btn sm" onclick="autoAssign()"><i class="ti ti-wand"></i> Auto-assign</button>
         <button class="btn sm" onclick="clearAssignments()"><i class="ti ti-eraser"></i> Clear all</button>
       </div>
@@ -1108,7 +1109,8 @@ function renderAssign(){
         <div style="font-size:16px;font-weight:500">${esc(sc.name)}</div>
         <div style="font-size:12px;color:var(--text2);margin-top:1px">${fmtDate(sc.date)}</div>
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn sm" onclick="copyFromPreviousEvent()"><i class="ti ti-copy"></i> Copy from previous event</button>
         <button class="btn sm" onclick="autoAssign()"><i class="ti ti-wand"></i> Auto-assign</button>
         <button class="btn sm" onclick="clearAssignments()"><i class="ti ti-eraser"></i> Clear all</button>
       </div>
@@ -1457,6 +1459,76 @@ function renderStats(){
     <span class="tag"><i class="ti ti-check" style="font-size:13px"></i>${activeAssigned} assigned</span>
     <span class="tag"><i class="ti ti-circle-dashed" style="font-size:13px"></i>${active.length-activeAssigned} unassigned</span>
     <span class="tag" style="${emptyJobs>0?'color:var(--warning)':''}"><i class="ti ti-briefcase" style="font-size:13px"></i>${emptyJobs} jobs with nobody</span>`;
+}
+/* ── COPY FROM PREVIOUS EVENT ── */
+function findPreviousEvent(sc){
+  const scheds=AS().schedules.filter(s=>s.id!==sc.id&&s.date<sc.date).sort((a,b)=>b.date.localeCompare(a.date));
+  return scheds[0]||null;
+}
+function copyFromPreviousEvent(){
+  const sc=activeSched();if(!sc)return;
+  const prev=findPreviousEvent(sc);
+  if(!prev){alert('No previous event found to copy from.');return;}
+  if(!confirm(`Copy assignments from "${prev.name}" (${fmtDate(prev.date)})?\n\nOnly volunteers on this week's roster who aren't already assigned will be copied.`))return;
+  const copiedCount=_mode==='general'?copyFromPreviousEventGeneral(sc,prev):copyFromPreviousEventLogistics(sc,prev);
+  save();renderBoard();
+  alert(copiedCount?`Copied ${copiedCount} assignment${copiedCount===1?'':'s'} from the previous event.`:'Nothing to copy — either nobody from last time is on this week\'s roster, or everyone is already assigned.');
+}
+function copyFromPreviousEventLogistics(sc,prev){
+  const currentRoster=new Set(scheduleVolunteers(sc).map(v=>v.id));
+  const alreadyAssigned=new Set(Object.values(sc.assignments||{}).flat());
+  const validJobIds=new Set(eventJobs(sc).map(j=>j.id));
+  let copied=0;
+  Object.entries(prev.assignments||{}).forEach(([jobId,volIds])=>{
+    if(!validJobIds.has(jobId))return;
+    const job=eventJobs(sc).find(j=>j.id===jobId);
+    (volIds||[]).forEach(vid=>{
+      if(!currentRoster.has(vid)||alreadyAssigned.has(vid))return;
+      const arr=sc.assignments[jobId]=sc.assignments[jobId]||[];
+      if(arr.length>=job.slots)return;
+      arr.push(vid);alreadyAssigned.add(vid);copied++;
+      const prevHtVal=prev.halftimeAssignments&&prev.halftimeAssignments[jobId+'_'+vid];
+      if(prevHtVal){ sc.halftimeAssignments=sc.halftimeAssignments||{}; sc.halftimeAssignments[jobId+'_'+vid]=prevHtVal; }
+    });
+  });
+  return copied;
+}
+function copyFromPreviousEventGeneral(sc,prev){
+  const currentRoster=new Set(scheduleVolunteers(sc).map(v=>v.id));
+  const alreadyAssigned=new Set(Object.values(sc.assignments||{}).flat());
+  const validSlotIds=new Set([...eventJobs(sc).map(j=>j.id),...busIds()]);
+  function slotCapacity(id){ return id.indexOf('bus')===0?BUS_SLOTS:(eventJobs(sc).find(j=>j.id===id)||{}).slots; }
+  let copied=0;
+  Object.entries(prev.assignments||{}).forEach(([slotId,volIds])=>{
+    if(!validSlotIds.has(slotId))return;
+    (volIds||[]).forEach(vid=>{
+      if(!currentRoster.has(vid)||alreadyAssigned.has(vid))return;
+      const isBus=slotId.indexOf('bus')===0;
+      const arr=sc.assignments[slotId]=sc.assignments[slotId]||[];
+      const effective=isBus?busEffectiveCount(sc,slotId):arr.length;
+      if(effective>=slotCapacity(slotId))return;
+      arr.push(vid);alreadyAssigned.add(vid);copied++;
+    });
+  });
+  if(prev.busViaSpecial){
+    Object.entries(prev.busViaSpecial).forEach(([vid,busId])=>{
+      if(!currentRoster.has(vid)||!alreadyAssigned.has(vid))return;
+      sc.busViaSpecial=sc.busViaSpecial||{};
+      if(sc.busViaSpecial[vid])return;
+      if(busIsFull(sc,busId,vid))return;
+      sc.busViaSpecial[vid]=busId;
+    });
+  }
+  ['firstHalfAssignments','halftimeAssignments','secondHalfAssignments'].forEach(field=>{
+    if(!prev[field])return;
+    Object.entries(prev[field]).forEach(([vid,val])=>{
+      if(!currentRoster.has(vid))return;
+      sc[field]=sc[field]||{};
+      if(sc[field][vid])return;
+      sc[field][vid]=val;
+    });
+  });
+  return copied;
 }
 function autoAssign(){
   const sc=activeSched();if(!sc)return;
