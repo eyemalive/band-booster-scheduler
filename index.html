@@ -201,14 +201,28 @@
 
   <!-- SETTINGS MODAL -->
   <div id="settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:998;align-items:center;justify-content:center">
-    <div style="background:var(--surface);border-radius:var(--radius-lg);padding:1.5rem;max-width:460px;width:92%;box-shadow:0 8px 32px rgba(0,0,0,.25)">
+    <div style="background:var(--surface);border-radius:var(--radius-lg);padding:1.5rem;max-width:480px;width:92%;box-shadow:0 8px 32px rgba(0,0,0,.25);max-height:88vh;overflow-y:auto">
       <div style="font-size:16px;font-weight:500;margin-bottom:.5rem">Google Sheets sync</div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:1rem">The connection is configured via Vercel environment variables.</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn sm primary" onclick="saveSettings()"><i class="ti ti-refresh"></i> Test &amp; resync</button>
-        <button class="btn sm" onclick="forcePush()"><i class="ti ti-cloud-upload"></i> Force push</button>
-        <button class="btn sm" onclick="runDiagnostic()"><i class="ti ti-stethoscope"></i> Diagnose</button>
-        <button class="btn sm danger" onclick="disconnectSheets()"><i class="ti ti-trash"></i> Clear cache</button>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:1rem">
+        <div>
+          <button class="btn sm primary" onclick="saveSettings()"><i class="ti ti-refresh"></i> Test &amp; resync</button>
+          <div style="font-size:11px;color:var(--text2);margin-top:3px">Checks the connection and pulls the latest data down from Google Sheets, overwriting what's shown in this browser. Safe — doesn't touch the sheet.</div>
+        </div>
+        <div>
+          <button class="btn sm" onclick="forcePush()"><i class="ti ti-cloud-upload"></i> Force push</button>
+          <div style="font-size:11px;color:var(--text2);margin-top:3px">Pushes what's currently in <em>this browser</em> up to Google Sheets, overwriting whatever is there. Use only if you're sure this device has the correct, current data — a force push from a stale device can overwrite good data.</div>
+        </div>
+        <div>
+          <button class="btn sm" onclick="runDiagnostic()"><i class="ti ti-stethoscope"></i> Diagnose</button>
+          <div style="font-size:11px;color:var(--text2);margin-top:3px">Read-only connection test. Checks that Vercel and Apps Script are configured correctly and reports what's wrong if not. Makes no changes.</div>
+        </div>
+        <div>
+          <button class="btn sm danger" onclick="disconnectSheets()"><i class="ti ti-trash"></i> Clear cache</button>
+          <div style="font-size:11px;color:var(--text2);margin-top:3px"><strong>Only affects this browser</strong> — deletes the locally cached copy of the data and reloads the page. Your Google Sheet is never touched by this. There is no button anywhere in the app that deletes data from the Sheet itself; deleting a schedule, volunteer, or job only removes that one item, and even that requires confirmation first.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="btn sm" onclick="closeSettings()">Close</button>
       </div>
       <div id="settings-msg" style="font-size:12px;margin-top:.75rem;line-height:1.6"></div>
