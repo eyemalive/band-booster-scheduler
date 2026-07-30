@@ -244,6 +244,12 @@
         <div><label class="lbl">Event date</label><input type="date" id="ns-date"></div>
         <button class="btn primary" onclick="createSchedule()" style="white-space:nowrap"><i class="ti ti-plus"></i> Create</button>
       </div>
+      <div style="border-top:.5px solid var(--border);margin-top:1rem;padding-top:.85rem">
+        <label class="lbl">Bulk import events from CSV</label>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:.5rem">First row is headers. Two columns: <strong>Name, Date</strong> (date format YYYY-MM-DD).</div>
+        <input type="file" id="event-csv-file" accept=".csv" onchange="importEventsCSV(event)" style="width:220px;font-size:12px">
+        <div id="event-import-result" style="font-size:12px;margin-top:.5rem"></div>
+      </div>
     </div>
     <div id="sched-grid" class="sched-grid"></div>
   </div>
@@ -1008,6 +1014,80 @@ function createSchedule(){
   pushEventShellToMode('logistics',shell);
   pushEventShellToMode('general',shell);
   renderSchedules();
+}
+async function pushEventShellsToMode(mode,shells){
+  const target = mode==='general'?SG:S;
+  if(target){
+    target.schedules=target.schedules||[];
+    shells.forEach(shell=>{
+      if(!target.schedules.find(s=>s.id===shell.id)){
+        const jobsSnapshot=(target.jobs||[]).map(j=>({...j}));
+        target.schedules.push({...shell,assignments:{},halftimeAssignments:{},jobs:jobsSnapshot,autoSaved:false,shared:true});
+      }
+    });
+    target.schedules.sort((a,b)=>a.date.localeCompare(b.date));
+    try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(target)); }catch(e){}
+    if(onHttpsHost()&&isConnected()){
+      try{ await apiCall('save',target,sheetTabFor(mode)); }catch(e){ console.warn('pushEventShellsToMode save failed:',e); }
+    }
+    return;
+  }
+  let data=null;
+  if(onHttpsHost()&&isConnected()){
+    try{ const r=await apiCall('load',undefined,sheetTabFor(mode)); data=r.data; }catch(e){ console.warn(e); }
+  }
+  if(!data){ try{ data=JSON.parse(localStorage.getItem(cacheKeyFor(mode))||'null'); }catch(e){} }
+  if(!data) data=defaultState(mode);
+  data.schedules=data.schedules||[];
+  shells.forEach(shell=>{
+    if(!data.schedules.find(s=>s.id===shell.id)){
+      const jobsSnapshot=(data.jobs||[]).map(j=>({...j}));
+      data.schedules.push({...shell,assignments:{},halftimeAssignments:{},jobs:jobsSnapshot,autoSaved:false,shared:true});
+    }
+  });
+  data.schedules.sort((a,b)=>a.date.localeCompare(b.date));
+  try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
+  if(onHttpsHost()&&isConnected()){
+    try{ await apiCall('save',data,sheetTabFor(mode)); }catch(e){ console.warn('pushEventShellsToMode save failed:',e); }
+  }
+}
+function importEventsCSV(e){
+  if(_role!=='admin'){alert('Only an admin can bulk import events.');e.target.value='';return;}
+  const file=e.target.files[0];if(!file)return;
+  const resultEl=document.getElementById('event-import-result');
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const lines=ev.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
+    if(lines.length<2){resultEl.innerHTML='<span style="color:var(--danger-text)">File has no data rows.</span>';try{e.target.value='';}catch(_){}
+      return;}
+    const dataLines=lines.slice(1); // skip header row
+    const dateRe=/^\d{4}-\d{2}-\d{2}$/;
+    const shells=[];let skipped=0;
+    dataLines.forEach(line=>{
+      const cols=parseCSVLine(line);
+      const name=(cols[0]||'').trim();
+      const date=(cols[1]||'').trim();
+      if(!name||!dateRe.test(date)){skipped++;return;}
+      const dup=(EVENTS||[]).some(ev2=>ev2.name.toLowerCase()===name.toLowerCase()&&ev2.date===date)
+        ||shells.some(s=>s.name.toLowerCase()===name.toLowerCase()&&s.date===date);
+      if(dup){skipped++;return;}
+      shells.push({id:uid(),name,date});
+    });
+    try{e.target.value='';}catch(_){}
+    if(!shells.length){
+      resultEl.innerHTML=`<span style="color:var(--danger-text)">No valid new events found.${skipped?' ('+skipped+' row(s) skipped — missing data, bad date format, or duplicate.)':''}</span>`;
+      return;
+    }
+    EVENTS=EVENTS||[];
+    EVENTS.push(...shells);
+    EVENTS.sort((a,b)=>a.date.localeCompare(b.date));
+    saveEvents();
+    pushEventShellsToMode('logistics',shells);
+    pushEventShellsToMode('general',shells);
+    renderSchedules();
+    resultEl.innerHTML=`<span style="color:green"><i class="ti ti-circle-check" style="font-size:13px;vertical-align:-1px"></i> Imported ${shells.length} event${shells.length!==1?'s':''}.${skipped?' Skipped '+skipped+' row(s) (missing data, bad date, or duplicate).':''}</span>`;
+  };
+  reader.readAsText(file);
 }
 function deleteSchedule(id){
   const sc=AS().schedules.find(s=>s.id===id);
