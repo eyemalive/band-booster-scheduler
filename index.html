@@ -394,17 +394,8 @@
         </table>
       </div>
       <div class="card" style="margin-top:1rem">
-        <div style="font-size:15px;font-weight:500;margin-bottom:.25rem"><i class="ti ti-users-group" style="font-size:14px"></i> Board members</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">This list is set once per year. On the Assign tab you'll check off which board members are covering each event.</div>
-        <div class="grid2c" style="margin-bottom:.75rem">
-          <div><label class="lbl">Name</label><input type="text" id="bm-name" placeholder="e.g. Kellie Koch"></div>
-          <button class="btn primary" onclick="addBoardMember()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
-        </div>
-        <table class="jtable">
-          <colgroup><col style="width:88%"><col style="width:12%"></colgroup>
-          <thead><tr><th>Name</th><th></th></tr></thead>
-          <tbody id="bm-body"></tbody>
-        </table>
+        <div style="font-size:15px;font-weight:500;margin-bottom:.25rem"><i class="ti ti-users-group" style="font-size:14px"></i> Admin</div>
+        <div style="font-size:12px;color:var(--text2)">Admin volunteers ("Game Day Admin" in the CSV) are imported directly, just like other volunteers — no separate list to maintain here. They can be assigned to a role in either module, and once assigned in one, they're no longer available in the other.</div>
       </div>
     </div>
 
@@ -546,6 +537,27 @@ function launchApp(mode){
   loadEventsFromCache();
   initData();
   refreshEvents().then(()=>{ if(document.getElementById('panel-schedules').classList.contains('active')) renderSchedules(); });
+  // Also load the other module's data in the background so cross-module checks
+  // (shared events, admin exclusivity) work without waiting for a manual mode switch.
+  ensureModeLoadedInBackground(mode==='general'?'logistics':'general');
+}
+async function ensureModeLoadedInBackground(mode){
+  if(mode==='general'?SG:S) return;
+  let data=null;
+  try{ data=JSON.parse(localStorage.getItem(cacheKeyFor(mode))||'null'); }catch(e){}
+  if(!data) data=defaultState(mode);
+  if(mode==='general') SG=data; else S=data;
+  if(mode==='general') migrateGeneralBusJobs(SG,'general');
+  if(onHttpsHost()&&isConnected()){
+    try{
+      const r=await apiCall('load',undefined,sheetTabFor(mode));
+      if(r.data){
+        if(mode==='general') SG=r.data; else S=r.data;
+        try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(mode==='general'?SG:S)); }catch(e){}
+        if(mode==='general') migrateGeneralBusJobs(SG,'general');
+      }
+    }catch(e){ console.warn('ensureModeLoadedInBackground failed:',e); }
+  }
 }
 
 function applyMode(mode){
@@ -576,10 +588,10 @@ function applyMode(mode){
   document.getElementById('app-subtitle').textContent =
     mode === 'general' ? 'General Volunteer assignments' : 'Logistics volunteer assignments';
 
-  // CSV description
-  document.getElementById('csv-description').textContent = mode === 'logistics'
-    ? 'Skips first and last lines; imports rows where column 36 is "Logistics Volunteers" — first name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the master roster automatically; volunteers already on that week\'s roster are skipped, not duplicated.'
-    : 'Skips first and last lines; imports rows where column 36 is one of: "General Volunteers", "Game Day Admin", "Student Specialties: Color Guard", "Photographers", "Uniforms", "Student Specialties: Percussion" — first name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the master roster automatically; volunteers already on that week\'s roster are skipped, not duplicated.';
+  // CSV description — import now checks all categories regardless of which module you're in,
+  // and routes each row to the right one automatically.
+  document.getElementById('csv-description').textContent =
+    'Skips first and last lines; checks column 36 against Logistics ("Logistics Volunteers"), General ("General Volunteers", "Student Specialties: Color Guard", "Photographers", "Uniforms", "Student Specialties: Percussion"), and Admin ("Game Day Admin") categories — first name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). Each row is routed to the right module automatically, even if it doesn\'t match your current module. Admin rows are imported into both modules; once an admin volunteer is assigned a role in one, they\'re no longer available in the other. After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the relevant master roster automatically; volunteers already on that week\'s roster are skipped, not duplicated.';
 
   showTab('schedules');
 }
@@ -602,7 +614,9 @@ let EVENTS = null; // shared event registry: [{id,name,date}] — visible to bot
 let _dirty    = false;
 let _syncing  = false;
 let _saveTimer = null;
-let _csvParsed = null;
+let _csvParsedLogistics = [];
+let _csvParsedGeneral = [];
+let _csvParsedAdmin = [];
 let _csvSelectedSchedId = null;
 
 // Active state accessor — always points to the right dataset
@@ -877,7 +891,6 @@ function defaultState(mode){
       {id:'hj3',name:'Concourse'},
       {id:'hj4',name:'Float'},
     ] : undefined,
-    boardMembers: isGeneral ? [] : undefined,
     history: []
   };
 }
@@ -925,27 +938,32 @@ async function initData(){
   }
 }
 
-function migrateGeneralBusJobs(){
-  if(!AS())return;
+function migrateGeneralBusJobs(data,mode){
+  data = data || AS();
+  mode = mode || _mode;
+  if(!data)return;
   const specialNames=['Colorguard','Uniforms','Percussion','Photographers'];
-  AS().jobs=AS().jobs||[];
+  data.jobs=data.jobs||[];
   let changed=false;
   specialNames.forEach(name=>{
-    let j=AS().jobs.find(j=>j.name.toLowerCase()===name.toLowerCase());
-    if(!j){ AS().jobs.push({id:uid(),name,desc:'',slots:2}); changed=true; }
+    let j=data.jobs.find(j=>j.name.toLowerCase()===name.toLowerCase());
+    if(!j){ data.jobs.push({id:uid(),name,desc:'',slots:2}); changed=true; }
   });
-  if(AS().halftimeJobs){
-    const before=AS().halftimeJobs.length;
-    AS().halftimeJobs=AS().halftimeJobs.filter(h=>!specialNames.some(n=>n.toLowerCase()===h.name.toLowerCase()));
-    if(AS().halftimeJobs.length!==before)changed=true;
+  if(data.halftimeJobs){
+    const before=data.halftimeJobs.length;
+    data.halftimeJobs=data.halftimeJobs.filter(h=>!specialNames.some(n=>n.toLowerCase()===h.name.toLowerCase()));
+    if(data.halftimeJobs.length!==before)changed=true;
   }
-  if(AS().maxBuses===undefined){AS().maxBuses=15;changed=true;}
-  if(!AS().halfJobs||!AS().halfJobs.length){
-    AS().halfJobs=[{id:uid(),name:"Women's Restroom"},{id:uid(),name:"Men's Restroom"},{id:uid(),name:'Concourse'},{id:uid(),name:'Float'}];
+  if(data.maxBuses===undefined){data.maxBuses=15;changed=true;}
+  if(!data.halfJobs||!data.halfJobs.length){
+    data.halfJobs=[{id:uid(),name:"Women's Restroom"},{id:uid(),name:"Men's Restroom"},{id:uid(),name:'Concourse'},{id:uid(),name:'Float'}];
     changed=true;
   }
-  if(!AS().boardMembers){AS().boardMembers=[];changed=true;}
-  if(changed)save();
+  if(changed){
+    try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
+    if(mode===_mode){ save(); }
+    else if(onHttpsHost()&&isConnected()){ apiCall('save',data,sheetTabFor(mode)).catch(e=>console.warn(e)); }
+  }
 }
 
 /* ── AUTO-SAVE PAST EVENTS ── */
@@ -1186,7 +1204,6 @@ function renderAssign(){
       <strong><i class="ti ti-alert-triangle"></i> No roster loaded for this event.</strong>
       Import a CSV from the <strong>Master Roster</strong> tab to set this week's volunteers, or add them individually below.
     </div>`:''}
-    ${_mode==='general'?`<div class="card" id="admin-checklist-card" style="margin-bottom:.75rem;padding:.75rem 1rem"></div>`:''}
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:.4rem">
       <div style="font-size:12px;color:var(--text2)">Drag from pool or any position row — drop onto a job or bus to append, onto a row to insert, or back to pool to unassign.${_mode==='general'?' Buses appear alongside jobs below.':''}</div>
       <button class="btn sm" onclick="openAddRosterModal()"><i class="ti ti-user-plus"></i> Add volunteer</button>
@@ -1222,9 +1239,10 @@ function fmtDate(iso){if(!iso)return'';const d=new Date(iso+'T00:00:00');return 
 
 /* ── DRAG ── */
 let dragVid=null,dragFrom=null;
-function makePoolChip(v){
+function makePoolChip(v,sc){
   const c=document.createElement('div');c.className='chip';c.draggable=true;
-  c.innerHTML=`<span>${esc(fullName(v))}</span>`;
+  const isAdmin=sc&&isAdminForEvent(sc,v);
+  c.innerHTML=`<span>${esc(fullName(v))}</span>${isAdmin?'<span class="badge purple" style="font-size:9px;padding:1px 5px">Admin</span>':''}`;
   c.addEventListener('dragstart',e=>{dragVid=v.id;dragFrom=null;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',v.id);setTimeout(()=>c.classList.add('dragging'),0);});
   c.addEventListener('dragend',()=>c.classList.remove('dragging'));
   return c;
@@ -1265,6 +1283,32 @@ function drop(e,jid,insertIdx){
 const BUS_SLOTS = 2;
 // Returns the job list for a specific schedule — per-event if set, else global
 function eventJobs(sc){ return (sc&&sc.jobs&&sc.jobs.length)?sc.jobs:AS().jobs; }
+// Admin ("Game Day Admin" CSV category) helpers — cross-module identity is by name, since
+// Logistics and General keep independent volunteer records even for the same real person.
+function nameKey(v){ return (v.fname+' '+v.lname).toLowerCase().trim(); }
+function isAdminForEvent(sc,v){ return !!(sc&&sc.adminNameKeys&&sc.adminNameKeys.includes(nameKey(v))); }
+function adminAssignmentLabel(sc,v){
+  const slotId=Object.keys(sc.assignments||{}).find(sid=>(sc.assignments[sid]||[]).includes(v.id));
+  if(!slotId)return '';
+  if(slotId.indexOf('bus')===0)return busLabelFromId(slotId);
+  const j=eventJobs(sc).find(j=>j.id===slotId);
+  return j?j.name:'';
+}
+function otherModeOf(mode){ return mode==='general'?'logistics':'general'; }
+// True if this admin-tagged volunteer is already assigned to something in the OTHER module for this same event
+function isAdminClaimedElsewhere(sc,v){
+  if(!isAdminForEvent(sc,v))return false;
+  const other=otherModeOf(_mode);
+  const otherData=other==='general'?SG:S;
+  if(!otherData)return false;
+  const otherSc=(otherData.schedules||[]).find(s=>s.id===sc.id);
+  if(!otherSc)return false;
+  const key=nameKey(v);
+  const otherVol=(otherData.volunteers||[]).find(ov=>nameKey(ov)===key);
+  if(!otherVol)return false;
+  const assignedSet=new Set(Object.values(otherSc.assignments||{}).flat());
+  return assignedSet.has(otherVol.id);
+}
 // Bus helpers (General mode)
 function busIds(){ const n=(AS()&&AS().maxBuses)||15; return Array.from({length:n},(_,i)=>'bus'+(i+1)); }
 function busLabelFromId(bid){ return 'Bus '+String(bid).replace('bus',''); }
@@ -1281,7 +1325,7 @@ function getVolunteerBus(sc,vid){
   if(sc.busViaSpecial&&sc.busViaSpecial[vid])return sc.busViaSpecial[vid];
   return null;
 }
-function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJobsTable();if(_mode==='general'){renderGeneralVolTable();renderAdminChecklist();}}
+function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJobsTable();if(_mode==='general')renderGeneralVolTable();}
 
 function renderEventJobsTable(){
   const sc=activeSched();if(!sc)return;
@@ -1350,10 +1394,18 @@ function renderPool(){
   const sc=activeSched();if(!sc){pool.innerHTML='<span style="font-size:12px;color:var(--text3);align-self:center">No schedule selected.</span>';return;}
   const hasRoster=sc.activeVolunteerIds&&sc.activeVolunteerIds.length>0;
   const assigned=new Set(Object.values(sc.assignments||{}).flat());
-  const avail=scheduleVolunteers(sc).filter(v=>!assigned.has(v.id));
-  avail.forEach(v=>pool.appendChild(makePoolChip(v)));
+  const eligible=scheduleVolunteers(sc).filter(v=>!assigned.has(v.id));
+  const claimedElsewhere=eligible.filter(v=>isAdminClaimedElsewhere(sc,v));
+  const avail=eligible.filter(v=>!isAdminClaimedElsewhere(sc,v));
+  avail.forEach(v=>pool.appendChild(makePoolChip(v,sc)));
   if(!pool.children.length){
     pool.innerHTML=`<span style="font-size:12px;color:var(--text3);align-self:center">${hasRoster?'All volunteers assigned':'No roster loaded — use "Add volunteer" above or import a CSV.'}</span>`;
+  }
+  if(claimedElsewhere.length){
+    const note=document.createElement('div');
+    note.style.cssText='width:100%;font-size:11px;color:var(--text3);margin-top:4px';
+    note.textContent=`${claimedElsewhere.length} admin volunteer${claimedElsewhere.length===1?'':'s'} already assigned in ${otherModeOf(_mode)==='general'?'General':'Logistics'}: ${claimedElsewhere.map(v=>fullName(v)).join(', ')}`;
+    pool.appendChild(note);
   }
 }
 function renderJobSlots(){
@@ -1388,7 +1440,7 @@ function renderJobSlots(){
       row.className='pos-row'+(isLead?' is-lead-row':'');row.draggable=true;row.dataset.insert=idx;
       row.innerHTML=`<span class="pos-num"><i class="ti ti-grip-vertical" style="font-size:11px;cursor:grab"></i></span>
         <span class="pos-num" style="margin-left:-4px">${isLead?'<i class="ti ti-star" style="font-size:10px"></i>':idx+1}</span>
-        <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}</span>
+        <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}${isAdminForEvent(sc,v)?' <span class="badge purple" style="font-size:9px;padding:0 4px;vertical-align:1px">Admin</span>':''}</span>
         ${htSelectHtml}
         ${busSelectHtml}
         <span class="pos-remove" onclick="removePos('${j.id}','${v.id}')" title="Remove">×</span>`;
@@ -1430,7 +1482,7 @@ function renderJobSlots(){
         const row=document.createElement('div');
         row.className='pos-row';row.draggable=true;row.dataset.insert=idx;
         row.innerHTML=`<span class="pos-num"><i class="ti ti-grip-vertical" style="font-size:11px;cursor:grab"></i></span>
-          <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}</span>
+          <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}${isAdminForEvent(sc,v)?' <span class="badge purple" style="font-size:9px;padding:0 4px;vertical-align:1px">Admin</span>':''}</span>
           <span class="pos-remove" onclick="removePos('${bid}','${vid}')" title="Remove">×</span>`;
         row.addEventListener('dragstart',e=>{dragVid=vid;dragFrom=bid;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',vid);setTimeout(()=>row.classList.add('dragging'),0);});
         row.addEventListener('dragend',()=>row.classList.remove('dragging'));
@@ -1478,33 +1530,6 @@ function setSpecialBusAssign(vid,busId){
   sc.busViaSpecial=sc.busViaSpecial||{};
   if(busId)sc.busViaSpecial[vid]=busId;else delete sc.busViaSpecial[vid];
   save();renderBoard();
-}
-function renderAdminChecklist(){
-  const card=document.getElementById('admin-checklist-card');if(!card)return;
-  const sc=activeSched();if(!sc){card.innerHTML='';return;}
-  const members=AS().boardMembers||[];
-  if(!members.length){
-    card.innerHTML=`<div style="font-size:13px;color:var(--text2)"><i class="ti ti-users-group" style="font-size:13px"></i> No board members configured yet. Add them in <strong>Configuration</strong>.</div>`;
-    return;
-  }
-  const attending=new Set(sc.adminAttendees||[]);
-  const sorted=[...members].sort((a,b)=>a.name.localeCompare(b.name));
-  card.innerHTML=`
-    <label class="lbl">Admin covering this event <span style="font-weight:400;color:var(--text3)">— List is populated from Board members on Config page — printed in the Admin section</span></label>
-    <div style="display:flex;flex-wrap:wrap;gap:6px 16px">
-      ${sorted.map(b=>`
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-          <input type="checkbox" ${attending.has(b.id)?'checked':''} onchange="toggleAdminAttendee('${b.id}',this.checked)">
-          ${esc(b.name)}
-        </label>`).join('')}
-    </div>`;
-}
-function toggleAdminAttendee(bid,checked){
-  const sc=activeSched();if(!sc)return;
-  sc.adminAttendees=sc.adminAttendees||[];
-  if(checked){ if(!sc.adminAttendees.includes(bid))sc.adminAttendees.push(bid); }
-  else { sc.adminAttendees=sc.adminAttendees.filter(id=>id!==bid); }
-  save();
 }
 function setHalftime(jid,vid,htId){
   const sc=activeSched();if(!sc)return;
@@ -1668,11 +1693,10 @@ function parseCSVLine(line){
   for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){cols.push(cur.trim());cur='';}else cur+=ch;}
   cols.push(cur.trim());return cols;
 }
-function csvFilterValues(){
-  return _mode === 'general'
-    ? ['general volunteers','game day admin','student specialties: color guard','photographers','uniforms','student specialties: percussion']
-    : ['logistics volunteers'];
-}
+const LOGISTICS_CSV_CATEGORIES=['logistics volunteers'];
+const GENERAL_CSV_CATEGORIES=['general volunteers','student specialties: color guard','photographers','uniforms','student specialties: percussion'];
+const ADMIN_CSV_CATEGORIES=['game day admin'];
+
 function importCSV(e){
   const file=e.target.files[0];if(!file)return;
   const reader=new FileReader();
@@ -1680,16 +1704,22 @@ function importCSV(e){
     const allLines=ev.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
     if(allLines.length<3){document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">File has too few lines.</span>';return;}
     const dataLines=allLines.slice(1,allLines.length-1);
-    const filterVals=csvFilterValues();
-    const logLines=dataLines.filter(l=>filterVals.includes((parseCSVLine(l)[35]||'').trim().toLowerCase()));
-    if(!logLines.length){document.getElementById('import-result').innerHTML=`<span style="color:var(--danger-text)">No matching rows found in column 36. Expected one of: ${filterVals.map(v=>'"'+v+'"').join(', ')}.</span>`;return;}
-    _csvParsed=[];
-    logLines.forEach(line=>{
+    _csvParsedLogistics=[];_csvParsedGeneral=[];_csvParsedAdmin=[];
+    dataLines.forEach(line=>{
       const cols=parseCSVLine(line);
+      const cat=(cols[35]||'').trim().toLowerCase();
+      let bucket=null;
+      if(LOGISTICS_CSV_CATEGORIES.includes(cat))bucket=_csvParsedLogistics;
+      else if(GENERAL_CSV_CATEGORIES.includes(cat))bucket=_csvParsedGeneral;
+      else if(ADMIN_CSV_CATEGORIES.includes(cat))bucket=_csvParsedAdmin;
+      if(!bucket)return;
       const fname=(cols[48]||'').trim(),lname=(cols[50]||'').trim();if(!fname&&!lname)return;
-      _csvParsed.push({fname,lname,rawPhone:(cols[51]||'').trim(),email:(cols[52]||'').trim()});
+      bucket.push({fname,lname,rawPhone:(cols[51]||'').trim(),email:(cols[52]||'').trim()});
     });
-    if(!_csvParsed.length){document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">No valid rows found.</span>';return;}
+    if(!_csvParsedLogistics.length&&!_csvParsedGeneral.length&&!_csvParsedAdmin.length){
+      document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">No matching rows found in column 36 — checked Logistics, General, and Admin categories.</span>';
+      return;
+    }
     try{e.target.value='';}catch(_){}
     openCsvModal();
   };
@@ -1698,7 +1728,11 @@ function importCSV(e){
 function openCsvModal(){
   const td=today();
   const future=AS().schedules.filter(sc=>sc.date>=td).sort((a,b)=>a.date.localeCompare(b.date));
-  document.getElementById('csv-modal-summary').textContent=`Found ${_csvParsed.length} volunteer${_csvParsed.length!==1?'s':''} in this file. Select which schedule they should be active for.`;
+  const parts=[];
+  if(_csvParsedLogistics.length)parts.push(`${_csvParsedLogistics.length} logistics`);
+  if(_csvParsedGeneral.length)parts.push(`${_csvParsedGeneral.length} general`);
+  if(_csvParsedAdmin.length)parts.push(`${_csvParsedAdmin.length} admin`);
+  document.getElementById('csv-modal-summary').textContent=`Found ${parts.join(', ')} volunteer${(_csvParsedLogistics.length+_csvParsedGeneral.length+_csvParsedAdmin.length)!==1?'s':''} in this file. Select which schedule they should be active for — matching rows are routed to the right module automatically.`;
   const list=document.getElementById('csv-modal-list');list.innerHTML='';
   _csvSelectedSchedId=null;document.getElementById('csv-modal-confirm').disabled=true;
   if(!future.length){list.innerHTML='<div style="font-size:13px;color:var(--text2);padding:.5rem">No upcoming schedules. Create one first.</div>';}
@@ -1707,7 +1741,7 @@ function openCsvModal(){
     const label=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
     const row=document.createElement('div');
     row.style.cssText='display:flex;align-items:center;gap:10px;padding:8px 10px;border:.5px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:background .15s';
-    row.innerHTML=`<input type="radio" name="csv-sched" value="${sc.id}" style="width:auto;cursor:pointer"><div><div style="font-size:13px;font-weight:500">${esc(sc.name)}</div><div style="font-size:11px;color:var(--text2)">${label}</div></div>`;
+    row.innerHTML=`<input type="radio" name="csv-sched" value="${sc.id}" style="width:auto;cursor:pointer"><div><div style="font-size:13px;font-weight:500">${esc(sc.name)}${sc.shared?' <span class="badge purple" style="font-size:10px">Shared</span>':''}</div><div style="font-size:11px;color:var(--text2)">${label}</div></div>`;
     row.addEventListener('click',()=>{
       list.querySelectorAll('div').forEach(r=>{r.style.background='';r.style.borderColor='';});
       row.querySelector('input').checked=true;
@@ -1719,18 +1753,24 @@ function openCsvModal(){
   });}
   document.getElementById('csv-modal').style.display='flex';
 }
-function closeCsvModal(){document.getElementById('csv-modal').style.display='none';_csvParsed=null;_csvSelectedSchedId=null;}
-function confirmCsvImport(){
-  if(!_csvSelectedSchedId||!_csvParsed)return;
-  const sc=AS().schedules.find(s=>s.id===_csvSelectedSchedId);
-  if(!sc){alert('Schedule not found.');closeCsvModal();return;}
+function closeCsvModal(){
+  document.getElementById('csv-modal').style.display='none';
+  _csvParsedLogistics=[];_csvParsedGeneral=[];_csvParsedAdmin=[];_csvSelectedSchedId=null;
+}
+// Applies a batch of parsed rows to a specific event within an already-resolved data object.
+// normalRows are added to the roster normally; adminRows are ALSO tagged into sc.adminNameKeys
+// so both modules can recognize "this person came from the admin import" for that event.
+function importRowsIntoModeData(data,sc,normalRows,adminRows){
   sc.activeVolunteerIds=sc.activeVolunteerIds||[];
+  sc.adminNameKeys=sc.adminNameKeys||[];
   const existingSet=new Set(sc.activeVolunteerIds);
-  let added=0,rosterUpdated=0,newToWeek=0,alreadyOnRoster=0;
-  _csvParsed.forEach(({fname,lname,rawPhone,email})=>{
+  const adminKeySet=new Set(sc.adminNameKeys);
+  let added=0,rosterUpdated=0,newToWeek=0,alreadyOnRoster=0,newAdmin=0;
+  const allRows=[...normalRows.map(r=>({...r,isAdmin:false})),...(adminRows||[]).map(r=>({...r,isAdmin:true}))];
+  allRows.forEach(({fname,lname,rawPhone,email,isAdmin})=>{
     const phone=rawPhone||'unknown';
     const key=(fname+' '+lname).toLowerCase().trim();
-    let vol=AS().volunteers.find(v=>(v.fname+' '+v.lname).toLowerCase().trim()===key);
+    let vol=data.volunteers.find(v=>(v.fname+' '+v.lname).toLowerCase().trim()===key);
     if(vol){
       let ch=false;
       if(email&&!vol.email){vol.email=email;ch=true;}
@@ -1739,18 +1779,68 @@ function confirmCsvImport(){
       if(ch)rosterUpdated++;
     } else {
       vol={id:uid(),fname,lname,email:email||'',phone,active:true};
-      AS().volunteers.push(vol);added++;
+      data.volunteers.push(vol);added++;
     }
-    if(existingSet.has(vol.id)){
-      alreadyOnRoster++;
-    } else {
-      existingSet.add(vol.id);
-      sc.activeVolunteerIds.push(vol.id);
-      newToWeek++;
-    }
+    if(existingSet.has(vol.id)){ alreadyOnRoster++; }
+    else { existingSet.add(vol.id); sc.activeVolunteerIds.push(vol.id); newToWeek++; }
+    if(isAdmin&&!adminKeySet.has(key)){ adminKeySet.add(key); sc.adminNameKeys.push(key); newAdmin++; }
   });
-  document.getElementById('import-result').innerHTML=`<span style="color:green"><i class="ti ti-circle-check" style="font-size:13px;vertical-align:-1px"></i> Imported for <strong>${esc(sc.name)}</strong> — ${newToWeek} added to this week's roster${alreadyOnRoster?', '+alreadyOnRoster+' already on it (skipped)':''}, ${added} new to master roster, ${rosterUpdated} contacts updated.</span>`;
-  save();renderVolunteers();closeCsvModal();
+  return {added,rosterUpdated,newToWeek,alreadyOnRoster,newAdmin};
+}
+// Resolves a mode's data (in-memory, cache, or server), applies rows to the matching event, and persists.
+async function applyImportToMode(mode,eventId,normalRows,adminRows){
+  let data = mode===_mode ? AS() : (mode==='general'?SG:S);
+  const wasLoaded=!!data;
+  if(!data){
+    if(onHttpsHost()&&isConnected()){
+      try{ const r=await apiCall('load',undefined,sheetTabFor(mode)); data=r.data; }catch(e){ console.warn(e); }
+    }
+    if(!data){ try{ data=JSON.parse(localStorage.getItem(cacheKeyFor(mode))||'null'); }catch(e){} }
+    if(!data) data=defaultState(mode);
+  }
+  const sc=(data.schedules||[]).find(s=>s.id===eventId);
+  if(!sc)return {eventFound:false};
+  const stats=importRowsIntoModeData(data,sc,normalRows,adminRows);
+  if(mode==='general')SG=data; else S=data;
+  if(mode!==_mode){
+    try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
+    if(onHttpsHost()&&isConnected()){
+      try{ await apiCall('save',data,sheetTabFor(mode)); }catch(e){ console.warn('applyImportToMode save failed:',e); }
+    }
+  }
+  return {eventFound:true,...stats};
+}
+async function confirmCsvImport(){
+  if(!_csvSelectedSchedId)return;
+  const sc=AS().schedules.find(s=>s.id===_csvSelectedSchedId);
+  if(!sc){alert('Schedule not found.');closeCsvModal();return;}
+
+  const ownRows=_mode==='general'?_csvParsedGeneral:_csvParsedLogistics;
+  const otherMode=otherModeOf(_mode);
+  const otherRows=_mode==='general'?_csvParsedLogistics:_csvParsedGeneral;
+  const adminRows=_csvParsedAdmin||[];
+
+  // Current module — own-category rows plus admin rows, persisted via the normal save() flow
+  const ownStats=importRowsIntoModeData(AS(),sc,ownRows,adminRows);
+  save();
+
+  let otherStats=null,otherNote=null;
+  if(otherRows.length||adminRows.length){
+    if(!sc.shared){
+      otherNote=`${otherRows.length+adminRows.length} row(s) for ${otherMode==='general'?'General':'Logistics'} were skipped — this event isn't shared with that module.`;
+    } else {
+      const r=await applyImportToMode(otherMode,sc.id,otherRows,adminRows);
+      if(r.eventFound){ otherStats=r; }
+      else { otherNote=`Found rows for ${otherMode==='general'?'General':'Logistics'} but couldn't find a matching event there.`; }
+    }
+  }
+
+  const modeLabel=m=>m==='general'?'General':'Logistics';
+  let msg=`<span style="color:green"><i class="ti ti-circle-check" style="font-size:13px;vertical-align:-1px"></i> ${modeLabel(_mode)}: ${ownStats.newToWeek} added${ownStats.alreadyOnRoster?', '+ownStats.alreadyOnRoster+' already on it':''}, ${ownStats.added} new to master roster${ownStats.newAdmin?', '+ownStats.newAdmin+' admin':''}.</span>`;
+  if(otherStats)msg+=`<br><span style="font-size:12px;color:var(--text2)">${modeLabel(otherMode)}: ${otherStats.newToWeek} added${otherStats.alreadyOnRoster?', '+otherStats.alreadyOnRoster+' already on it':''}, ${otherStats.added} new to master roster${otherStats.newAdmin?', '+otherStats.newAdmin+' admin':''}.</span>`;
+  if(otherNote)msg+=`<br><span style="font-size:12px;color:var(--amber-dk)">${otherNote}</span>`;
+  document.getElementById('import-result').innerHTML=msg;
+  renderVolunteers();closeCsvModal();
 }
 
 /* ── JOBS ── */
@@ -1795,7 +1885,6 @@ function renderGeneralOnlyConfig(){
   const inp=document.getElementById('max-buses-input');
   if(inp)inp.value=AS().maxBuses||15;
   renderHalfJobsTable();
-  renderBoardMembersTable();
 }
 
 /* ── HALFTIME JOBS ── */
@@ -1964,36 +2053,6 @@ function renderHalfJobsTable(){
   });
 }
 
-/* ── BOARD MEMBERS ── */
-function addBoardMember(){
-  const name=document.getElementById('bm-name').value.trim();if(!name){alert('Name required.');return;}
-  AS().boardMembers=AS().boardMembers||[];
-  if(AS().boardMembers.some(b=>b.name.toLowerCase()===name.toLowerCase())){alert('Already exists.');return;}
-  AS().boardMembers.push({id:uid(),name});
-  document.getElementById('bm-name').value='';save();renderBoardMembersTable();
-}
-function removeBoardMember(id){
-  if(!confirm('Remove this board member?'))return;
-  AS().boardMembers=(AS().boardMembers||[]).filter(b=>b.id!==id);
-  AS().schedules.forEach(sc=>{
-    if(sc.adminAttendees)sc.adminAttendees=sc.adminAttendees.filter(bid=>bid!==id);
-  });
-  save();renderBoardMembersTable();
-}
-function editBoardMemberName(id,val){
-  const b=(AS().boardMembers||[]).find(b=>b.id===id);if(b&&val.trim())b.name=val.trim();save();
-}
-function renderBoardMembersTable(){
-  const tb=document.getElementById('bm-body');if(!tb||!AS())return;tb.innerHTML='';
-  const members=AS().boardMembers||[];
-  if(!members.length){tb.innerHTML='<tr><td colspan="2" style="padding:1rem;font-size:13px;color:var(--text2)">No board members yet.</td></tr>';return;}
-  members.forEach(b=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td><input class="inline-edit" value="${esc(b.name)}" onblur="editBoardMemberName('${b.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td><td><button class="btn xs danger" onclick="removeBoardMember('${b.id}')"><i class="ti ti-trash"></i></button></td>`;
-    tb.appendChild(tr);
-  });
-}
-
 /* ── GENERAL MODE: VOLUNTEER ASSIGNMENT TABLE ── */
 function renderGeneralVolTable(){
   const wrap=document.getElementById('general-vol-table-wrap');if(!wrap)return;
@@ -2138,6 +2197,14 @@ function printLogisticsSchedule(sc){
   });
   const unassigned=scheduleVolunteers(sc).filter(v=>!new Set(Object.values(sc.assignments||{}).flat()).has(v.id));
   if(unassigned.length)html+=`<div style="margin-top:16px;padding:8px;border:1px dashed #ccc;border-radius:4px;font-size:12px;color:#777"><strong style="color:#555">Unassigned:</strong> ${unassigned.map(v=>fullName(v)).join(', ')}</div>`;
+  const adminVols=scheduleVolunteers(sc).filter(v=>isAdminForEvent(sc,v)&&new Set(Object.values(sc.assignments||{}).flat()).has(v.id));
+  if(adminVols.length){
+    const names=adminVols.map(v=>{
+      const role=adminAssignmentLabel(sc,v);
+      return role?`${fullName(v)} (${role})`:fullName(v);
+    }).sort();
+    html+=`<div style="margin-top:12px;border:1px solid #ccc;border-radius:4px;padding:8px 10px;font-size:12px"><strong style="color:#555;letter-spacing:.5px">ADMIN</strong><br>${names.map(esc).join(', ')}</div>`;
+  }
   html+=`<p style="margin-top:20px;font-size:10px;color:#aaa">Printed ${new Date().toLocaleString()}</p>`;
   showPrint(pv,html);
 }
@@ -2179,10 +2246,11 @@ function printGeneralSchedule(sc){
   const halftimeHtml=roleGroupedHtml(htJobs,'halftimeAssignments');
   const secondHalfHtml=roleGroupedHtml(halfJobs,'secondHalfAssignments');
 
-  // Column 5: checked-off admin/board members
-  const colAdmin=(sc.adminAttendees||[]).map(bid=>{
-    const b=(AS().boardMembers||[]).find(b=>b.id===bid);return b?b.name:null;
-  }).filter(Boolean).sort();
+  // Column 5: admin-tagged volunteers, with whatever job/bus they ended up assigned to here
+  const colAdmin=vols.filter(v=>isAdminForEvent(sc,v)).map(v=>{
+    const role=adminAssignmentLabel(sc,v);
+    return role?`${fullName(v)} (${role})`:fullName(v);
+  }).sort();
 
   let html=`<div style="font-family:Georgia,serif">
     <h1 style="font-size:18px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h1>
