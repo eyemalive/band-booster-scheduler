@@ -1624,12 +1624,18 @@ function copyFromPreviousEventGeneral(sc,prev){
 function autoAssign(){
   const sc=activeSched();if(!sc)return;
   const assigned=new Set(Object.values(sc.assignments||{}).flat());
-  let pool=[...scheduleVolunteers(sc).filter(v=>!assigned.has(v.id)&&!isAdminClaimedElsewhere(sc,v))].sort((a,b)=>a.lname.localeCompare(b.lname));
+  let pool=[...scheduleVolunteers(sc).filter(v=>!assigned.has(v.id)&&!isAdminClaimedElsewhere(sc,v)&&!isAdminForEvent(sc,v))].sort((a,b)=>a.lname.localeCompare(b.lname));
   if(!pool.length){alert('No unassigned volunteers.');return;}
-  const emptyJobs=eventJobs(sc).filter(j=>!(sc.assignments[j.id]&&sc.assignments[j.id].length));
+  // In General mode, specialty roles (Colorguard/Uniforms/Percussion/Photographers) are only ever
+  // filled via the CSV import's specialty tagging — Auto-assign never touches them.
+  const specialtyKeys=Object.values(SPECIALTY_JOB_MAP);
+  const fillableJobs=_mode==='general'
+    ? eventJobs(sc).filter(j=>!specialtyKeys.includes(j.name.toLowerCase()))
+    : eventJobs(sc);
+  const emptyJobs=fillableJobs.filter(j=>!(sc.assignments[j.id]&&sc.assignments[j.id].length));
   for(const j of emptyJobs){if(!pool.length)break;sc.assignments[j.id]=[pool.shift().id];}
   let go=true;
-  while(pool.length&&go){go=false;for(const j of eventJobs(sc)){if(!pool.length)break;const cur=(sc.assignments[j.id]||[]).length;if(cur<j.slots){sc.assignments[j.id]=sc.assignments[j.id]||[];sc.assignments[j.id].push(pool.shift().id);go=true;}}}
+  while(pool.length&&go){go=false;for(const j of fillableJobs){if(!pool.length)break;const cur=(sc.assignments[j.id]||[]).length;if(cur<j.slots){sc.assignments[j.id]=sc.assignments[j.id]||[];sc.assignments[j.id].push(pool.shift().id);go=true;}}}
   // General mode: distribute any leftover pool across buses — one person per bus per pass,
   // wrapping back to bus 1 for a second pass if there are still people left over.
   if(_mode==='general'&&pool.length){
