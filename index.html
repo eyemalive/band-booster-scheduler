@@ -1624,12 +1624,28 @@ function copyFromPreviousEventGeneral(sc,prev){
 function autoAssign(){
   const sc=activeSched();if(!sc)return;
   const assigned=new Set(Object.values(sc.assignments||{}).flat());
-  let pool=[...scheduleVolunteers(sc).filter(v=>!assigned.has(v.id))].sort((a,b)=>a.lname.localeCompare(b.lname));
+  let pool=[...scheduleVolunteers(sc).filter(v=>!assigned.has(v.id)&&!isAdminClaimedElsewhere(sc,v))].sort((a,b)=>a.lname.localeCompare(b.lname));
   if(!pool.length){alert('No unassigned volunteers.');return;}
   const emptyJobs=eventJobs(sc).filter(j=>!(sc.assignments[j.id]&&sc.assignments[j.id].length));
   for(const j of emptyJobs){if(!pool.length)break;sc.assignments[j.id]=[pool.shift().id];}
   let go=true;
   while(pool.length&&go){go=false;for(const j of eventJobs(sc)){if(!pool.length)break;const cur=(sc.assignments[j.id]||[]).length;if(cur<j.slots){sc.assignments[j.id]=sc.assignments[j.id]||[];sc.assignments[j.id].push(pool.shift().id);go=true;}}}
+  // General mode: distribute any leftover pool across buses — one person per bus per pass,
+  // wrapping back to bus 1 for a second pass if there are still people left over.
+  if(_mode==='general'&&pool.length){
+    const buses=busIds();
+    let progress=true;
+    while(pool.length&&progress){
+      progress=false;
+      for(const bid of buses){
+        if(!pool.length)break;
+        if(busIsFull(sc,bid))continue;
+        sc.assignments[bid]=sc.assignments[bid]||[];
+        sc.assignments[bid].push(pool.shift().id);
+        progress=true;
+      }
+    }
+  }
   save();renderBoard();
 }
 function clearAssignments(){
@@ -1696,6 +1712,13 @@ function parseCSVLine(line){
 const LOGISTICS_CSV_CATEGORIES=['logistics volunteers'];
 const GENERAL_CSV_CATEGORIES=['general volunteers','student specialties: color guard','photographers','uniforms','student specialties: percussion'];
 const ADMIN_CSV_CATEGORIES=['game day admin'];
+// Maps a CSV specialty category to the job it should auto-assign into on import (matched by job name, case-insensitive)
+const SPECIALTY_JOB_MAP={
+  'student specialties: color guard':'colorguard',
+  'photographers':'photographers',
+  'uniforms':'uniforms',
+  'student specialties: percussion':'percussion'
+};
 
 function importCSV(e){
   const file=e.target.files[0];if(!file)return;
@@ -1714,7 +1737,7 @@ function importCSV(e){
       else if(ADMIN_CSV_CATEGORIES.includes(cat))bucket=_csvParsedAdmin;
       if(!bucket)return;
       const fname=(cols[48]||'').trim(),lname=(cols[50]||'').trim();if(!fname&&!lname)return;
-      bucket.push({fname,lname,rawPhone:(cols[51]||'').trim(),email:(cols[52]||'').trim()});
+      bucket.push({fname,lname,rawPhone:(cols[51]||'').trim(),email:(cols[52]||'').trim(),category:cat});
     });
     if(!_csvParsedLogistics.length&&!_csvParsedGeneral.length&&!_csvParsedAdmin.length){
       document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">No matching rows found in column 36 — checked Logistics, General, and Admin categories.</span>';
@@ -1760,14 +1783,17 @@ function closeCsvModal(){
 // Applies a batch of parsed rows to a specific event within an already-resolved data object.
 // normalRows are added to the roster normally; adminRows are ALSO tagged into sc.adminNameKeys
 // so both modules can recognize "this person came from the admin import" for that event.
-function importRowsIntoModeData(data,sc,normalRows,adminRows){
+// For General mode, rows tagged with a specialty category (Colorguard/Uniforms/Percussion/Photographers)
+// are also auto-assigned straight into the matching job, if there's an open slot and they aren't already assigned.
+function importRowsIntoModeData(data,sc,mode,normalRows,adminRows){
   sc.activeVolunteerIds=sc.activeVolunteerIds||[];
   sc.adminNameKeys=sc.adminNameKeys||[];
   const existingSet=new Set(sc.activeVolunteerIds);
   const adminKeySet=new Set(sc.adminNameKeys);
-  let added=0,rosterUpdated=0,newToWeek=0,alreadyOnRoster=0,newAdmin=0;
+  let added=0,rosterUpdated=0,newToWeek=0,alreadyOnRoster=0,newAdmin=0,specialtyAssigned=0;
   const allRows=[...normalRows.map(r=>({...r,isAdmin:false})),...(adminRows||[]).map(r=>({...r,isAdmin:true}))];
-  allRows.forEach(({fname,lname,rawPhone,email,isAdmin})=>{
+  const specialtyPending=[]; // {vol, category} — resolved after roster is built
+  allRows.forEach(({fname,lname,rawPhone,email,isAdmin,category})=>{
     const phone=rawPhone||'unknown';
     const key=(fname+' '+lname).toLowerCase().trim();
     let vol=data.volunteers.find(v=>(v.fname+' '+v.lname).toLowerCase().trim()===key);
@@ -1784,8 +1810,23 @@ function importRowsIntoModeData(data,sc,normalRows,adminRows){
     if(existingSet.has(vol.id)){ alreadyOnRoster++; }
     else { existingSet.add(vol.id); sc.activeVolunteerIds.push(vol.id); newToWeek++; }
     if(isAdmin&&!adminKeySet.has(key)){ adminKeySet.add(key); sc.adminNameKeys.push(key); newAdmin++; }
+    if(mode==='general'&&category&&SPECIALTY_JOB_MAP[category])specialtyPending.push({vol,jobKey:SPECIALTY_JOB_MAP[category]});
   });
-  return {added,rosterUpdated,newToWeek,alreadyOnRoster,newAdmin};
+  if(specialtyPending.length){
+    const jobsList=(sc.jobs&&sc.jobs.length)?sc.jobs:(data.jobs||[]);
+    const assignedSet=new Set(Object.values(sc.assignments||{}).flat());
+    specialtyPending.forEach(({vol,jobKey})=>{
+      if(assignedSet.has(vol.id))return;
+      const job=jobsList.find(j=>j.name.toLowerCase()===jobKey);
+      if(!job)return;
+      const arr=sc.assignments[job.id]=sc.assignments[job.id]||[];
+      if(arr.length>=job.slots)return;
+      arr.push(vol.id);
+      assignedSet.add(vol.id);
+      specialtyAssigned++;
+    });
+  }
+  return {added,rosterUpdated,newToWeek,alreadyOnRoster,newAdmin,specialtyAssigned};
 }
 // Resolves a mode's data (in-memory, cache, or server), applies rows to the matching event, and persists.
 async function applyImportToMode(mode,eventId,normalRows,adminRows){
@@ -1800,7 +1841,7 @@ async function applyImportToMode(mode,eventId,normalRows,adminRows){
   }
   const sc=(data.schedules||[]).find(s=>s.id===eventId);
   if(!sc)return {eventFound:false};
-  const stats=importRowsIntoModeData(data,sc,normalRows,adminRows);
+  const stats=importRowsIntoModeData(data,sc,mode,normalRows,adminRows);
   if(mode==='general')SG=data; else S=data;
   if(mode!==_mode){
     try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
@@ -1821,8 +1862,8 @@ async function confirmCsvImport(){
   const adminRows=_csvParsedAdmin||[];
 
   // Current module — own-category rows plus admin rows, persisted via the normal save() flow
-  const ownStats=importRowsIntoModeData(AS(),sc,ownRows,adminRows);
-  save();
+  const ownStats=importRowsIntoModeData(AS(),sc,_mode,ownRows,adminRows);
+  save();renderBoard();
 
   let otherStats=null,otherNote=null;
   if(otherRows.length||adminRows.length){
@@ -1836,8 +1877,8 @@ async function confirmCsvImport(){
   }
 
   const modeLabel=m=>m==='general'?'General':'Logistics';
-  let msg=`<span style="color:green"><i class="ti ti-circle-check" style="font-size:13px;vertical-align:-1px"></i> ${modeLabel(_mode)}: ${ownStats.newToWeek} added${ownStats.alreadyOnRoster?', '+ownStats.alreadyOnRoster+' already on it':''}, ${ownStats.added} new to master roster${ownStats.newAdmin?', '+ownStats.newAdmin+' admin':''}.</span>`;
-  if(otherStats)msg+=`<br><span style="font-size:12px;color:var(--text2)">${modeLabel(otherMode)}: ${otherStats.newToWeek} added${otherStats.alreadyOnRoster?', '+otherStats.alreadyOnRoster+' already on it':''}, ${otherStats.added} new to master roster${otherStats.newAdmin?', '+otherStats.newAdmin+' admin':''}.</span>`;
+  let msg=`<span style="color:green"><i class="ti ti-circle-check" style="font-size:13px;vertical-align:-1px"></i> ${modeLabel(_mode)}: ${ownStats.newToWeek} added${ownStats.alreadyOnRoster?', '+ownStats.alreadyOnRoster+' already on it':''}, ${ownStats.added} new to master roster${ownStats.newAdmin?', '+ownStats.newAdmin+' admin':''}${ownStats.specialtyAssigned?', '+ownStats.specialtyAssigned+' auto-assigned to their specialty role':''}.</span>`;
+  if(otherStats)msg+=`<br><span style="font-size:12px;color:var(--text2)">${modeLabel(otherMode)}: ${otherStats.newToWeek} added${otherStats.alreadyOnRoster?', '+otherStats.alreadyOnRoster+' already on it':''}, ${otherStats.added} new to master roster${otherStats.newAdmin?', '+otherStats.newAdmin+' admin':''}${otherStats.specialtyAssigned?', '+otherStats.specialtyAssigned+' auto-assigned to their specialty role':''}.</span>`;
   if(otherNote)msg+=`<br><span style="font-size:12px;color:var(--amber-dk)">${otherNote}</span>`;
   document.getElementById('import-result').innerHTML=msg;
   renderVolunteers();closeCsvModal();
