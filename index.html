@@ -317,11 +317,12 @@
         <div class="row" style="gap:8px">
           <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:5px"><input type="checkbox" id="show-inactive" onchange="renderVolunteers()"> Show inactive</label>
           <input type="text" id="v-search" placeholder="Search..." style="width:140px;font-size:12px" oninput="renderVolunteers()">
+          <button class="btn xs danger" onclick="deleteAllVolunteers()"><i class="ti ti-trash"></i> Delete all</button>
         </div>
       </div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Click any cell to edit inline.</div>
       <table class="rtable">
-        <colgroup><col style="width:4%"><col style="width:15%"><col style="width:15%"><col style="width:31%"><col style="width:19%"><col style="width:12%"><col style="width:4%"></colgroup>
+        <colgroup><col style="width:12%"><col style="width:13%"><col style="width:13%"><col style="width:23%"><col style="width:15%"><col style="width:15%"><col style="width:9%"></colgroup>
         <thead><tr><th></th><th>First</th><th>Last</th><th>Email</th><th>Phone</th><th>This week</th><th></th></tr></thead>
         <tbody id="vol-body"></tbody>
       </table>
@@ -1689,6 +1690,26 @@ function removeVolunteer(id){
   });
   save();renderVolunteers();
 }
+function deleteAllVolunteers(){
+  if(!AS()||!AS().volunteers.length){alert('Master roster is already empty.');return;}
+  const modeLabel=_mode==='general'?'General':'Logistics';
+  const count=AS().volunteers.length;
+  if(!confirm(`⚠ WARNING: This will permanently delete all ${count} volunteers from the ${modeLabel} master roster, and remove them from every schedule's rosters and assignments (past and future). This cannot be undone.\n\nClick OK to continue.`))return;
+  const typed=prompt(`Type DELETE (all caps) to confirm removing all ${count} volunteers from ${modeLabel}.`);
+  if(typed!=='DELETE'){alert('Cancelled — nothing was deleted.');return;}
+  AS().volunteers=[];
+  AS().schedules.forEach(sc=>{
+    sc.assignments={};
+    sc.halftimeAssignments={};
+    sc.activeVolunteerIds=[];
+    if(sc.busViaSpecial)sc.busViaSpecial={};
+    if(sc.firstHalfAssignments)sc.firstHalfAssignments={};
+    if(sc.secondHalfAssignments)sc.secondHalfAssignments={};
+    if(sc.adminNameKeys)sc.adminNameKeys=[];
+  });
+  save();renderVolunteers();renderSchedules();
+  alert(`Deleted all volunteers from the ${modeLabel} master roster.`);
+}
 function toggleActive(id,val){const v=AS().volunteers.find(v=>v.id===id);if(v){v.active=val;save();renderVolunteers();}}
 function editVolField(id,field,val){const v=AS().volunteers.find(v=>v.id===id);if(v&&val.trim()){v[field]=val.trim();save();}}
 function renderVolunteers(){
@@ -1707,12 +1728,12 @@ function renderVolunteers(){
     const tr=document.createElement('tr');if(!v.active)tr.className='inactive';
     const inThisWeek=activeIds.has(v.id);
     tr.innerHTML=`
-      <td><input type="checkbox" ${v.active?'checked':''} onchange="toggleActive('${v.id}',this.checked)" title="Active"></td>
+      <td><button class="btn xs ${v.active?'':'primary'}" onclick="toggleActive('${v.id}',${!v.active})" style="white-space:nowrap">${v.active?'<i class="ti ti-user-off"></i> Deactivate':'<i class="ti ti-user-check"></i> Activate'}</button></td>
       <td><input class="inline-edit" value="${esc(v.fname)}" onblur="editVolField('${v.id}','fname',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
       <td><input class="inline-edit" value="${esc(v.lname)}" onblur="editVolField('${v.id}','lname',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
       <td><input class="inline-edit" value="${esc(v.email||'')}" onblur="editVolField('${v.id}','email',this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder="—"></td>
       <td><input class="inline-edit" value="${esc(v.phone||'')}" onblur="editVolField('${v.id}','phone',this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder="—"></td>
-      <td>${inThisWeek?'<span class="badge teal">✓</span>':'<span style="color:var(--text3);font-size:11px">—</span>'}</td>
+      <td>${sc?(inThisWeek?`<button class="btn xs" onclick="removeVolunteerFromRoster('${v.id}')" title="Remove from this week's roster"><i class="ti ti-x"></i> Remove</button>`:`<button class="btn xs primary" onclick="addVolunteerToRoster('${v.id}')" title="Add to this week's roster"><i class="ti ti-plus"></i> Add</button>`):'<span style="color:var(--text3);font-size:11px">No event open</span>'}</td>
       <td><button class="btn xs danger" onclick="removeVolunteer('${v.id}')"><i class="ti ti-trash"></i></button></td>`;
     tbody.appendChild(tr);
   });
@@ -2403,7 +2424,18 @@ function addVolunteerToRoster(vid){
   const sc=activeSched();if(!sc)return;
   sc.activeVolunteerIds=sc.activeVolunteerIds||[];
   if(!sc.activeVolunteerIds.includes(vid))sc.activeVolunteerIds.push(vid);
-  save();renderAddRosterList();renderBoard();renderAssign();
+  save();renderAddRosterList();renderBoard();renderAssign();renderVolunteers();
+}
+function removeVolunteerFromRoster(vid){
+  const sc=activeSched();if(!sc)return;
+  if(!confirm("Remove from this week's roster? This also clears any job, bus, or halftime assignment they have for this event."))return;
+  sc.activeVolunteerIds=(sc.activeVolunteerIds||[]).filter(id=>id!==vid);
+  Object.keys(sc.assignments||{}).forEach(jid=>{sc.assignments[jid]=(sc.assignments[jid]||[]).filter(id=>id!==vid);});
+  if(sc.halftimeAssignments)Object.keys(sc.halftimeAssignments).forEach(k=>{if(k===vid||k.endsWith('_'+vid))delete sc.halftimeAssignments[k];});
+  if(sc.busViaSpecial)delete sc.busViaSpecial[vid];
+  if(sc.firstHalfAssignments)delete sc.firstHalfAssignments[vid];
+  if(sc.secondHalfAssignments)delete sc.secondHalfAssignments[vid];
+  save();renderVolunteers();renderBoard();
 }
 
 /* ── INIT ── */
