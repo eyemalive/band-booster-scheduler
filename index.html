@@ -2134,7 +2134,15 @@ function renderHalfJobsTable(){
 function renderGeneralVolTable(){
   const wrap=document.getElementById('general-vol-table-wrap');if(!wrap)return;
   const sc=activeSched();if(!sc){wrap.innerHTML='';return;}
-  const vols=scheduleVolunteers(sc);
+  const assignedSet=new Set(Object.values(sc.assignments||{}).flat());
+  const hasAnyAssignment=v=>{
+    const bus=getVolunteerBus(sc,v.id);
+    const h1=sc.firstHalfAssignments&&sc.firstHalfAssignments[v.id];
+    const ht=sc.halftimeAssignments&&sc.halftimeAssignments[v.id];
+    const h2=sc.secondHalfAssignments&&sc.secondHalfAssignments[v.id];
+    return !!(bus||h1||ht||h2||assignedSet.has(v.id));
+  };
+  const vols=scheduleVolunteers(sc).filter(hasAnyAssignment);
   if(!vols.length){wrap.innerHTML='';return;}
   const halfJobs=AS().halfJobs||[];
   const htJobs=AS().halftimeJobs||[];
@@ -2168,7 +2176,7 @@ function renderGeneralVolTable(){
 
   wrap.innerHTML=`
     <div style="font-size:14px;font-weight:500;margin-bottom:.6rem"><i class="ti ti-layout-rows" style="font-size:13px"></i> Volunteer assignments</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">Bus is set via the Buses board above. Assign 1st half, halftime, and 2nd half jobs here.</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">Only shows volunteers with at least one assignment (bus, job, or half). Bus is set via the Buses board above. Assign 1st half, halftime, and 2nd half jobs here.</div>
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead>
