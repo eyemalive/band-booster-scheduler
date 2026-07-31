@@ -578,8 +578,8 @@ function applyMode(mode){
 
   // CSV description
   document.getElementById('csv-description').textContent = mode === 'logistics'
-    ? 'Skips first and last lines; imports rows where column 36 is "Logistics Volunteers" — first name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the master roster automatically.'
-    : 'Skips first and last lines; imports rows where column 36 is "General Volunteers" — first name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the master roster automatically.';
+    ? 'Skips first and last lines; imports rows where column 36 is "Logistics Volunteers" — first name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the master roster automatically; volunteers already on that week\'s roster are skipped, not duplicated.'
+    : 'Skips first and last lines; imports rows where column 36 is one of: "General Volunteers", "Game Day Admin", "Student Specialties: Color Guard", "Photographers", "Uniforms", "Student Specialties: Percussion" — first name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the master roster automatically; volunteers already on that week\'s roster are skipped, not duplicated.';
 
   showTab('schedules');
 }
@@ -1668,8 +1668,10 @@ function parseCSVLine(line){
   for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){cols.push(cur.trim());cur='';}else cur+=ch;}
   cols.push(cur.trim());return cols;
 }
-function csvFilterValue(){
-  return _mode === 'general' ? 'general volunteers' : 'logistics volunteers';
+function csvFilterValues(){
+  return _mode === 'general'
+    ? ['general volunteers','game day admin','student specialties: color guard','photographers','uniforms','student specialties: percussion']
+    : ['logistics volunteers'];
 }
 function importCSV(e){
   const file=e.target.files[0];if(!file)return;
@@ -1678,9 +1680,9 @@ function importCSV(e){
     const allLines=ev.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
     if(allLines.length<3){document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">File has too few lines.</span>';return;}
     const dataLines=allLines.slice(1,allLines.length-1);
-    const filterVal=csvFilterValue();
-    const logLines=dataLines.filter(l=>(parseCSVLine(l)[35]||'').trim().toLowerCase()===filterVal);
-    if(!logLines.length){document.getElementById('import-result').innerHTML=`<span style="color:var(--danger-text)">No "${filterVal}" rows found (checked column 36).</span>`;return;}
+    const filterVals=csvFilterValues();
+    const logLines=dataLines.filter(l=>filterVals.includes((parseCSVLine(l)[35]||'').trim().toLowerCase()));
+    if(!logLines.length){document.getElementById('import-result').innerHTML=`<span style="color:var(--danger-text)">No matching rows found in column 36. Expected one of: ${filterVals.map(v=>'"'+v+'"').join(', ')}.</span>`;return;}
     _csvParsed=[];
     logLines.forEach(line=>{
       const cols=parseCSVLine(line);
@@ -1722,7 +1724,9 @@ function confirmCsvImport(){
   if(!_csvSelectedSchedId||!_csvParsed)return;
   const sc=AS().schedules.find(s=>s.id===_csvSelectedSchedId);
   if(!sc){alert('Schedule not found.');closeCsvModal();return;}
-  let added=0,rosterUpdated=0;const schedVolIds=[];
+  sc.activeVolunteerIds=sc.activeVolunteerIds||[];
+  const existingSet=new Set(sc.activeVolunteerIds);
+  let added=0,rosterUpdated=0,newToWeek=0,alreadyOnRoster=0;
   _csvParsed.forEach(({fname,lname,rawPhone,email})=>{
     const phone=rawPhone||'unknown';
     const key=(fname+' '+lname).toLowerCase().trim();
@@ -1737,10 +1741,15 @@ function confirmCsvImport(){
       vol={id:uid(),fname,lname,email:email||'',phone,active:true};
       AS().volunteers.push(vol);added++;
     }
-    schedVolIds.push(vol.id);
+    if(existingSet.has(vol.id)){
+      alreadyOnRoster++;
+    } else {
+      existingSet.add(vol.id);
+      sc.activeVolunteerIds.push(vol.id);
+      newToWeek++;
+    }
   });
-  sc.activeVolunteerIds=schedVolIds;
-  document.getElementById('import-result').innerHTML=`<span style="color:green"><i class="ti ti-circle-check" style="font-size:13px;vertical-align:-1px"></i> Imported ${_csvParsed.length} volunteers to <strong>${esc(sc.name)}</strong> — ${added} new to master roster, ${rosterUpdated} contacts updated.</span>`;
+  document.getElementById('import-result').innerHTML=`<span style="color:green"><i class="ti ti-circle-check" style="font-size:13px;vertical-align:-1px"></i> Imported for <strong>${esc(sc.name)}</strong> — ${newToWeek} added to this week's roster${alreadyOnRoster?', '+alreadyOnRoster+' already on it (skipped)':''}, ${added} new to master roster, ${rosterUpdated} contacts updated.</span>`;
   save();renderVolunteers();closeCsvModal();
 }
 
