@@ -1636,10 +1636,19 @@ function autoAssign(){
   for(const j of emptyJobs){if(!pool.length)break;sc.assignments[j.id]=[pool.shift().id];}
   let go=true;
   while(pool.length&&go){go=false;for(const j of fillableJobs){if(!pool.length)break;const cur=(sc.assignments[j.id]||[]).length;if(cur<j.slots){sc.assignments[j.id]=sc.assignments[j.id]||[];sc.assignments[j.id].push(pool.shift().id);go=true;}}}
-  // General mode: distribute any leftover pool across buses — one person per bus per pass,
-  // wrapping back to bus 1 for a second pass if there are still people left over.
+  // General mode: distribute any leftover pool across buses. First round only fills buses
+  // that are currently completely empty (skips any bus that already has someone), so buses
+  // starting from zero catch up before anyone gets a second person. After that, fill normally,
+  // wrapping back to bus 1 for further passes if there are still people left over.
   if(_mode==='general'&&pool.length){
     const buses=busIds();
+    for(const bid of buses){
+      if(!pool.length)break;
+      if(busEffectiveCount(sc,bid)===0){
+        sc.assignments[bid]=sc.assignments[bid]||[];
+        sc.assignments[bid].push(pool.shift().id);
+      }
+    }
     let progress=true;
     while(pool.length&&progress){
       progress=false;
