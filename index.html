@@ -592,7 +592,7 @@ function applyMode(mode){
   // CSV description — import now checks all categories regardless of which module you're in,
   // and routes each row to the right one automatically.
   document.getElementById('csv-description').textContent =
-    'Skips first and last lines; checks column 36 against Logistics ("Logistics Volunteers"), General ("General Volunteers", "Student Specialties: Color Guard", "Photographers", "Uniforms", "Student Specialties: Percussion"), and Admin ("Game Day Admin") categories — first name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). Each row is routed to the right module automatically, even if it doesn\'t match your current module. Admin rows are imported into both modules; once an admin volunteer is assigned a role in one, they\'re no longer available in the other. After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the relevant master roster automatically; volunteers already on that week\'s roster are skipped, not duplicated.';
+    'Skips the header row only (no footer row expected). Checks column 36 against Logistics ("Logistics Volunteer(s)"), General ("General Volunteer(s)", "Uniform(s)", "Photographer(s)", "Student Specialt(ies/ies): Color Guard/ColorGuard", "Student Specialt(ies/ies): Percussion"), and Admin ("Game Day Admin" or "Administration") — matching is case-insensitive and tolerant of minor spelling/spacing differences. First name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). Each row is routed to the right module automatically, even if it doesn\'t match your current module. Admin rows are imported into both modules; once an admin volunteer is assigned a role in one, they\'re no longer available in the other. After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the relevant master roster automatically; volunteers already on that week\'s roster are skipped, not duplicated.';
 
   showTab('schedules');
 }
@@ -1745,28 +1745,47 @@ function parseCSVLine(line){
   for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){cols.push(cur.trim());cur='';}else cur+=ch;}
   cols.push(cur.trim());return cols;
 }
-const LOGISTICS_CSV_CATEGORIES=['logistics volunteers'];
-const GENERAL_CSV_CATEGORIES=['general volunteers','student specialties: color guard','photographers','uniforms','student specialties: percussion'];
-const ADMIN_CSV_CATEGORIES=['game day admin'];
-// Maps a CSV specialty category to the job it should auto-assign into on import (matched by job name, case-insensitive)
+const LOGISTICS_CSV_CATEGORIES=['logistics volunteer','logistics volunteers'];
+const GENERAL_CSV_CATEGORIES=[
+  'general volunteer','general volunteers',
+  'uniform','uniforms',
+  'photographer','photographers',
+  'student specialities: colorguard','student specialties: colorguard',
+  'student specialities: color guard','student specialties: color guard',
+  'student specialities: percussion','student specialties: percussion'
+];
+const ADMIN_CSV_CATEGORIES=['game day admin','administration'];
+// Maps a CSV specialty category (normalized) to the job it should auto-assign into on import
+// (matched by job name, case-insensitive). Covers real-world spelling/spacing variants seen in exports.
 const SPECIALTY_JOB_MAP={
+  'student specialities: colorguard':'colorguard',
+  'student specialties: colorguard':'colorguard',
+  'student specialities: color guard':'colorguard',
   'student specialties: color guard':'colorguard',
+  'photographer':'photographers',
   'photographers':'photographers',
+  'uniform':'uniforms',
   'uniforms':'uniforms',
+  'student specialities: percussion':'percussion',
   'student specialties: percussion':'percussion'
 };
+// Lowercases, trims, and collapses internal whitespace so minor export inconsistencies
+// (double spaces, trailing spaces) don't break category matching.
+function normalizeCategory(raw){
+  return (raw||'').trim().toLowerCase().replace(/\s+/g,' ');
+}
 
 function importCSV(e){
   const file=e.target.files[0];if(!file)return;
   const reader=new FileReader();
   reader.onload=ev=>{
     const allLines=ev.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
-    if(allLines.length<3){document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">File has too few lines.</span>';return;}
-    const dataLines=allLines.slice(1,allLines.length-1);
+    if(allLines.length<2){document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">File has too few lines.</span>';return;}
+    const dataLines=allLines.slice(1); // skip header row only — no footer row in real exports
     _csvParsedLogistics=[];_csvParsedGeneral=[];_csvParsedAdmin=[];
     dataLines.forEach(line=>{
       const cols=parseCSVLine(line);
-      const cat=(cols[35]||'').trim().toLowerCase();
+      const cat=normalizeCategory(cols[35]);
       let bucket=null;
       if(LOGISTICS_CSV_CATEGORIES.includes(cat))bucket=_csvParsedLogistics;
       else if(GENERAL_CSV_CATEGORIES.includes(cat))bucket=_csvParsedGeneral;
