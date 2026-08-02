@@ -1268,6 +1268,7 @@ function renderSchedules(){
     const canDelete=!sc.shared||_role==='admin';
     const div=document.createElement('div');
     div.className='sched-card'+(isActive?' active-sched':'');
+    div.onclick=()=>selectSchedule(sc.id);
     div.innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
@@ -1282,8 +1283,8 @@ function renderSchedules(){
         ${emptyJobs>0?`<span class="tag" style="font-size:11px;color:var(--warning)"><i class="ti ti-alert-circle" style="font-size:11px"></i>${emptyJobs} empty jobs</span>`:'<span class="tag" style="font-size:11px"><i class="ti ti-circle-check" style="font-size:11px"></i>All jobs covered</span>'}
       </div>
       <div class="sched-card-actions">
-        <button class="btn sm primary" onclick="selectSchedule('${sc.id}')"><i class="ti ti-layout-board"></i> ${isActive?'Edit':'Open'}</button>
-        ${canDelete?`<button class="btn sm danger" onclick="deleteSchedule('${sc.id}')"><i class="ti ti-trash"></i></button>`:''}
+        <button class="btn sm primary" onclick="event.stopPropagation();selectSchedule('${sc.id}')"><i class="ti ti-layout-board"></i> ${isActive?'Edit':'Open'}</button>
+        ${canDelete?`<button class="btn sm danger" onclick="event.stopPropagation();deleteSchedule('${sc.id}')"><i class="ti ti-trash"></i></button>`:''}
       </div>`;
     grid.appendChild(div);
   });
