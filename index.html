@@ -877,6 +877,7 @@ function defaultState(mode){
       {id:'j10',name:'First aid station',desc:'Staffing first aid tent',slots:1},
     ],
     halftimeJobs: isGeneral ? [
+      {id:'gh0',name:'Security/Ropes'},
       {id:'gh1',name:'Concessions support'},
       {id:'gh2',name:'Stands usher'},
     ] : [
@@ -939,6 +940,21 @@ async function initData(){
   }
 }
 
+// Ensures a "Security/Ropes" halftime job exists in the given General mode data, returning its id
+function getOrCreateSecurityRopesJobId(data){
+  data.halftimeJobs=data.halftimeJobs||[];
+  let j=data.halftimeJobs.find(h=>h.name.toLowerCase()==='security/ropes');
+  if(!j){ j={id:uid(),name:'Security/Ropes'}; data.halftimeJobs.unshift(j); }
+  return j.id;
+}
+// Sets a volunteer's halftime assignment to Security/Ropes by default (General mode only),
+// but only if they don't already have a halftime assignment for this event.
+function applyDefaultHalftime(data,sc,vid){
+  sc.halftimeAssignments=sc.halftimeAssignments||{};
+  if(sc.halftimeAssignments[vid])return;
+  sc.halftimeAssignments[vid]=getOrCreateSecurityRopesJobId(data);
+}
+
 function migrateGeneralBusJobs(data,mode){
   data = data || AS();
   mode = mode || _mode;
@@ -958,6 +974,11 @@ function migrateGeneralBusJobs(data,mode){
   if(data.maxBuses===undefined){data.maxBuses=15;changed=true;}
   if(!data.halfJobs||!data.halfJobs.length){
     data.halfJobs=[{id:uid(),name:"Women's Restroom"},{id:uid(),name:"Men's Restroom"},{id:uid(),name:'Concourse'},{id:uid(),name:'Float'}];
+    changed=true;
+  }
+  data.halftimeJobs=data.halftimeJobs||[];
+  if(!data.halftimeJobs.some(h=>h.name.toLowerCase()==='security/ropes')){
+    data.halftimeJobs.unshift({id:uid(),name:'Security/Ropes'});
     changed=true;
   }
   if(changed){
@@ -1667,7 +1688,11 @@ function autoAssign(){
 function clearAssignments(){
   const sc=activeSched();if(!sc)return;
   if(!confirm('Clear all assignments?'))return;
-  sc.assignments={};sc.halftimeAssignments={};save();renderBoard();
+  sc.assignments={};sc.halftimeAssignments={};
+  if(sc.busViaSpecial)sc.busViaSpecial={};
+  if(sc.firstHalfAssignments)sc.firstHalfAssignments={};
+  if(sc.secondHalfAssignments)sc.secondHalfAssignments={};
+  save();renderBoard();
 }
 
 /* ── VOLUNTEERS ── */
@@ -1863,7 +1888,10 @@ function importRowsIntoModeData(data,sc,mode,normalRows,adminRows){
       data.volunteers.push(vol);added++;
     }
     if(existingSet.has(vol.id)){ alreadyOnRoster++; }
-    else { existingSet.add(vol.id); sc.activeVolunteerIds.push(vol.id); newToWeek++; }
+    else {
+      existingSet.add(vol.id); sc.activeVolunteerIds.push(vol.id); newToWeek++;
+      if(mode==='general')applyDefaultHalftime(data,sc,vol.id);
+    }
     if(isAdmin&&!adminKeySet.has(key)){ adminKeySet.add(key); sc.adminNameKeys.push(key); newAdmin++; }
     if(mode==='general'&&category&&SPECIALTY_JOB_MAP[category])specialtyPending.push({vol,jobKey:SPECIALTY_JOB_MAP[category]});
   });
@@ -2450,7 +2478,10 @@ function renderAddRosterList(){
 function addVolunteerToRoster(vid){
   const sc=activeSched();if(!sc)return;
   sc.activeVolunteerIds=sc.activeVolunteerIds||[];
-  if(!sc.activeVolunteerIds.includes(vid))sc.activeVolunteerIds.push(vid);
+  if(!sc.activeVolunteerIds.includes(vid)){
+    sc.activeVolunteerIds.push(vid);
+    if(_mode==='general')applyDefaultHalftime(AS(),sc,vid);
+  }
   save();renderAddRosterList();renderBoard();renderAssign();renderVolunteers();
 }
 function removeVolunteerFromRoster(vid){
