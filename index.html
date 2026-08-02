@@ -251,6 +251,12 @@
         <div id="event-import-result" style="font-size:12px;margin-top:.5rem"></div>
       </div>
     </div>
+    <div class="row" style="justify-content:space-between;margin-bottom:.6rem;flex-wrap:wrap;gap:8px">
+      <div style="font-size:15px;font-weight:500">Events</div>
+      <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:5px;cursor:pointer">
+        <input type="checkbox" id="show-past-events" onchange="renderSchedules()"> Show past events
+      </label>
+    </div>
     <div id="sched-grid" class="sched-grid"></div>
   </div>
 
@@ -1238,9 +1244,17 @@ function renderSchedules(){
   if(!AS()){grid.innerHTML='<div style="font-size:13px;color:var(--text2);padding:.5rem 0">Loading…</div>';return;}
   if(!AS().schedules.length){grid.innerHTML='<div style="font-size:13px;color:var(--text2);padding:.5rem 0">No schedules yet. Create one above.</div>';return;}
   const td=today();
+  const showPastEl=document.getElementById('show-past-events');
+  const showPast=showPastEl&&showPastEl.checked;
+  const visibleSchedules=showPast?AS().schedules:AS().schedules.filter(sc=>sc.date>=td);
+  if(!visibleSchedules.length){
+    const pastCount=AS().schedules.length;
+    grid.innerHTML=`<div style="font-size:13px;color:var(--text2);padding:.5rem 0">All ${pastCount} event${pastCount===1?' is':'s are'} in the past. Check "Show past events" above to view ${pastCount===1?'it':'them'}.</div>`;
+    return;
+  }
   const upcoming=AS().schedules.filter(sc=>sc.date>=td).sort((a,b)=>a.date.localeCompare(b.date));
   const thisWeekSchedId=upcoming.length?upcoming[0].id:null;
-  AS().schedules.forEach(sc=>{
+  visibleSchedules.forEach(sc=>{
     const isActive=sc.id===AS().activeSchedId;
     const isPast=sc.date<td;
     const d=new Date(sc.date+'T00:00:00');
