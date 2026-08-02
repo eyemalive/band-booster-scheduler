@@ -401,6 +401,23 @@
     </div>
 
     <div class="card pw-admin-only" style="margin-top:1.5rem;border-color:var(--border-med)">
+      <div style="font-size:15px;font-weight:500;margin-bottom:.25rem"><i class="ti ti-filter" style="font-size:14px"></i> CSV import category mapping</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Shared between Logistics and General. Defines which text values in column 36 of the volunteer CSV route to which role. Matching is case-insensitive and ignores extra spacing.</div>
+      <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:end;margin-bottom:.75rem">
+        <div><label class="lbl">Text in column 36</label><input type="text" id="ic-text" placeholder="e.g. Logistics Volunteers"></div>
+        <div><label class="lbl">Routes to</label>
+          <select id="ic-role" style="width:150px"></select>
+        </div>
+        <button class="btn primary" onclick="addImportCategory()" style="white-space:nowrap"><i class="ti ti-plus"></i> Add</button>
+      </div>
+      <table class="jtable">
+        <colgroup><col style="width:56%"><col style="width:32%"><col style="width:12%"></colgroup>
+        <thead><tr><th>Text in column 36</th><th>Routes to</th><th></th></tr></thead>
+        <tbody id="ic-body"></tbody>
+      </table>
+    </div>
+
+    <div class="card pw-admin-only" style="margin-top:1.5rem;border-color:var(--border-med)">
       <div style="font-size:15px;font-weight:500;margin-bottom:.25rem"><i class="ti ti-lock" style="font-size:14px"></i> Password management</div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Passwords are stored in the <strong>AppPasswords</strong> tab of your Google Sheet. Load current passwords to edit, then save back to the sheet. Leave a field blank to keep the existing password unchanged.</div>
       <div id="pw-load-area">
@@ -536,8 +553,10 @@ function launchApp(mode){
   document.getElementById('app-main').style.display = 'block';
   applyMode(mode);
   loadEventsFromCache();
+  loadImportCategoriesFromCache();
   initData();
   refreshEvents().then(()=>{ if(document.getElementById('panel-schedules').classList.contains('active')) renderSchedules(); });
+  refreshImportCategories();
   // Also load the other module's data in the background so cross-module checks
   // (shared events, admin exclusivity) work without waiting for a manual mode switch.
   ensureModeLoadedInBackground(mode==='general'?'logistics':'general');
@@ -590,9 +609,10 @@ function applyMode(mode){
     mode === 'general' ? 'General Volunteer assignments' : 'Logistics volunteer assignments';
 
   // CSV description — import now checks all categories regardless of which module you're in,
-  // and routes each row to the right one automatically.
+  // and routes each row to the right one automatically. The exact text-to-role mapping is
+  // configurable by admin on the Configuration tab.
   document.getElementById('csv-description').textContent =
-    'Skips the header row only (no footer row expected). Checks column 36 against Logistics ("Logistics Volunteer(s)"), General ("General Volunteer(s)", "Uniform(s)", "Photographer(s)", "Student Specialt(ies/ies): Color Guard/ColorGuard", "Student Specialt(ies/ies): Percussion"), and Admin ("Game Day Admin" or "Administration") — matching is case-insensitive and tolerant of minor spelling/spacing differences. First name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). Each row is routed to the right module automatically, even if it doesn\'t match your current module. Admin rows are imported into both modules; once an admin volunteer is assigned a role in one, they\'re no longer available in the other. After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the relevant master roster automatically; volunteers already on that week\'s roster are skipped, not duplicated.';
+    'Skips the header row only (no footer row expected). Checks column 36 against your configured category mapping (Configuration tab, admin-only) — first name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). Matching is case-insensitive and tolerant of extra spacing. Each row is routed to the right module automatically, even if it doesn\'t match your current module. Admin rows are imported into both modules; once an admin volunteer is assigned a role in one, they\'re no longer available in the other. After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the relevant master roster automatically; volunteers already on that week\'s roster are skipped, not duplicated.';
 
   showTab('schedules');
 }
@@ -612,6 +632,7 @@ function switchMode(mode){
 let S  = null;   // logistics state
 let SG = null;   // general state
 let EVENTS = null; // shared event registry: [{id,name,date}] — visible to both modes
+let IMPORT_CATEGORIES = null; // shared CSV import category-to-role mapping: [{id,text,role}] — visible to both modes
 let _dirty    = false;
 let _syncing  = false;
 let _saveTimer = null;
@@ -632,6 +653,33 @@ const CACHE_KEY_LOG    = 'bbs_cache_v8';
 const CACHE_KEY_GEN    = 'bbs_cache_general_v1';
 const CACHE_KEY_EVENTS = 'bbs_cache_events_v1';
 const EVENTS_TAB       = 'AppEvents';
+const CACHE_KEY_IMPORT_CATS = 'bbs_cache_import_cats_v1';
+const IMPORT_CATS_TAB       = 'AppImportCategories';
+const IMPORT_CAT_ROLES = [
+  {value:'logistics',label:'Logistics'},
+  {value:'admin',label:'Admin'},
+  {value:'general',label:'General'},
+  {value:'colorguard',label:'Color Guard'},
+  {value:'percussion',label:'Percussion'},
+  {value:'photographers',label:'Photographers'},
+  {value:'uniforms',label:'Uniforms'},
+];
+const DEFAULT_IMPORT_CATEGORIES=[
+  {id:'ic1',text:'Logistics Volunteers',role:'logistics'},
+  {id:'ic2',text:'Logistics Volunteer',role:'logistics'},
+  {id:'ic3',text:'General Volunteers',role:'general'},
+  {id:'ic4',text:'General Volunteer',role:'general'},
+  {id:'ic5',text:'Game Day Admin',role:'admin'},
+  {id:'ic6',text:'Administration',role:'admin'},
+  {id:'ic7',text:'Student Specialties: Color Guard',role:'colorguard'},
+  {id:'ic8',text:'Student Specialities:  ColorGuard',role:'colorguard'},
+  {id:'ic9',text:'Student Specialties: Percussion',role:'percussion'},
+  {id:'ic10',text:'Student Specialities:  Percussion',role:'percussion'},
+  {id:'ic11',text:'Photographers',role:'photographers'},
+  {id:'ic12',text:'Photographer',role:'photographers'},
+  {id:'ic13',text:'Uniforms',role:'uniforms'},
+  {id:'ic14',text:'Uniform',role:'uniforms'},
+];
 
 function cacheKey(){ return _mode === 'general' ? CACHE_KEY_GEN : CACHE_KEY_LOG; }
 function sheetTab(){ return _mode === 'general' ? 'AppDataGeneral' : 'AppData'; }
@@ -696,6 +744,33 @@ async function saveEvents(){
   if(onHttpsHost()&&isConnected()){
     try{ await apiCall('save',EVENTS,EVENTS_TAB); }catch(e){ console.warn('saveEvents failed:',e); }
   }
+}
+
+/* ── SHARED IMPORT CATEGORY MAPPING (visible to both Logistics and General) ── */
+function loadImportCategoriesFromCache(){
+  try{ IMPORT_CATEGORIES = JSON.parse(localStorage.getItem(CACHE_KEY_IMPORT_CATS)||'null'); }catch(e){ IMPORT_CATEGORIES=null; }
+  if(!IMPORT_CATEGORIES||!IMPORT_CATEGORIES.length) IMPORT_CATEGORIES=DEFAULT_IMPORT_CATEGORIES.map(r=>({...r}));
+}
+async function refreshImportCategories(){
+  loadImportCategoriesFromCache();
+  if(onHttpsHost()&&isConnected()){
+    try{
+      const r=await apiCall('load',undefined,IMPORT_CATS_TAB);
+      if(r.data&&Array.isArray(r.data)&&r.data.length){ IMPORT_CATEGORIES=r.data; localStorage.setItem(CACHE_KEY_IMPORT_CATS,JSON.stringify(IMPORT_CATEGORIES)); }
+      else if(r.data===null){ saveImportCategories(); } // nothing on the sheet yet — seed it with defaults
+    }catch(e){ console.warn('refreshImportCategories failed:',e); }
+  }
+}
+async function saveImportCategories(){
+  try{ localStorage.setItem(CACHE_KEY_IMPORT_CATS,JSON.stringify(IMPORT_CATEGORIES)); }catch(e){}
+  if(onHttpsHost()&&isConnected()){
+    try{ await apiCall('save',IMPORT_CATEGORIES,IMPORT_CATS_TAB); }catch(e){ console.warn('saveImportCategories failed:',e); }
+  }
+}
+// Looks up which role a normalized CSV category value maps to, or null if unmapped
+function classifyCategory(normalizedCat){
+  const row=(IMPORT_CATEGORIES||[]).find(r=>normalizeCategory(r.text)===normalizedCat);
+  return row?row.role:null;
 }
 // Ensures a schedule shell for a shared event exists in the given mode's data — in memory (if loaded),
 // in localStorage cache, and pushed to that mode's own sheet tab. Used when admin creates/deletes a shared event.
@@ -1031,7 +1106,7 @@ function showTab(t){
   if(t==='schedules'){autoSavePastEvents();renderSchedules();}
   if(t==='assign')renderAssign();
   if(t==='volunteers')renderVolunteers();
-  if(t==='config'){renderJobsTable();renderHalftimeTable();renderGeneralOnlyConfig();}
+  if(t==='config'){renderJobsTable();renderHalftimeTable();renderGeneralOnlyConfig();renderImportCategoriesTable();}
   if(t==='history')renderHistory();
 }
 
@@ -1650,7 +1725,7 @@ function autoAssign(){
   if(!pool.length){alert('No unassigned volunteers.');return;}
   // In General mode, specialty roles (Colorguard/Uniforms/Percussion/Photographers) are only ever
   // filled via the CSV import's specialty tagging — Auto-assign never touches them.
-  const specialtyKeys=Object.values(SPECIALTY_JOB_MAP);
+  const specialtyKeys=['colorguard','percussion','photographers','uniforms'];
   const fillableJobs=_mode==='general'
     ? eventJobs(sc).filter(j=>!specialtyKeys.includes(j.name.toLowerCase()))
     : eventJobs(sc);
@@ -1770,30 +1845,6 @@ function parseCSVLine(line){
   for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){cols.push(cur.trim());cur='';}else cur+=ch;}
   cols.push(cur.trim());return cols;
 }
-const LOGISTICS_CSV_CATEGORIES=['logistics volunteer','logistics volunteers'];
-const GENERAL_CSV_CATEGORIES=[
-  'general volunteer','general volunteers',
-  'uniform','uniforms',
-  'photographer','photographers',
-  'student specialities: colorguard','student specialties: colorguard',
-  'student specialities: color guard','student specialties: color guard',
-  'student specialities: percussion','student specialties: percussion'
-];
-const ADMIN_CSV_CATEGORIES=['game day admin','administration'];
-// Maps a CSV specialty category (normalized) to the job it should auto-assign into on import
-// (matched by job name, case-insensitive). Covers real-world spelling/spacing variants seen in exports.
-const SPECIALTY_JOB_MAP={
-  'student specialities: colorguard':'colorguard',
-  'student specialties: colorguard':'colorguard',
-  'student specialities: color guard':'colorguard',
-  'student specialties: color guard':'colorguard',
-  'photographer':'photographers',
-  'photographers':'photographers',
-  'uniform':'uniforms',
-  'uniforms':'uniforms',
-  'student specialities: percussion':'percussion',
-  'student specialties: percussion':'percussion'
-};
 // Lowercases, trims, and collapses internal whitespace so minor export inconsistencies
 // (double spaces, trailing spaces) don't break category matching.
 function normalizeCategory(raw){
@@ -1811,16 +1862,17 @@ function importCSV(e){
     dataLines.forEach(line=>{
       const cols=parseCSVLine(line);
       const cat=normalizeCategory(cols[35]);
+      const role=classifyCategory(cat);
+      if(!role)return;
       let bucket=null;
-      if(LOGISTICS_CSV_CATEGORIES.includes(cat))bucket=_csvParsedLogistics;
-      else if(GENERAL_CSV_CATEGORIES.includes(cat))bucket=_csvParsedGeneral;
-      else if(ADMIN_CSV_CATEGORIES.includes(cat))bucket=_csvParsedAdmin;
-      if(!bucket)return;
+      if(role==='logistics')bucket=_csvParsedLogistics;
+      else if(role==='admin')bucket=_csvParsedAdmin;
+      else bucket=_csvParsedGeneral; // general, colorguard, percussion, photographers, uniforms all route to General
       const fname=(cols[48]||'').trim(),lname=(cols[50]||'').trim();if(!fname&&!lname)return;
-      bucket.push({fname,lname,rawPhone:(cols[51]||'').trim(),email:(cols[52]||'').trim(),category:cat});
+      bucket.push({fname,lname,rawPhone:(cols[51]||'').trim(),email:(cols[52]||'').trim(),category:role});
     });
     if(!_csvParsedLogistics.length&&!_csvParsedGeneral.length&&!_csvParsedAdmin.length){
-      document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">No matching rows found in column 36 — checked Logistics, General, and Admin categories.</span>';
+      document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">No matching rows found in column 36 — none of the values matched your configured import categories (Configuration tab).</span>';
       return;
     }
     try{e.target.value='';}catch(_){}
@@ -1893,7 +1945,7 @@ function importRowsIntoModeData(data,sc,mode,normalRows,adminRows){
       if(mode==='general')applyDefaultHalftime(data,sc,vol.id);
     }
     if(isAdmin&&!adminKeySet.has(key)){ adminKeySet.add(key); sc.adminNameKeys.push(key); newAdmin++; }
-    if(mode==='general'&&category&&SPECIALTY_JOB_MAP[category])specialtyPending.push({vol,jobKey:SPECIALTY_JOB_MAP[category]});
+    if(mode==='general'&&['colorguard','percussion','photographers','uniforms'].includes(category))specialtyPending.push({vol,jobKey:category});
   });
   if(specialtyPending.length){
     const jobsList=(sc.jobs&&sc.jobs.length)?sc.jobs:(data.jobs||[]);
@@ -2009,6 +2061,49 @@ function renderGeneralOnlyConfig(){
   const inp=document.getElementById('max-buses-input');
   if(inp)inp.value=AS().maxBuses||15;
   renderHalfJobsTable();
+}
+
+/* ── CSV IMPORT CATEGORY MAPPING (shared, admin-only) ── */
+function roleLabel(role){ const r=IMPORT_CAT_ROLES.find(r=>r.value===role); return r?r.label:role; }
+function addImportCategory(){
+  const text=document.getElementById('ic-text').value.trim();
+  if(!text){alert('Enter the text that appears in column 36.');return;}
+  const role=document.getElementById('ic-role').value;
+  IMPORT_CATEGORIES=IMPORT_CATEGORIES||[];
+  if(IMPORT_CATEGORIES.some(r=>normalizeCategory(r.text)===normalizeCategory(text))){alert('That text is already mapped.');return;}
+  IMPORT_CATEGORIES.push({id:uid(),text,role});
+  document.getElementById('ic-text').value='';
+  saveImportCategories();renderImportCategoriesTable();
+}
+function editImportCategoryText(id,val){
+  const r=(IMPORT_CATEGORIES||[]).find(r=>r.id===id);if(r&&val.trim())r.text=val.trim();saveImportCategories();
+}
+function editImportCategoryRole(id,val){
+  const r=(IMPORT_CATEGORIES||[]).find(r=>r.id===id);if(r)r.role=val;saveImportCategories();
+}
+function removeImportCategory(id){
+  if(!confirm('Remove this mapping?'))return;
+  IMPORT_CATEGORIES=(IMPORT_CATEGORIES||[]).filter(r=>r.id!==id);
+  saveImportCategories();renderImportCategoriesTable();
+}
+function renderImportCategoriesTable(){
+  const addRoleSel=document.getElementById('ic-role');
+  if(addRoleSel&&!addRoleSel.children.length){
+    addRoleSel.innerHTML=IMPORT_CAT_ROLES.map(r=>`<option value="${r.value}">${r.label}</option>`).join('');
+  }
+  const tb=document.getElementById('ic-body');if(!tb)return;tb.innerHTML='';
+  const rows=IMPORT_CATEGORIES||[];
+  if(!rows.length){tb.innerHTML='<tr><td colspan="3" style="padding:1rem;font-size:13px;color:var(--text2)">No mappings yet — imports will match nothing until you add some.</td></tr>';return;}
+  const sorted=[...rows].sort((a,b)=>roleLabel(a.role).localeCompare(roleLabel(b.role))||a.text.localeCompare(b.text));
+  sorted.forEach(r=>{
+    const tr=document.createElement('tr');
+    const roleOpts=IMPORT_CAT_ROLES.map(opt=>`<option value="${opt.value}"${opt.value===r.role?' selected':''}>${opt.label}</option>`).join('');
+    tr.innerHTML=`
+      <td><input class="inline-edit" value="${esc(r.text)}" onblur="editImportCategoryText('${r.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><select style="font-size:12px;padding:3px 6px;width:100%" onchange="editImportCategoryRole('${r.id}',this.value)">${roleOpts}</select></td>
+      <td><button class="btn xs danger" onclick="removeImportCategory('${r.id}')"><i class="ti ti-trash"></i></button></td>`;
+    tb.appendChild(tr);
+  });
 }
 
 /* ── HALFTIME JOBS ── */
