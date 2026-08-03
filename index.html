@@ -1588,7 +1588,6 @@ function renderJobSlots(){
       const full=total>=BUS_SLOTS;
       const slot=document.createElement('div');slot.className='job-slot';slot.dataset.jid=bid;
       const badge=full?'<span class="badge green">Full</span>':total>0?`<span class="badge amber">${total}/${BUS_SLOTS}</span>`:`<span class="badge gray">0/${BUS_SLOTS}</span>`;
-      const swapBtn=direct.length>=2?`<button class="btn xs" onclick="swapBusOccupants('${bid}')" title="Swap who is the Bus Bag Volunteer"><i class="ti ti-arrows-left-right"></i></button>`:'';
       const posWrap=document.createElement('div');posWrap.className='slot-positions';
       direct.forEach((vid,idx)=>{
         const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
@@ -1623,7 +1622,7 @@ function renderJobSlots(){
         empty.addEventListener('drop',e=>drop(e,bid,i));
         posWrap.appendChild(empty);
       }
-      slot.innerHTML=`<div class="slot-header"><span class="slot-title"><i class="ti ti-bus" style="font-size:12px"></i> ${busLabelFromId(bid)}</span><span style="display:flex;gap:4px;align-items:center">${swapBtn}${badge}</span></div>`;
+      slot.innerHTML=`<div class="slot-header"><span class="slot-title"><i class="ti ti-bus" style="font-size:12px"></i> ${busLabelFromId(bid)}</span>${badge}</div>`;
       slot.appendChild(posWrap);
       slot.addEventListener('dragover',e=>{if(e.target===slot||e.target.classList.contains('slot-header')||e.target.classList.contains('slot-title'))dragOver(e,bid,null);});
       slot.addEventListener('drop',e=>{if(e.target===slot||e.target.classList.contains('slot-header')||e.target.classList.contains('slot-title'))drop(e,bid,null);});
@@ -1643,13 +1642,6 @@ function setSpecialBusAssign(vid,busId){
   const sc=activeSched();if(!sc)return;
   sc.busViaSpecial=sc.busViaSpecial||{};
   if(busId)sc.busViaSpecial[vid]=busId;else delete sc.busViaSpecial[vid];
-  save();renderBoard();
-}
-function swapBusOccupants(bid){
-  const sc=activeSched();if(!sc)return;
-  const arr=sc.assignments[bid];
-  if(!arr||arr.length<2)return;
-  [arr[0],arr[1]]=[arr[1],arr[0]];
   save();renderBoard();
 }
 function setHalftime(jid,vid,htId){
