@@ -574,7 +574,7 @@ async function ensureModeLoadedInBackground(mode){
   if(!data) data=defaultState(mode);
   if(mode==='general') SG=data; else S=data;
   if(mode==='general') migrateGeneralBusJobs(SG,'general');
-  if(onHttpsHost()&&isConnected()){
+  if(onHttpsHost()){
     try{
       const r=await apiCall('load',undefined,sheetTabFor(mode));
       if(r.data){
@@ -738,7 +738,7 @@ function loadEventsFromCache(){
 }
 async function refreshEvents(){
   loadEventsFromCache();
-  if(onHttpsHost()&&isConnected()){
+  if(onHttpsHost()){
     try{
       const r=await apiCall('load',undefined,EVENTS_TAB);
       if(r.data&&Array.isArray(r.data)){ EVENTS=r.data; localStorage.setItem(CACHE_KEY_EVENTS,JSON.stringify(EVENTS)); }
@@ -747,7 +747,7 @@ async function refreshEvents(){
 }
 async function saveEvents(){
   try{ localStorage.setItem(CACHE_KEY_EVENTS,JSON.stringify(EVENTS)); }catch(e){}
-  if(onHttpsHost()&&isConnected()){
+  if(onHttpsHost()){
     try{ await apiCall('save',EVENTS,EVENTS_TAB); }catch(e){ console.warn('saveEvents failed:',e); }
   }
 }
@@ -759,7 +759,7 @@ function loadImportCategoriesFromCache(){
 }
 async function refreshImportCategories(){
   loadImportCategoriesFromCache();
-  if(onHttpsHost()&&isConnected()){
+  if(onHttpsHost()){
     try{
       const r=await apiCall('load',undefined,IMPORT_CATS_TAB);
       if(r.data&&Array.isArray(r.data)&&r.data.length){ IMPORT_CATEGORIES=r.data; localStorage.setItem(CACHE_KEY_IMPORT_CATS,JSON.stringify(IMPORT_CATEGORIES)); }
@@ -769,7 +769,7 @@ async function refreshImportCategories(){
 }
 async function saveImportCategories(){
   try{ localStorage.setItem(CACHE_KEY_IMPORT_CATS,JSON.stringify(IMPORT_CATEGORIES)); }catch(e){}
-  if(onHttpsHost()&&isConnected()){
+  if(onHttpsHost()){
     try{ await apiCall('save',IMPORT_CATEGORIES,IMPORT_CATS_TAB); }catch(e){ console.warn('saveImportCategories failed:',e); }
   }
 }
@@ -790,14 +790,14 @@ async function pushEventShellToMode(mode,shell){
       target.schedules.sort((a,b)=>a.date.localeCompare(b.date));
     }
     try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(target)); }catch(e){}
-    if(onHttpsHost()&&isConnected()){
+    if(onHttpsHost()){
       try{ await apiCall('save',target,sheetTabFor(mode)); }catch(e){ console.warn('pushEventShellToMode save failed:',e); }
     }
     return;
   }
   // That mode isn't loaded into memory this session — patch its server/cache copy directly
   let data=null;
-  if(onHttpsHost()&&isConnected()){
+  if(onHttpsHost()){
     try{ const r=await apiCall('load',undefined,sheetTabFor(mode)); data=r.data; }catch(e){ console.warn(e); }
   }
   if(!data){
@@ -811,7 +811,7 @@ async function pushEventShellToMode(mode,shell){
     data.schedules.sort((a,b)=>a.date.localeCompare(b.date));
   }
   try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
-  if(onHttpsHost()&&isConnected()){
+  if(onHttpsHost()){
     try{ await apiCall('save',data,sheetTabFor(mode)); }catch(e){ console.warn('pushEventShellToMode save failed:',e); }
   }
 }
@@ -823,13 +823,13 @@ async function removeEventFromMode(mode,eventId){
     target.history=(target.history||[]).filter(h=>h.schedId!==eventId);
     if(target.activeSchedId===eventId)target.activeSchedId=null;
     try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(target)); }catch(e){}
-    if(onHttpsHost()&&isConnected()){
+    if(onHttpsHost()){
       try{ await apiCall('save',target,sheetTabFor(mode)); }catch(e){ console.warn('removeEventFromMode save failed:',e); }
     }
     return;
   }
   let data=null;
-  if(onHttpsHost()&&isConnected()){
+  if(onHttpsHost()){
     try{ const r=await apiCall('load',undefined,sheetTabFor(mode)); data=r.data; }catch(e){ console.warn(e); }
   }
   if(!data){ try{ data=JSON.parse(localStorage.getItem(cacheKeyFor(mode))||'null'); }catch(e){} }
@@ -838,7 +838,7 @@ async function removeEventFromMode(mode,eventId){
   data.history=(data.history||[]).filter(h=>h.schedId!==eventId);
   if(data.activeSchedId===eventId)data.activeSchedId=null;
   try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
-  if(onHttpsHost()&&isConnected()){
+  if(onHttpsHost()){
     try{ await apiCall('save',data,sheetTabFor(mode)); }catch(e){ console.warn('removeEventFromMode save failed:',e); }
   }
 }
@@ -846,7 +846,7 @@ async function removeEventFromMode(mode,eventId){
 function save(){
   try{ localStorage.setItem(cacheKey(), JSON.stringify(AS())); } catch(e){}
   _dirty = true;
-  if(!isConnected()) return;
+  if(!onHttpsHost()) return;
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(pushToSheets, 1500);
 }
@@ -1010,7 +1010,7 @@ async function initData(){
   showTab('schedules');
 
   // Background sync
-  if(onHttpsHost() && isConnected()){
+  if(onHttpsHost()){
     setSyncStatus('busy','Syncing…');
     apiCall('load')
       .then(r=>{
@@ -1065,7 +1065,7 @@ function migrateGeneralBusJobs(data,mode){
   if(changed){
     try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
     if(mode===_mode){ save(); }
-    else if(onHttpsHost()&&isConnected()){ apiCall('save',data,sheetTabFor(mode)).catch(e=>console.warn(e)); }
+    else if(onHttpsHost()){ apiCall('save',data,sheetTabFor(mode)).catch(e=>console.warn(e)); }
   }
 }
 
@@ -1148,13 +1148,13 @@ async function pushEventShellsToMode(mode,shells){
     });
     target.schedules.sort((a,b)=>a.date.localeCompare(b.date));
     try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(target)); }catch(e){}
-    if(onHttpsHost()&&isConnected()){
+    if(onHttpsHost()){
       try{ await apiCall('save',target,sheetTabFor(mode)); }catch(e){ console.warn('pushEventShellsToMode save failed:',e); }
     }
     return;
   }
   let data=null;
-  if(onHttpsHost()&&isConnected()){
+  if(onHttpsHost()){
     try{ const r=await apiCall('load',undefined,sheetTabFor(mode)); data=r.data; }catch(e){ console.warn(e); }
   }
   if(!data){ try{ data=JSON.parse(localStorage.getItem(cacheKeyFor(mode))||'null'); }catch(e){} }
@@ -1168,7 +1168,7 @@ async function pushEventShellsToMode(mode,shells){
   });
   data.schedules.sort((a,b)=>a.date.localeCompare(b.date));
   try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
-  if(onHttpsHost()&&isConnected()){
+  if(onHttpsHost()){
     try{ await apiCall('save',data,sheetTabFor(mode)); }catch(e){ console.warn('pushEventShellsToMode save failed:',e); }
   }
 }
@@ -1983,7 +1983,7 @@ async function applyImportToMode(mode,eventId,normalRows,adminRows){
   let data = mode===_mode ? AS() : (mode==='general'?SG:S);
   const wasLoaded=!!data;
   if(!data){
-    if(onHttpsHost()&&isConnected()){
+    if(onHttpsHost()){
       try{ const r=await apiCall('load',undefined,sheetTabFor(mode)); data=r.data; }catch(e){ console.warn(e); }
     }
     if(!data){ try{ data=JSON.parse(localStorage.getItem(cacheKeyFor(mode))||'null'); }catch(e){} }
@@ -1995,7 +1995,7 @@ async function applyImportToMode(mode,eventId,normalRows,adminRows){
   if(mode==='general')SG=data; else S=data;
   if(mode!==_mode){
     try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
-    if(onHttpsHost()&&isConnected()){
+    if(onHttpsHost()){
       try{ await apiCall('save',data,sheetTabFor(mode)); }catch(e){ console.warn('applyImportToMode save failed:',e); }
     }
   }
@@ -2625,7 +2625,7 @@ function removeVolunteerFromRoster(vid){
 
   // Background interval refresh (only when app is active)
   setInterval(async()=>{
-    if(!_mode||!onHttpsHost()||!isConnected()||_dirty||_syncing) return;
+    if(!_mode||!onHttpsHost()||_dirty||_syncing) return;
     try{
       const r = await apiCall('load');
       if(r.data){ setAS(r.data); localStorage.setItem(cacheKey(),JSON.stringify(AS())); refreshAllPanels(); setSyncStatus('ok','Refreshed '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})); }
