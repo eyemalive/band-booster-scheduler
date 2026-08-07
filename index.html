@@ -1369,7 +1369,11 @@ let dragVid=null,dragFrom=null;
 function makePoolChip(v,sc){
   const c=document.createElement('div');c.className='chip';c.draggable=true;
   const isAdmin=sc&&isAdminForEvent(sc,v);
-  c.innerHTML=`<span>${esc(fullName(v))}</span>${isAdmin?'<span class="badge purple" style="font-size:9px;padding:1px 5px">Admin</span>':''}`;
+  const adminCtrl=sc?(isAdmin
+    ?`<span class="badge purple" style="font-size:9px;padding:1px 5px;cursor:pointer" title="Click to unmark as Admin" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();toggleManualAdmin('${v.id}')">Admin ×</span>`
+    :`<span style="font-size:9px;color:var(--text3);cursor:pointer;padding:1px 5px;border:.5px dashed var(--border-med);border-radius:999px" title="Mark as Admin" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();toggleManualAdmin('${v.id}')">+ Admin</span>`
+  ):'';
+  c.innerHTML=`<span>${esc(fullName(v))}</span>${adminCtrl}`;
   c.addEventListener('dragstart',e=>{dragVid=v.id;dragFrom=null;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',v.id);setTimeout(()=>c.classList.add('dragging'),0);});
   c.addEventListener('dragend',()=>c.classList.remove('dragging'));
   return c;
@@ -1416,6 +1420,17 @@ function eventJobs(sc){ return (sc&&sc.jobs&&sc.jobs.length)?sc.jobs:AS().jobs; 
 // Logistics and General keep independent volunteer records even for the same real person.
 function nameKey(v){ return (v.fname+' '+v.lname).toLowerCase().trim(); }
 function isAdminForEvent(sc,v){ return !!(sc&&sc.adminNameKeys&&sc.adminNameKeys.includes(nameKey(v))); }
+// Lets you manually mark/unmark someone as Admin for this event, same as the "Game Day Admin"
+// CSV category would — they get the Admin badge, the cross-module exclusivity, and show in print.
+function toggleManualAdmin(vid){
+  const sc=activeSched();if(!sc)return;
+  const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
+  const key=nameKey(v);
+  sc.adminNameKeys=sc.adminNameKeys||[];
+  const idx=sc.adminNameKeys.indexOf(key);
+  if(idx>=0)sc.adminNameKeys.splice(idx,1);else sc.adminNameKeys.push(key);
+  save();renderBoard();
+}
 function adminAssignmentLabel(sc,v){
   const slotId=Object.keys(sc.assignments||{}).find(sid=>(sc.assignments[sid]||[]).includes(v.id));
   if(!slotId)return '';
@@ -1580,7 +1595,7 @@ function renderJobSlots(){
       row.className='pos-row'+(isLead?' is-lead-row':'');row.draggable=true;row.dataset.insert=idx;
       row.innerHTML=`<span class="pos-num"><i class="ti ti-grip-vertical" style="font-size:11px;cursor:grab"></i></span>
         <span class="pos-num" style="margin-left:-4px">${isLead?'<i class="ti ti-star" style="font-size:10px"></i>':idx+1}</span>
-        <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}${isAdminForEvent(sc,v)?' <span class="badge purple" style="font-size:9px;padding:0 4px;vertical-align:1px">Admin</span>':''}</span>
+        <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}${isAdminForEvent(sc,v)?` <span class="badge purple" style="font-size:9px;padding:0 4px;vertical-align:1px;cursor:pointer" title="Click to unmark as Admin" onclick="event.stopPropagation();toggleManualAdmin('${v.id}')">Admin ×</span>`:''}</span>
         ${htSelectHtml}
         ${busSelectHtml}
         <span class="pos-remove" onclick="removePos('${j.id}','${v.id}')" title="Remove">×</span>`;
@@ -1623,7 +1638,7 @@ function renderJobSlots(){
         const row=document.createElement('div');
         row.className='pos-row'+(isBagVolunteer?' is-lead-row':'');row.draggable=true;row.dataset.insert=idx;
         row.innerHTML=`<span class="pos-num"><i class="ti ti-grip-vertical" style="font-size:11px;cursor:grab"></i></span>
-          <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}${isAdminForEvent(sc,v)?' <span class="badge purple" style="font-size:9px;padding:0 4px;vertical-align:1px">Admin</span>':''}${isBagVolunteer?' <span class="badge teal" style="font-size:9px;padding:0 4px;vertical-align:1px" title="Responsible for the bus bag during travel"><i class="ti ti-briefcase" style="font-size:9px"></i> Bus Bag</span>':''}</span>
+          <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}${isAdminForEvent(sc,v)?` <span class="badge purple" style="font-size:9px;padding:0 4px;vertical-align:1px;cursor:pointer" title="Click to unmark as Admin" onclick="event.stopPropagation();toggleManualAdmin('${v.id}')">Admin ×</span>`:''}${isBagVolunteer?' <span class="badge teal" style="font-size:9px;padding:0 4px;vertical-align:1px" title="Responsible for the bus bag during travel"><i class="ti ti-briefcase" style="font-size:9px"></i> Bus Bag</span>':''}</span>
           <span class="pos-remove" onclick="removePos('${bid}','${vid}')" title="Remove">×</span>`;
         row.addEventListener('dragstart',e=>{dragVid=vid;dragFrom=bid;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',vid);setTimeout(()=>row.classList.add('dragging'),0);});
         row.addEventListener('dragend',()=>row.classList.remove('dragging'));
@@ -2482,7 +2497,8 @@ function printLogisticsSchedule(sc){
 
 function printGeneralSchedule(sc){
   const pv=document.getElementById('print-view');
-  const vols=scheduleVolunteers(sc);
+  const assignedSet=new Set(Object.values(sc.assignments||{}).flat());
+  const vols=scheduleVolunteers(sc).filter(v=>assignedSet.has(v.id));
 
   // Column 1: Volunteers with bus, sorted by bus number, unassigned last
   const withBus=[],withoutBus=[];
