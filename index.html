@@ -2502,20 +2502,19 @@ function printGeneralSchedule(sc){
     ||(sc.secondHalfAssignments&&sc.secondHalfAssignments[v.id]);
   const vols=scheduleVolunteers(sc).filter(hasAnyDuty);
 
-  // Column 1: Volunteers with bus, sorted by bus number, unassigned last
-  const withBus=[],withoutBus=[];
+  // Column 1: Volunteers with a bus only — everyone else already appears under their own
+  // role column (1st Half, Halftime, 2nd Half, or the Job Assignments legend below).
+  const withBus=[];
   vols.forEach(v=>{
     const bus=getVolunteerBus(sc,v.id);
-    if(bus)withBus.push({v,bus});else withoutBus.push({v,bus:null});
+    if(bus)withBus.push({v,bus});
   });
   withBus.sort((a,b)=>{
     const na=parseInt(a.bus.replace('bus','')),nb=parseInt(b.bus.replace('bus',''));
     if(na!==nb)return na-nb;
     return a.v.lname.localeCompare(b.v.lname);
   });
-  withoutBus.sort((a,b)=>a.v.lname.localeCompare(b.v.lname));
-  const volunteerLines=[...withBus,...withoutBus].map(({v,bus})=>{
-    if(!bus)return fullName(v);
+  const volunteerLines=withBus.map(({v,bus})=>{
     const isBagVolunteer=busDirectVols(sc,bus)[0]===v.id;
     return `${fullName(v)} - ${busLabelFromId(bus)}${isBagVolunteer?' (Bus Bag)':''}`;
   });
@@ -2554,7 +2553,7 @@ function printGeneralSchedule(sc){
     <p style="font-size:11px;color:#888;margin-bottom:12px">General Volunteers</p>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="background:#f1efe8;border-bottom:1.5px solid #ccc">
-        <th style="text-align:left;padding:6px 8px;font-weight:600;width:26%;vertical-align:top">VOLUNTEERS</th>
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:26%;vertical-align:top">BUS ASSIGNMENTS</th>
         <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">1st Half</th>
         <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">Halftime</th>
         <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">2nd Half</th>
