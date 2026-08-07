@@ -2496,7 +2496,11 @@ function printLogisticsSchedule(sc){
 function printGeneralSchedule(sc){
   const pv=document.getElementById('print-view');
   const assignedSet=new Set(Object.values(sc.assignments||{}).flat());
-  const vols=scheduleVolunteers(sc).filter(v=>assignedSet.has(v.id));
+  const hasAnyDuty=v=>assignedSet.has(v.id)
+    ||(sc.firstHalfAssignments&&sc.firstHalfAssignments[v.id])
+    ||(sc.halftimeAssignments&&sc.halftimeAssignments[v.id])
+    ||(sc.secondHalfAssignments&&sc.secondHalfAssignments[v.id]);
+  const vols=scheduleVolunteers(sc).filter(hasAnyDuty);
 
   // Column 1: Volunteers with bus, sorted by bus number, unassigned last
   const withBus=[],withoutBus=[];
