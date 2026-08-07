@@ -2537,8 +2537,10 @@ function printGeneralSchedule(sc){
 
   // Column 5: everyone tagged Admin for this event — always shown here, whether they have
   // a job/bus assignment or not, and however they got tagged (CSV import or manual).
+  // Bus assignments are intentionally left out here since those already appear in the Volunteers column.
   const colAdmin=scheduleVolunteers(sc).filter(v=>isAdminForEvent(sc,v)).map(v=>{
-    const role=adminAssignmentLabel(sc,v);
+    const slotId=Object.keys(sc.assignments||{}).find(sid=>(sc.assignments[sid]||[]).includes(v.id));
+    const role=(slotId&&slotId.indexOf('bus')!==0)?(eventJobs(sc).find(j=>j.id===slotId)||{}).name:null;
     return role?`${fullName(v)} (${role})`:fullName(v);
   }).sort();
 
