@@ -1352,6 +1352,11 @@ function renderAssign(){
         <button class="btn sm" style="margin-top:.5rem" onclick="resetEventJobs()"><i class="ti ti-refresh"></i> Reset to global template</button>
       </div>
     </details>
+    ${_mode==='general'?`<div class="row" style="gap:8px;align-items:center;margin-bottom:.75rem">
+      <label class="lbl" style="margin-bottom:0">Seats per bus for this event:</label>
+      <input type="number" id="bus-slot-count-input" min="1" max="12" value="${busSlotsFor(sc)}" style="width:70px" onchange="setBusSlotCount(this.value)">
+      <span style="font-size:11px;color:var(--text2)">Applies only to ${esc(sc.name)} — other events keep their own setting.</span>
+    </div>`:''}
     <div class="pool" id="pool" ondragover="dragOver(event,null,null)" ondrop="drop(event,null,null)" ondragleave="dragLeave(event)"></div>
     <div class="jobs-board" id="jobs-board"></div>
     ${_mode==='general'?`<div id="general-vol-table-wrap" style="margin-top:1.25rem"></div>`:''}`;
@@ -1384,7 +1389,7 @@ function drop(e,jid,insertIdx){
   if(fromJob)sc.assignments[fromJob]=(sc.assignments[fromJob]||[]).filter(x=>x!==vid);
   if(jid){
     const isBus=jid.indexOf('bus')===0;
-    const slots=isBus?BUS_SLOTS:(eventJobs(sc).find(j=>j.id===jid)||{}).slots;
+    const slots=isBus?busSlotsFor(sc):(eventJobs(sc).find(j=>j.id===jid)||{}).slots;
     if(slots===undefined)return;
     const arr=sc.assignments[jid]||[];
     if(arr.includes(vid)){
@@ -1402,7 +1407,9 @@ function drop(e,jid,insertIdx){
 }
 
 /* ── BOARD ── */
-const BUS_SLOTS = 2;
+const DEFAULT_BUS_SLOTS = 2;
+// Slots per bus for a given event — configurable per event, falls back to the default
+function busSlotsFor(sc){ return (sc&&sc.busSlotCount)||DEFAULT_BUS_SLOTS; }
 // Returns the job list for a specific schedule — per-event if set, else global
 function eventJobs(sc){ return (sc&&sc.jobs&&sc.jobs.length)?sc.jobs:AS().jobs; }
 // Admin ("Game Day Admin" CSV category) helpers — cross-module identity is by name, since
@@ -1440,7 +1447,7 @@ function busEffectiveCount(sc,bid){ return busDirectVols(sc,bid).length + busInd
 function busIsFull(sc,bid,excludeVid){
   let indirect=busIndirectVols(sc,bid);
   if(excludeVid)indirect=indirect.filter(v=>v!==excludeVid);
-  return busDirectVols(sc,bid).length+indirect.length>=BUS_SLOTS;
+  return busDirectVols(sc,bid).length+indirect.length>=busSlotsFor(sc);
 }
 function getVolunteerBus(sc,vid){
   for(const bid of busIds()){ if(busDirectVols(sc,bid).includes(vid))return bid; }
@@ -1504,6 +1511,17 @@ function resetEventJobs(){
   const sc=activeSched();if(!sc)return;
   if(!confirm('Reset this event\'s jobs to the global template? This will clear any per-event job customizations (but not assignments already made).'))return;
   sc.jobs=AS().jobs.map(j=>({...j}));
+  save();renderBoard();
+}
+function setBusSlotCount(val){
+  const sc=activeSched();if(!sc)return;
+  const n=parseInt(val);
+  if(isNaN(n)||n<1||n>12){alert('Enter a number between 1 and 12.');renderAssign();return;}
+  const maxOccupancy=Math.max(0,...busIds().map(bid=>busEffectiveCount(sc,bid)));
+  if(n<maxOccupancy&&!confirm(`At least one bus currently has ${maxOccupancy} people assigned — more than ${n}. Existing assignments won't be removed, but no new people can be added to that bus until you free up space. Continue?`)){
+    renderAssign();return;
+  }
+  sc.busSlotCount=n;
   save();renderBoard();
 }
 function scheduleVolunteers(sc){
@@ -1595,9 +1613,9 @@ function renderJobSlots(){
       const direct=busDirectVols(sc,bid);
       const indirect=busIndirectVols(sc,bid);
       const total=direct.length+indirect.length;
-      const full=total>=BUS_SLOTS;
+      const full=total>=busSlotsFor(sc);
       const slot=document.createElement('div');slot.className='job-slot';slot.dataset.jid=bid;
-      const badge=full?'<span class="badge green">Full</span>':total>0?`<span class="badge amber">${total}/${BUS_SLOTS}</span>`:`<span class="badge gray">0/${BUS_SLOTS}</span>`;
+      const badge=full?'<span class="badge green">Full</span>':total>0?`<span class="badge amber">${total}/${busSlotsFor(sc)}</span>`:`<span class="badge gray">0/${busSlotsFor(sc)}</span>`;
       const posWrap=document.createElement('div');posWrap.className='slot-positions';
       direct.forEach((vid,idx)=>{
         const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
@@ -1624,7 +1642,7 @@ function renderJobSlots(){
           <span style="font-size:10px;color:var(--text2);white-space:nowrap">via ${esc(srcJob?srcJob.name:'job')}</span>`;
         posWrap.appendChild(row);
       });
-      for(let i=total;i<BUS_SLOTS;i++){
+      for(let i=total;i<busSlotsFor(sc);i++){
         const empty=document.createElement('div');empty.className='pos-row';empty.style.opacity='.35';empty.dataset.insert=i;
         empty.innerHTML=`<span class="pos-num">${i+1}</span><span class="pos-name" style="color:var(--text3);font-weight:400">Empty — drop here</span>`;
         empty.addEventListener('dragover',e=>dragOver(e,bid,i));
@@ -1711,7 +1729,7 @@ function copyFromPreviousEventGeneral(sc,prev){
   const currentRoster=new Set(scheduleVolunteers(sc).map(v=>v.id));
   const alreadyAssigned=new Set(Object.values(sc.assignments||{}).flat());
   const validSlotIds=new Set([...eventJobs(sc).map(j=>j.id),...busIds()]);
-  function slotCapacity(id){ return id.indexOf('bus')===0?BUS_SLOTS:(eventJobs(sc).find(j=>j.id===id)||{}).slots; }
+  function slotCapacity(id){ return id.indexOf('bus')===0?busSlotsFor(sc):(eventJobs(sc).find(j=>j.id===id)||{}).slots; }
   let copied=0;
   Object.entries(prev.assignments||{}).forEach(([slotId,volIds])=>{
     if(!validSlotIds.has(slotId))return;
