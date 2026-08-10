@@ -239,14 +239,22 @@
     <div class="card" id="create-sched-card">
       <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Create new schedule</div>
       <div id="create-sched-note" style="font-size:12px;color:var(--text2);margin-bottom:.5rem"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:.6rem">
         <div><label class="lbl">Event name</label><input type="text" id="ns-name" placeholder="e.g. Friday Night Game"></div>
         <div><label class="lbl">Event date</label><input type="date" id="ns-date"></div>
         <button class="btn primary" onclick="createSchedule()" style="white-space:nowrap"><i class="ti ti-plus"></i> Create</button>
       </div>
+      <div>
+        <label class="lbl">Event type</label>
+        <div style="display:flex;gap:16px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="ns-event-type" value="game" checked style="width:auto"> Game</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="ns-event-type" value="event" style="width:auto"> Non-Game Event</label>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-top:3px">Non-Game Events skip 1st/Halftime/2nd Half in General — just buses, the 4 specialty roles, and your configured non-game job list.</div>
+      </div>
       <div style="border-top:.5px solid var(--border);margin-top:1rem;padding-top:.85rem">
         <label class="lbl">Bulk import events from CSV</label>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:.5rem">First row is headers. Two columns: <strong>Name, Date</strong> (date format YYYY-MM-DD).</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:.5rem">First row is headers. Two columns: <strong>Name, Date</strong> (date format YYYY-MM-DD). Imported this way are always created as Game events.</div>
         <input type="file" id="event-csv-file" accept=".csv" onchange="importEventsCSV(event)" style="width:220px;font-size:12px">
         <div id="event-import-result" style="font-size:12px;margin-top:.5rem"></div>
       </div>
@@ -398,6 +406,26 @@
           <colgroup><col style="width:88%"><col style="width:12%"></colgroup>
           <thead><tr><th>Name</th><th></th></tr></thead>
           <tbody id="hj-body"></tbody>
+        </table>
+      </div>
+      <div class="card" style="margin-top:1rem">
+        <div style="font-size:15px;font-weight:500;margin-bottom:.25rem"><i class="ti ti-list-details" style="font-size:14px"></i> Jobs for non-game events</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Used only when you create a "Non-Game Event" schedule. Those events skip 1st/Halftime/2nd Half and the regular game job list — just buses, the 4 specialty roles, and this list.</div>
+        <div class="grid3c" style="margin-bottom:.75rem">
+          <div><label class="lbl">Job title</label><input type="text" id="ngj-name" placeholder="Job title"></div>
+          <div><label class="lbl">Notes</label><input type="text" id="ngj-desc" placeholder="Optional notes"></div>
+          <div><label class="lbl">Slots</label>
+            <select id="ngj-slots" style="width:80px">
+              <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+              <option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
+            </select>
+          </div>
+          <button class="btn primary" onclick="addNonGameJob()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
+        </div>
+        <table class="jtable">
+          <colgroup><col style="width:32%"><col style="width:44%"><col style="width:12%"><col style="width:12%"></colgroup>
+          <thead><tr><th>Job title</th><th>Notes</th><th>Slots</th><th></th></tr></thead>
+          <tbody id="ngj-body"></tbody>
         </table>
       </div>
       <div class="card" style="margin-top:1rem">
@@ -780,12 +808,24 @@ function classifyCategory(normalizedCat){
 }
 // Ensures a schedule shell for a shared event exists in the given mode's data — in memory (if loaded),
 // in localStorage cache, and pushed to that mode's own sheet tab. Used when admin creates/deletes a shared event.
+// Builds the job list a newly-created event should start with. Non-game General events only
+// get the 4 specialty roles plus the configured non-game job list — not the full game job board.
+function buildJobsSnapshotForMode(data,mode,eventType){
+  const allJobs=data.jobs||[];
+  if(mode==='general'&&eventType==='event'){
+    const specialtyNames=['colorguard','uniforms','percussion','photographers'];
+    const specialtyJobs=allJobs.filter(j=>specialtyNames.includes(j.name.toLowerCase())).map(j=>({...j}));
+    const nonGame=(data.nonGameJobs||[]).map(j=>({...j}));
+    return [...specialtyJobs,...nonGame];
+  }
+  return allJobs.map(j=>({...j}));
+}
 async function pushEventShellToMode(mode,shell){
   const target = mode==='general'?SG:S;
   if(target){
     target.schedules=target.schedules||[];
     if(!target.schedules.find(s=>s.id===shell.id)){
-      const jobsSnapshot=(target.jobs||[]).map(j=>({...j}));
+      const jobsSnapshot=buildJobsSnapshotForMode(target,mode,shell.eventType);
       target.schedules.push({...shell,assignments:{},halftimeAssignments:{},jobs:jobsSnapshot,autoSaved:false,shared:true});
       target.schedules.sort((a,b)=>a.date.localeCompare(b.date));
     }
@@ -806,7 +846,7 @@ async function pushEventShellToMode(mode,shell){
   if(!data) data=defaultState(mode);
   data.schedules=data.schedules||[];
   if(!data.schedules.find(s=>s.id===shell.id)){
-    const jobsSnapshot=(data.jobs||[]).map(j=>({...j}));
+    const jobsSnapshot=buildJobsSnapshotForMode(data,mode,shell.eventType);
     data.schedules.push({...shell,assignments:{},halftimeAssignments:{},jobs:jobsSnapshot,autoSaved:false,shared:true});
     data.schedules.sort((a,b)=>a.date.localeCompare(b.date));
   }
@@ -974,6 +1014,9 @@ function defaultState(mode){
       {id:'hj3',name:'Concourse'},
       {id:'hj4',name:'Float'},
     ] : undefined,
+    // Jobs available for non-game (General) events — bus + specialty assignments still apply,
+    // but 1st/Halftime/2nd Half and the regular game job list do not.
+    nonGameJobs: isGeneral ? [] : undefined,
     history: []
   };
 }
@@ -1062,6 +1105,7 @@ function migrateGeneralBusJobs(data,mode){
     data.halftimeJobs.unshift({id:uid(),name:'Security/Ropes'});
     changed=true;
   }
+  if(!data.nonGameJobs){data.nonGameJobs=[];changed=true;}
   if(changed){
     try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
     if(mode===_mode){ save(); }
@@ -1123,7 +1167,11 @@ function createSchedule(){
   const date=document.getElementById('ns-date').value;
   if(!name){alert('Event name required.');return;}
   if(!date){alert('Event date required.');return;}
+  const typeInput=document.querySelector('input[name="ns-event-type"]:checked');
+  const eventType=typeInput?typeInput.value:'game';
   document.getElementById('ns-name').value='';document.getElementById('ns-date').value='';
+  const defaultTypeInput=document.querySelector('input[name="ns-event-type"][value="game"]');
+  if(defaultTypeInput)defaultTypeInput.checked=true;
 
   // Shared event — visible in both Logistics and General
   const id=uid();
@@ -1131,7 +1179,7 @@ function createSchedule(){
   EVENTS.push({id,name,date});
   EVENTS.sort((a,b)=>a.date.localeCompare(b.date));
   saveEvents();
-  const shell={id,name,date};
+  const shell={id,name,date,eventType};
   pushEventShellToMode('logistics',shell);
   pushEventShellToMode('general',shell);
   renderSchedules();
@@ -1142,7 +1190,7 @@ async function pushEventShellsToMode(mode,shells){
     target.schedules=target.schedules||[];
     shells.forEach(shell=>{
       if(!target.schedules.find(s=>s.id===shell.id)){
-        const jobsSnapshot=(target.jobs||[]).map(j=>({...j}));
+        const jobsSnapshot=buildJobsSnapshotForMode(target,mode,shell.eventType);
         target.schedules.push({...shell,assignments:{},halftimeAssignments:{},jobs:jobsSnapshot,autoSaved:false,shared:true});
       }
     });
@@ -1162,7 +1210,7 @@ async function pushEventShellsToMode(mode,shells){
   data.schedules=data.schedules||[];
   shells.forEach(shell=>{
     if(!data.schedules.find(s=>s.id===shell.id)){
-      const jobsSnapshot=(data.jobs||[]).map(j=>({...j}));
+      const jobsSnapshot=buildJobsSnapshotForMode(data,mode,shell.eventType);
       data.schedules.push({...shell,assignments:{},halftimeAssignments:{},jobs:jobsSnapshot,autoSaved:false,shared:true});
     }
   });
@@ -1282,10 +1330,10 @@ function renderSchedules(){
     div.innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
-          <div class="sched-card-name">${esc(sc.name)}${sc.shared?' <span class="badge purple" style="font-size:10px;vertical-align:middle" title="Shared with the other module">Shared</span>':''}</div>
+          <div class="sched-card-name">${esc(sc.name)}${sc.shared?' <span class="badge purple" style="font-size:10px;vertical-align:middle" title="Shared with the other module">Shared</span>':''}${sc.eventType==='event'?' <span class="badge blue" style="font-size:10px;vertical-align:middle" title="Skips 1st/Halftime/2nd Half in General">Non-Game</span>':''}</div>
           <div class="sched-card-date"><i class="ti ti-calendar" style="font-size:11px"></i> ${dateLabel}</div>
         </div>
-        ${isPast?'<span class="badge gray">Past</span>':isThisWeek?'<span class="badge teal">This week</span>':''}
+        ${isPast?'<span class="badge gray">Past</span>':isThisWeek?'<span class="badge teal">Next Event</span>':''}
       </div>
       <div class="sched-card-stats">
         <span class="tag" style="font-size:11px"><i class="ti ti-users" style="font-size:11px"></i>${schedVols.length} volunteers</span>
@@ -1312,7 +1360,7 @@ function renderAssign(){
   p.innerHTML=`
     <div class="row" style="justify-content:space-between;margin-bottom:.5rem;flex-wrap:wrap;gap:8px">
       <div>
-        <div style="font-size:16px;font-weight:500">${esc(sc.name)}</div>
+        <div style="font-size:16px;font-weight:500">${esc(sc.name)}${_mode==='general'&&sc.eventType==='event'?' <span class="badge purple" style="font-size:10px;vertical-align:middle">Non-Game Event</span>':''}</div>
         <div style="font-size:12px;color:var(--text2);margin-top:1px">${fmtDate(sc.date)}</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -2118,6 +2166,43 @@ function renderGeneralOnlyConfig(){
   const inp=document.getElementById('max-buses-input');
   if(inp)inp.value=AS().maxBuses||15;
   renderHalfJobsTable();
+  renderNonGameJobsTable();
+}
+
+/* ── NON-GAME EVENT JOBS (General mode, admin config) ── */
+function addNonGameJob(){
+  const name=document.getElementById('ngj-name').value.trim();if(!name){alert('Job title required.');return;}
+  AS().nonGameJobs=AS().nonGameJobs||[];
+  AS().nonGameJobs.push({id:uid(),name,desc:document.getElementById('ngj-desc').value.trim(),slots:parseInt(document.getElementById('ngj-slots').value)||1});
+  document.getElementById('ngj-name').value='';document.getElementById('ngj-desc').value='';
+  save();renderNonGameJobsTable();
+}
+function editNonGameJobField(id,field,val){
+  const j=(AS().nonGameJobs||[]).find(j=>j.id===id);if(!j)return;
+  if(field==='slots'){const n=parseInt(val);if(n>=1&&n<=10)j.slots=n;}
+  else j[field]=val.trim();
+  save();
+}
+function removeNonGameJob(id){
+  if(!confirm('Remove this job? It will stay on any events that already have it, but new non-game events won\'t include it.'))return;
+  AS().nonGameJobs=(AS().nonGameJobs||[]).filter(j=>j.id!==id);
+  save();renderNonGameJobsTable();
+}
+function renderNonGameJobsTable(){
+  const tb=document.getElementById('ngj-body');if(!tb||!AS())return;tb.innerHTML='';
+  const jobs=AS().nonGameJobs||[];
+  if(!jobs.length){tb.innerHTML='<tr><td colspan="4" style="padding:1rem;font-size:13px;color:var(--text2)">No non-game jobs yet.</td></tr>';return;}
+  jobs.forEach(j=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><input class="inline-edit" value="${esc(j.name)}" onblur="editNonGameJobField('${j.id}','name',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><input class="inline-edit" value="${esc(j.desc||'')}" onblur="editNonGameJobField('${j.id}','desc',this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder="—"></td>
+      <td><select style="font-size:12px;padding:3px 6px;width:56px" onchange="editNonGameJobField('${j.id}','slots',this.value)">
+        ${Array.from({length:10},(_,i)=>`<option value="${i+1}"${j.slots===i+1?' selected':''}>${i+1}</option>`).join('')}
+      </select></td>
+      <td><button class="btn xs danger" onclick="removeNonGameJob('${j.id}')"><i class="ti ti-trash"></i></button></td>`;
+    tb.appendChild(tr);
+  });
 }
 
 /* ── CSV IMPORT CATEGORY MAPPING (shared, admin-only) ── */
@@ -2333,6 +2418,7 @@ function renderHalfJobsTable(){
 function renderGeneralVolTable(){
   const wrap=document.getElementById('general-vol-table-wrap');if(!wrap)return;
   const sc=activeSched();if(!sc){wrap.innerHTML='';return;}
+  if(sc.eventType==='event'){wrap.innerHTML='';return;} // non-game events don't use 1st/Halftime/2nd Half
   const assignedSet=new Set(Object.values(sc.assignments||{}).flat());
   const hasAnyAssignment=v=>{
     const bus=getVolunteerBus(sc,v.id);
@@ -2547,25 +2633,26 @@ function printGeneralSchedule(sc){
     return role?`${fullName(v)} (${role})`:fullName(v);
   }).sort();
 
+  const isNonGame=sc.eventType==='event';
   let html=`<div style="font-family:Georgia,serif">
     <h1 style="font-size:18px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h1>
     <p style="font-size:13px;color:#555;margin-bottom:2px">${fmtDate(sc.date)}</p>
-    <p style="font-size:11px;color:#888;margin-bottom:12px">General Volunteers</p>
+    <p style="font-size:11px;color:#888;margin-bottom:12px">General Volunteers${isNonGame?' — Non-Game Event':''}</p>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="background:#f1efe8;border-bottom:1.5px solid #ccc">
-        <th style="text-align:left;padding:6px 8px;font-weight:600;width:26%;vertical-align:top">BUS ASSIGNMENTS</th>
-        <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">1st Half</th>
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:${isNonGame?'70':'26'}%;vertical-align:top">BUS ASSIGNMENTS</th>
+        ${isNonGame?'':`<th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">1st Half</th>
         <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">Halftime</th>
-        <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">2nd Half</th>
-        <th style="text-align:left;padding:6px 8px;font-weight:600;width:17%;vertical-align:top">ADMIN</th>
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">2nd Half</th>`}
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:${isNonGame?'30':'17'}%;vertical-align:top">ADMIN</th>
       </tr></thead>
       <tbody><tr>
         <td style="padding:6px 8px;vertical-align:top;border-right:.5px solid #eee">
           ${volunteerLines.map(n=>`<div style="font-size:12px;padding:1px 0">${esc(n)}</div>`).join('')}
         </td>
-        <td style="padding:6px 8px;vertical-align:top;border-right:.5px solid #eee">${firstHalfHtml}</td>
+        ${isNonGame?'':`<td style="padding:6px 8px;vertical-align:top;border-right:.5px solid #eee">${firstHalfHtml}</td>
         <td style="padding:6px 8px;vertical-align:top;border-right:.5px solid #eee">${halftimeHtml}</td>
-        <td style="padding:6px 8px;vertical-align:top;border-right:.5px solid #eee">${secondHalfHtml}</td>
+        <td style="padding:6px 8px;vertical-align:top;border-right:.5px solid #eee">${secondHalfHtml}</td>`}
         <td style="padding:6px 8px;vertical-align:top">
           ${colAdmin.length?colAdmin.map(n=>`<div style="font-size:12px;padding:1px 0">${esc(n)}</div>`).join(''):'<div style="font-size:11px;color:#999">—</div>'}
         </td>
