@@ -1537,6 +1537,20 @@ function getVolunteerBus(sc,vid){
   if(sc.busViaSpecial&&sc.busViaSpecial[vid])return sc.busViaSpecial[vid];
   return null;
 }
+// Bus Bag Volunteer — explicit per-bus designation so it can be handed to ANYONE on that bus,
+// including people linked in via a specialty job's "assign bus" dropdown (not just the first
+// person dragged directly onto the bus). Falls back to the first direct occupant by default.
+function getBusBagVolunteerId(sc,bid){
+  const explicit=sc.busBagVolunteer&&sc.busBagVolunteer[bid];
+  if(explicit&&(busDirectVols(sc,bid).includes(explicit)||busIndirectVols(sc,bid).includes(explicit)))return explicit;
+  return busDirectVols(sc,bid)[0]||null;
+}
+function setBusBagVolunteer(bid,vid){
+  const sc=activeSched();if(!sc)return;
+  sc.busBagVolunteer=sc.busBagVolunteer||{};
+  sc.busBagVolunteer[bid]=vid;
+  save();renderBoard();
+}
 function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJobsTable();if(_mode==='general'){renderGeneralVolTable();renderNonGameJobSummary();}}
 function renderNonGameJobSummary(){
   const wrap=document.getElementById('nongame-job-summary-wrap');if(!wrap)return;
@@ -1731,9 +1745,13 @@ function renderJobSlots(){
       const slot=document.createElement('div');slot.className='job-slot';slot.dataset.jid=bid;
       const badge=full?'<span class="badge green">Full</span>':total>0?`<span class="badge amber">${total}/${busSlotsFor(sc)}</span>`:`<span class="badge gray">0/${busSlotsFor(sc)}</span>`;
       const posWrap=document.createElement('div');posWrap.className='slot-positions';
+      const bagVolId=getBusBagVolunteerId(sc,bid);
       direct.forEach((vid,idx)=>{
         const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
-        const isBagVolunteer=idx===0;
+        const isBagVolunteer=vid===bagVolId;
+        const bagCtrl=isBagVolunteer
+          ?'<span class="badge teal" style="font-size:9px;padding:0 4px;vertical-align:1px" title="Responsible for the bus bag during travel"><i class="ti ti-briefcase" style="font-size:9px"></i> Bus Bag</span>'
+          :`<span style="font-size:9px;color:var(--text3);cursor:pointer;padding:0 4px;border:.5px dashed var(--border-med);border-radius:999px;vertical-align:1px" title="Make this person the Bus Bag Volunteer" onclick="event.stopPropagation();setBusBagVolunteer('${bid}','${vid}')">+ Bag</span>`;
         let jobSelectHtml='';
         if(isNonGameEvent){
           const customJobs=nonGameCustomJobsFor(sc);
@@ -1745,7 +1763,7 @@ function renderJobSlots(){
         const row=document.createElement('div');
         row.className='pos-row'+(isBagVolunteer?' is-lead-row':'');row.draggable=true;row.dataset.insert=idx;
         row.innerHTML=`<span class="pos-num"><i class="ti ti-grip-vertical" style="font-size:11px;cursor:grab"></i></span>
-          <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}${isAdminForEvent(sc,v)?' <span class="badge purple" style="font-size:9px;padding:0 4px;vertical-align:1px">Admin</span>':''}${isBagVolunteer?' <span class="badge teal" style="font-size:9px;padding:0 4px;vertical-align:1px" title="Responsible for the bus bag during travel"><i class="ti ti-briefcase" style="font-size:9px"></i> Bus Bag</span>':''}</span>
+          <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}${isAdminForEvent(sc,v)?' <span class="badge purple" style="font-size:9px;padding:0 4px;vertical-align:1px">Admin</span>':''} ${bagCtrl}</span>
           ${jobSelectHtml}
           <span class="pos-remove" onclick="removePos('${bid}','${vid}')" title="Remove">×</span>`;
         row.addEventListener('dragstart',e=>{dragVid=vid;dragFrom=bid;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',vid);setTimeout(()=>row.classList.add('dragging'),0);});
@@ -1758,10 +1776,14 @@ function renderJobSlots(){
       indirect.forEach(vid=>{
         const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
         const srcJob=eventJobs(sc).find(j=>(sc.assignments[j.id]||[]).includes(vid));
+        const isBagVolunteer=vid===bagVolId;
+        const bagCtrl=isBagVolunteer
+          ?'<span class="badge teal" style="font-size:9px;padding:0 4px;vertical-align:1px" title="Responsible for the bus bag during travel"><i class="ti ti-briefcase" style="font-size:9px"></i> Bus Bag</span>'
+          :`<span style="font-size:9px;color:var(--text2);cursor:pointer;padding:0 4px;border:.5px dashed var(--text3);border-radius:999px;vertical-align:1px" title="Make this person the Bus Bag Volunteer" onclick="event.stopPropagation();setBusBagVolunteer('${bid}','${vid}')">+ Bag</span>`;
         const row=document.createElement('div');
         row.className='pos-row';row.style.background='var(--purple-lt)';
         row.innerHTML=`<span class="pos-num"><i class="ti ti-link" style="font-size:11px"></i></span>
-          <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}</span>
+          <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))} ${bagCtrl}</span>
           <span style="font-size:10px;color:var(--text2);white-space:nowrap">via ${esc(srcJob?srcJob.name:'job')}</span>`;
         posWrap.appendChild(row);
       });
@@ -1949,6 +1971,7 @@ function clearAssignments(){
   if(sc.firstHalfAssignments)sc.firstHalfAssignments={};
   if(sc.secondHalfAssignments)sc.secondHalfAssignments={};
   if(sc.busJobAssignments)sc.busJobAssignments={};
+  if(sc.busBagVolunteer)sc.busBagVolunteer={};
   save();renderBoard();
 }
 
@@ -1990,6 +2013,7 @@ function deleteAllVolunteers(){
     if(sc.secondHalfAssignments)sc.secondHalfAssignments={};
     if(sc.adminNameKeys)sc.adminNameKeys=[];
     if(sc.busJobAssignments)sc.busJobAssignments={};
+  if(sc.busBagVolunteer)sc.busBagVolunteer={};
   });
   save();renderVolunteers();renderSchedules();
   alert(`Deleted all volunteers from the ${modeLabel} master roster.`);
@@ -2682,7 +2706,7 @@ function printGeneralSchedule(sc){
     return a.v.lname.localeCompare(b.v.lname);
   });
   const volunteerLines=withBus.map(({v,bus})=>{
-    const isBagVolunteer=busDirectVols(sc,bus)[0]===v.id;
+    const isBagVolunteer=getBusBagVolunteerId(sc,bus)===v.id;
     return `${fullName(v)} - ${busLabelFromId(bus)}${isBagVolunteer?' (Bus Bag)':''}`;
   });
 
