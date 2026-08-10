@@ -1321,7 +1321,7 @@ function renderSchedules(){
     const schedVols=sc.activeVolunteerIds&&sc.activeVolunteerIds.length
       ?sc.activeVolunteerIds.map(id=>AS().volunteers.find(v=>v.id===id)).filter(Boolean)
       :AS().volunteers.filter(v=>v.active);
-    const emptyJobs=eventJobs(sc).filter(j=>!(sc.assignments&&sc.assignments[j.id]&&sc.assignments[j.id].length)).length;
+    const emptyJobs=eventJobs(sc).filter(j=>!jobHasAnyoneAssigned(sc,j)).length;
     const isThisWeek=sc.id===thisWeekSchedId;
     const canDelete=!sc.shared||_role==='admin';
     const div=document.createElement('div');
@@ -1484,6 +1484,14 @@ function eventJobs(sc){ return (sc&&sc.jobs&&sc.jobs.length)?sc.jobs:AS().jobs; 
 // occupant's row instead of its own card — these two helpers separate the two groups.
 const SPECIALTY_JOB_NAMES=['colorguard','uniforms','percussion','photographers'];
 function isSpecialtyJobName(name){ return SPECIALTY_JOB_NAMES.includes((name||'').toLowerCase()); }
+// Whether a job has anyone in it, regardless of which mechanism fills it: sc.assignments for
+// game jobs and specialty roles, or sc.busJobAssignments for a non-game event's custom jobs.
+function jobHasAnyoneAssigned(sc,j){
+  if(_mode==='general'&&sc.eventType==='event'&&!isSpecialtyJobName(j.name)){
+    return busJobCount(sc,j.id)>0;
+  }
+  return !!(sc.assignments&&sc.assignments[j.id]&&sc.assignments[j.id].length);
+}
 function nonGameCustomJobsFor(sc){ return eventJobs(sc).filter(j=>!isSpecialtyJobName(j.name)); }
 function busJobCount(sc,jobId){ return Object.values(sc.busJobAssignments||{}).filter(j=>j===jobId).length; }
 function setBusJobAssignment(vid,jobId){
@@ -1851,7 +1859,7 @@ function renderStats(){
   const active=scheduleVolunteers(sc);
   const assigned=new Set(Object.values(sc.assignments||{}).flat());
   const activeAssigned=[...assigned].filter(id=>active.find(v=>v.id===id)).length;
-  const emptyJobs=eventJobs(sc).filter(j=>!(sc.assignments[j.id]&&sc.assignments[j.id].length)).length;
+  const emptyJobs=eventJobs(sc).filter(j=>!jobHasAnyoneAssigned(sc,j)).length;
   el.innerHTML=`
     <span class="tag"><i class="ti ti-users" style="font-size:13px"></i>${active.length} for this event</span>
     <span class="tag"><i class="ti ti-check" style="font-size:13px"></i>${activeAssigned} assigned</span>
