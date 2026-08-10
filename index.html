@@ -2723,6 +2723,9 @@ function printGeneralSchedule(sc){
   withBus.sort((a,b)=>{
     const na=parseInt(a.bus.replace('bus','')),nb=parseInt(b.bus.replace('bus',''));
     if(na!==nb)return na-nb;
+    const aIsBag=getBusDisplayOrder(sc,a.bus)[0]===a.v.id;
+    const bIsBag=getBusDisplayOrder(sc,b.bus)[0]===b.v.id;
+    if(aIsBag!==bIsBag)return aIsBag?-1:1;
     return a.v.lname.localeCompare(b.v.lname);
   });
   const volunteerLines=withBus.map(({v,bus})=>{
