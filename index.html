@@ -1407,6 +1407,7 @@ function renderAssign(){
     </div>`:''}
     <div class="pool" id="pool" ondragover="dragOver(event,null,null)" ondrop="drop(event,null,null)" ondragleave="dragLeave(event)"></div>
     <div class="jobs-board" id="jobs-board"></div>
+    ${_mode==='general'&&sc.eventType==='event'?`<div id="nongame-job-summary-wrap" style="margin-top:1.25rem"></div>`:''}
     ${_mode==='general'?`<div id="general-vol-table-wrap" style="margin-top:1.25rem"></div>`:''}`;
   renderBoard();
 }
@@ -1435,6 +1436,7 @@ function drop(e,jid,insertIdx){
   const sc=activeSched();if(!sc)return;
   const vid=dragVid,fromJob=dragFrom;dragVid=null;dragFrom=null;
   if(fromJob)sc.assignments[fromJob]=(sc.assignments[fromJob]||[]).filter(x=>x!==vid);
+  if(fromJob&&fromJob.indexOf('bus')===0&&jid!==fromJob&&sc.busJobAssignments&&sc.busJobAssignments[vid])delete sc.busJobAssignments[vid];
   if(jid){
     const isBus=jid.indexOf('bus')===0;
     const slots=isBus?busSlotsFor(sc):(eventJobs(sc).find(j=>j.id===jid)||{}).slots;
@@ -1460,6 +1462,28 @@ const DEFAULT_BUS_SLOTS = 2;
 function busSlotsFor(sc){ return (sc&&sc.busSlotCount)||DEFAULT_BUS_SLOTS; }
 // Returns the job list for a specific schedule — per-event if set, else global
 function eventJobs(sc){ return (sc&&sc.jobs&&sc.jobs.length)?sc.jobs:AS().jobs; }
+// Non-Game Events: specialty roles (Colorguard/Uniforms/Percussion/Photographers) stay as
+// board cards, filled by import. Every other job is assigned via a dropdown on each bus
+// occupant's row instead of its own card — these two helpers separate the two groups.
+const SPECIALTY_JOB_NAMES=['colorguard','uniforms','percussion','photographers'];
+function isSpecialtyJobName(name){ return SPECIALTY_JOB_NAMES.includes((name||'').toLowerCase()); }
+function nonGameCustomJobsFor(sc){ return eventJobs(sc).filter(j=>!isSpecialtyJobName(j.name)); }
+function busJobCount(sc,jobId){ return Object.values(sc.busJobAssignments||{}).filter(j=>j===jobId).length; }
+function setBusJobAssignment(vid,jobId){
+  const sc=activeSched();if(!sc)return;
+  sc.busJobAssignments=sc.busJobAssignments||{};
+  if(jobId){
+    const job=nonGameCustomJobsFor(sc).find(j=>j.id===jobId);
+    if(job){
+      const already=sc.busJobAssignments[vid]===jobId;
+      if(!already&&busJobCount(sc,jobId)>=job.slots){alert('That job is full.');renderBoard();return;}
+    }
+    sc.busJobAssignments[vid]=jobId;
+  } else {
+    delete sc.busJobAssignments[vid];
+  }
+  save();renderBoard();
+}
 // Admin ("Game Day Admin" CSV category) helpers — cross-module identity is by name, since
 // Logistics and General keep independent volunteer records even for the same real person.
 function nameKey(v){ return (v.fname+' '+v.lname).toLowerCase().trim(); }
@@ -1513,7 +1537,25 @@ function getVolunteerBus(sc,vid){
   if(sc.busViaSpecial&&sc.busViaSpecial[vid])return sc.busViaSpecial[vid];
   return null;
 }
-function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJobsTable();if(_mode==='general')renderGeneralVolTable();}
+function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJobsTable();if(_mode==='general'){renderGeneralVolTable();renderNonGameJobSummary();}}
+function renderNonGameJobSummary(){
+  const wrap=document.getElementById('nongame-job-summary-wrap');if(!wrap)return;
+  const sc=activeSched();if(!sc||sc.eventType!=='event'){wrap.innerHTML='';return;}
+  const jobs=nonGameCustomJobsFor(sc);
+  if(!jobs.length){
+    wrap.innerHTML=`<div style="font-size:12px;color:var(--text2)">No non-game jobs configured yet — add some in <strong>Configuration</strong>.</div>`;
+    return;
+  }
+  wrap.innerHTML=`
+    <div style="font-size:14px;font-weight:500;margin-bottom:.5rem"><i class="ti ti-clipboard-list" style="font-size:13px"></i> Job status</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      ${jobs.map(j=>{
+        const count=busJobCount(sc,j.id);
+        const full=count>=j.slots;
+        return `<span class="tag" style="font-size:12px;${full?'color:var(--warning)':''}">${esc(j.name)}: ${count}/${j.slots}${full?' (full)':''}${full?` <span onclick="addOneJobSlot('${j.id}')" style="cursor:pointer;font-weight:600" title="Add another slot to this job">+</span>`:''}</span>`;
+      }).join('')}
+    </div>`;
+}
 
 function renderEventJobsTable(){
   const sc=activeSched();if(!sc)return;
@@ -1623,7 +1665,9 @@ function renderJobSlots(){
   const htOpts='<option value="">— none —</option>'+AS().halftimeJobs.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
   const isGen=_mode==='general';
 
+  const isNonGameEvent=isGen&&sc.eventType==='event';
   eventJobs(sc).forEach(j=>{
+    if(isNonGameEvent&&!isSpecialtyJobName(j.name))return; // custom jobs move to the bus dropdown instead
     const asgn=(sc.assignments[j.id]||[]);const full=asgn.length>=j.slots;
     const slot=document.createElement('div');slot.className='job-slot';slot.dataset.jid=j.id;
     const badge=full?'<span class="badge green">Full</span>':asgn.length>0?`<span class="badge amber">${asgn.length}/${j.slots}</span>`:`<span class="badge gray">0/${j.slots}</span>`;
@@ -1690,10 +1734,19 @@ function renderJobSlots(){
       direct.forEach((vid,idx)=>{
         const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
         const isBagVolunteer=idx===0;
+        let jobSelectHtml='';
+        if(isNonGameEvent){
+          const customJobs=nonGameCustomJobsFor(sc);
+          const curJob=(sc.busJobAssignments&&sc.busJobAssignments[vid])||'';
+          const availJobs=customJobs.filter(j=>j.id===curJob||busJobCount(sc,j.id)<j.slots);
+          const jobOptsHtml='<option value="">— assign job —</option>'+availJobs.map(j=>`<option value="${j.id}"${j.id===curJob?' selected':''}>${esc(j.name)}</option>`).join('');
+          jobSelectHtml=`<select class="pos-ht-select" style="max-width:130px" onchange="setBusJobAssignment('${vid}',this.value)" title="Assign a job">${jobOptsHtml}</select>`;
+        }
         const row=document.createElement('div');
         row.className='pos-row'+(isBagVolunteer?' is-lead-row':'');row.draggable=true;row.dataset.insert=idx;
         row.innerHTML=`<span class="pos-num"><i class="ti ti-grip-vertical" style="font-size:11px;cursor:grab"></i></span>
           <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}${isAdminForEvent(sc,v)?' <span class="badge purple" style="font-size:9px;padding:0 4px;vertical-align:1px">Admin</span>':''}${isBagVolunteer?' <span class="badge teal" style="font-size:9px;padding:0 4px;vertical-align:1px" title="Responsible for the bus bag during travel"><i class="ti ti-briefcase" style="font-size:9px"></i> Bus Bag</span>':''}</span>
+          ${jobSelectHtml}
           <span class="pos-remove" onclick="removePos('${bid}','${vid}')" title="Remove">×</span>`;
         row.addEventListener('dragstart',e=>{dragVid=vid;dragFrom=bid;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',vid);setTimeout(()=>row.classList.add('dragging'),0);});
         row.addEventListener('dragend',()=>row.classList.remove('dragging'));
@@ -1734,6 +1787,7 @@ function removePos(jid,vid){
   sc.assignments[jid]=(sc.assignments[jid]||[]).filter(x=>x!==vid);
   if(sc.halftimeAssignments)delete sc.halftimeAssignments[jid+'_'+vid];
   if(sc.busViaSpecial&&sc.busViaSpecial[vid])delete sc.busViaSpecial[vid];
+  if(jid.indexOf('bus')===0&&sc.busJobAssignments&&sc.busJobAssignments[vid])delete sc.busJobAssignments[vid];
   save();renderBoard();
 }
 function setSpecialBusAssign(vid,busId){
@@ -1821,6 +1875,16 @@ function copyFromPreviousEventGeneral(sc,prev){
       sc.busViaSpecial[vid]=busId;
     });
   }
+  if(prev.busJobAssignments){
+    Object.entries(prev.busJobAssignments).forEach(([vid,jobId])=>{
+      if(!currentRoster.has(vid)||!alreadyAssigned.has(vid))return;
+      sc.busJobAssignments=sc.busJobAssignments||{};
+      if(sc.busJobAssignments[vid])return;
+      const job=nonGameCustomJobsFor(sc).find(j=>j.id===jobId);
+      if(!job||busJobCount(sc,jobId)>=job.slots)return;
+      sc.busJobAssignments[vid]=jobId;
+    });
+  }
   ['firstHalfAssignments','halftimeAssignments','secondHalfAssignments'].forEach(field=>{
     if(!prev[field])return;
     Object.entries(prev[field]).forEach(([vid,val])=>{
@@ -1838,11 +1902,14 @@ function autoAssign(){
   let pool=[...scheduleVolunteers(sc).filter(v=>!assigned.has(v.id)&&!isAdminClaimedElsewhere(sc,v)&&!isAdminForEvent(sc,v))].sort((a,b)=>a.lname.localeCompare(b.lname));
   if(!pool.length){alert('No unassigned volunteers.');return;}
   // In General mode, specialty roles (Colorguard/Uniforms/Percussion/Photographers) are only ever
-  // filled via the CSV import's specialty tagging — Auto-assign never touches them.
+  // filled via the CSV import's specialty tagging — Auto-assign never touches them. Non-game events
+  // don't fill any job cards at all — their custom jobs are assigned via each bus occupant's job
+  // dropdown after Auto-assign places them on a bus, not by a card-filling pass.
   const specialtyKeys=['colorguard','percussion','photographers','uniforms'];
-  const fillableJobs=_mode==='general'
+  const isNonGameAutoAssign=_mode==='general'&&sc.eventType==='event';
+  const fillableJobs=isNonGameAutoAssign?[]:(_mode==='general'
     ? eventJobs(sc).filter(j=>!specialtyKeys.includes(j.name.toLowerCase()))
-    : eventJobs(sc);
+    : eventJobs(sc));
   const emptyJobs=fillableJobs.filter(j=>!(sc.assignments[j.id]&&sc.assignments[j.id].length));
   for(const j of emptyJobs){if(!pool.length)break;sc.assignments[j.id]=[pool.shift().id];}
   let go=true;
@@ -1881,6 +1948,7 @@ function clearAssignments(){
   if(sc.busViaSpecial)sc.busViaSpecial={};
   if(sc.firstHalfAssignments)sc.firstHalfAssignments={};
   if(sc.secondHalfAssignments)sc.secondHalfAssignments={};
+  if(sc.busJobAssignments)sc.busJobAssignments={};
   save();renderBoard();
 }
 
@@ -1901,6 +1969,7 @@ function removeVolunteer(id){
   AS().schedules.forEach(sc=>{
     Object.keys(sc.assignments||{}).forEach(jid=>{sc.assignments[jid]=sc.assignments[jid].filter(x=>x!==id);});
     Object.keys(sc.halftimeAssignments||{}).forEach(k=>{if(k.endsWith('_'+id))delete sc.halftimeAssignments[k];});
+    if(sc.busJobAssignments&&sc.busJobAssignments[id])delete sc.busJobAssignments[id];
   });
   save();renderVolunteers();
 }
@@ -1920,6 +1989,7 @@ function deleteAllVolunteers(){
     if(sc.firstHalfAssignments)sc.firstHalfAssignments={};
     if(sc.secondHalfAssignments)sc.secondHalfAssignments={};
     if(sc.adminNameKeys)sc.adminNameKeys=[];
+    if(sc.busJobAssignments)sc.busJobAssignments={};
   });
   save();renderVolunteers();renderSchedules();
   alert(`Deleted all volunteers from the ${modeLabel} master roster.`);
@@ -2636,11 +2706,16 @@ function printGeneralSchedule(sc){
   const secondHalfHtml=roleGroupedHtml(halfJobs,'secondHalfAssignments');
 
   // Job Assignments column (non-game events): each job as a sub-heading with its assigned
-  // volunteers listed underneath — same grouped style as the half columns above.
+  // volunteers listed underneath — same grouped style as the half columns above. Specialty
+  // jobs are still filled via the job board (sc.assignments); custom jobs go through each
+  // bus occupant's job dropdown (sc.busJobAssignments) instead.
   function jobGroupedHtml(jobsList){
     let out='';
     jobsList.forEach(job=>{
-      const names=(sc.assignments[job.id]||[]).map(vid=>{
+      const names=(isSpecialtyJobName(job.name)
+        ? (sc.assignments[job.id]||[])
+        : Object.keys(sc.busJobAssignments||{}).filter(vid=>sc.busJobAssignments[vid]===job.id)
+      ).map(vid=>{
         const v=AS().volunteers.find(v=>v.id===vid);return v?fullName(v):null;
       }).filter(Boolean).sort();
       if(!names.length)return;
@@ -2655,8 +2730,10 @@ function printGeneralSchedule(sc){
   // a job/bus assignment or not, and however they got tagged (CSV import or manual).
   // Bus assignments are intentionally left out here since those already appear in the Volunteers column.
   const colAdmin=scheduleVolunteers(sc).filter(v=>isAdminForEvent(sc,v)).map(v=>{
+    let role=null;
     const slotId=Object.keys(sc.assignments||{}).find(sid=>(sc.assignments[sid]||[]).includes(v.id));
-    const role=(slotId&&slotId.indexOf('bus')!==0)?(eventJobs(sc).find(j=>j.id===slotId)||{}).name:null;
+    if(slotId&&slotId.indexOf('bus')!==0)role=(eventJobs(sc).find(j=>j.id===slotId)||{}).name;
+    else if(sc.busJobAssignments&&sc.busJobAssignments[v.id])role=(eventJobs(sc).find(j=>j.id===sc.busJobAssignments[v.id])||{}).name;
     return role?`${fullName(v)} (${role})`:fullName(v);
   }).sort();
 
@@ -2773,6 +2850,7 @@ function removeVolunteerFromRoster(vid){
   if(sc.busViaSpecial)delete sc.busViaSpecial[vid];
   if(sc.firstHalfAssignments)delete sc.firstHalfAssignments[vid];
   if(sc.secondHalfAssignments)delete sc.secondHalfAssignments[vid];
+  if(sc.busJobAssignments)delete sc.busJobAssignments[vid];
   save();renderVolunteers();renderBoard();
 }
 
