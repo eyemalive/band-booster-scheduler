@@ -7,10 +7,10 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <style>
   :root {
-    --bg:#f8f7f4;--surface:#fff;--surface2:#f1efe8;--border:rgba(0,0,0,.12);--border-med:rgba(0,0,0,.2);
-    --text:#1a1a18;--text2:#5f5e5a;--text3:#999895;
-    --blue:#185FA5;--blue-lt:#E6F1FB;--blue-dk:#0C447C;
-    --teal:#085041;--teal-lt:#E1F5EE;--teal-mid:#0F6E56;
+    --bg:#f7f7f8;--surface:#fff;--surface2:#f0f1f3;--border:rgba(0,0,0,.12);--border-med:rgba(0,0,0,.2);
+    --text:#1a1a1c;--text2:#5c5d61;--text3:#95969b;
+    --blue:#0B2545;--blue-lt:#E7ECF3;--blue-dk:#061529;
+    --teal:#8C0A21;--teal-lt:#FBE8EA;--teal-mid:#C8102E;
     --amber-lt:#FAEEDA;--amber-dk:#633806;--green-lt:#EAF3DE;--green-dk:#27500A;
     --gray-lt:#F1EFE8;--gray-dk:#444441;
     --danger:#fcebeb;--danger-text:#791F1F;--danger-border:rgba(163,45,45,.3);
@@ -18,9 +18,9 @@
     --purple:#3C3489;--purple-lt:#EEEDFE;
   }
   @media(prefers-color-scheme:dark){:root{
-    --bg:#1a1a18;--surface:#242422;--surface2:#2c2c2a;--border:rgba(255,255,255,.1);--border-med:rgba(255,255,255,.18);
-    --text:#f0ede6;--text2:#b4b2a9;--text3:#888780;
-    --blue-lt:#0c2d4a;--blue-dk:#85B7EB;--teal-lt:#04342c;--teal:#9FE1CB;--teal-mid:#5DCAA5;
+    --bg:#0E1620;--surface:#16202C;--surface2:#1C2836;--border:rgba(255,255,255,.1);--border-med:rgba(255,255,255,.18);
+    --text:#F0EDE6;--text2:#AEB4BC;--text3:#7E858F;
+    --blue-lt:#152438;--blue-dk:#8FB4E3;--teal-lt:#391119;--teal:#FF97A3;--teal-mid:#E8546A;
     --amber-lt:#412402;--amber-dk:#FAC775;--green-lt:#173404;--green-dk:#C0DD97;
     --gray-lt:#2c2c2a;--gray-dk:#D3D1C7;--danger:#501313;--danger-text:#F09595;--danger-border:rgba(240,149,149,.3);
     --purple-lt:#1e1c40;
@@ -1435,6 +1435,20 @@ function drop(e,jid,insertIdx){
   if(!dragVid)return;
   const sc=activeSched();if(!sc)return;
   const vid=dragVid,fromJob=dragFrom;dragVid=null;dragFrom=null;
+
+  const fromIsBus=fromJob&&fromJob.indexOf('bus')===0;
+  const wasIndirect=fromIsBus&&sc.busViaSpecial&&sc.busViaSpecial[vid]===fromJob;
+
+  // Reordering within the same bus — works for both directly-dragged and specialty-linked
+  // occupants alike. Pure position change; doesn't touch assignments or busViaSpecial.
+  if(fromIsBus&&jid===fromJob){
+    reorderBusOccupant(sc,jid,vid,insertIdx);
+    save();renderBoard();
+    return;
+  }
+  // Specialty-linked occupants can only leave their bus via their source job's dropdown, not by dragging.
+  if(wasIndirect){ renderBoard(); return; }
+
   if(fromJob)sc.assignments[fromJob]=(sc.assignments[fromJob]||[]).filter(x=>x!==vid);
   if(fromJob&&fromJob.indexOf('bus')===0&&jid!==fromJob&&sc.busJobAssignments&&sc.busJobAssignments[vid])delete sc.busJobAssignments[vid];
   if(jid){
@@ -1449,7 +1463,10 @@ function drop(e,jid,insertIdx){
     } else {
       const effectiveCount=isBus?busEffectiveCount(sc,jid):arr.length;
       if(effectiveCount>=slots){alert(isBus?'This bus is full!':'This job slot is full!');renderBoard();return;}
-      const na=[...arr];let ni=insertIdx!=null?insertIdx:na.length;if(ni>na.length)ni=na.length;
+      const na=[...arr];
+      // Buses always append — precise visual position is governed by display order (see
+      // getBusDisplayOrder), not raw array position, so exact insertIdx doesn't matter here.
+      let ni=isBus?na.length:(insertIdx!=null?insertIdx:na.length);if(ni>na.length)ni=na.length;
       na.splice(ni,0,vid);sc.assignments[jid]=na;
     }
   }
@@ -1537,19 +1554,26 @@ function getVolunteerBus(sc,vid){
   if(sc.busViaSpecial&&sc.busViaSpecial[vid])return sc.busViaSpecial[vid];
   return null;
 }
-// Bus Bag Volunteer — explicit per-bus designation so it can be handed to ANYONE on that bus,
-// including people linked in via a specialty job's "assign bus" dropdown (not just the first
-// person dragged directly onto the bus). Falls back to the first direct occupant by default.
-function getBusBagVolunteerId(sc,bid){
-  const explicit=sc.busBagVolunteer&&sc.busBagVolunteer[bid];
-  if(explicit&&(busDirectVols(sc,bid).includes(explicit)||busIndirectVols(sc,bid).includes(explicit)))return explicit;
-  return busDirectVols(sc,bid)[0]||null;
+// Bus Bag Volunteer — always whoever is in position #1. "Position" is a unified per-bus order
+// covering BOTH directly-dragged occupants and specialty-linked ones, so anyone on the bus can
+// end up first via drag-and-drop reordering, not just direct occupants.
+function getBusDisplayOrder(sc,bid){
+  const natural=[...busDirectVols(sc,bid),...busIndirectVols(sc,bid)];
+  const stored=(sc.busOrder&&sc.busOrder[bid])||null;
+  if(!stored)return natural;
+  const present=new Set(natural);
+  const ordered=stored.filter(vid=>present.has(vid));
+  natural.forEach(vid=>{ if(!ordered.includes(vid))ordered.push(vid); });
+  return ordered;
 }
-function setBusBagVolunteer(bid,vid){
-  const sc=activeSched();if(!sc)return;
-  sc.busBagVolunteer=sc.busBagVolunteer||{};
-  sc.busBagVolunteer[bid]=vid;
-  save();renderBoard();
+function reorderBusOccupant(sc,bid,vid,insertIdx){
+  const order=getBusDisplayOrder(sc,bid);
+  const oi=order.indexOf(vid);if(oi<0)return;
+  order.splice(oi,1);
+  let ni=insertIdx==null?order.length:insertIdx;if(ni>order.length)ni=order.length;
+  order.splice(ni,0,vid);
+  sc.busOrder=sc.busOrder||{};
+  sc.busOrder[bid]=order;
 }
 function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJobsTable();if(_mode==='general'){renderGeneralVolTable();renderNonGameJobSummary();}}
 function renderNonGameJobSummary(){
@@ -1740,51 +1764,47 @@ function renderJobSlots(){
     busIds().forEach(bid=>{
       const direct=busDirectVols(sc,bid);
       const indirect=busIndirectVols(sc,bid);
+      const directSet=new Set(direct);
       const total=direct.length+indirect.length;
       const full=total>=busSlotsFor(sc);
       const slot=document.createElement('div');slot.className='job-slot';slot.dataset.jid=bid;
       const badge=full?'<span class="badge green">Full</span>':total>0?`<span class="badge amber">${total}/${busSlotsFor(sc)}</span>`:`<span class="badge gray">0/${busSlotsFor(sc)}</span>`;
       const posWrap=document.createElement('div');posWrap.className='slot-positions';
-      const bagVolId=getBusBagVolunteerId(sc,bid);
-      direct.forEach((vid,idx)=>{
+      // Unified order — position #1 is always the Bus Bag Volunteer. Covers both directly-dragged
+      // occupants and specialty-linked ones, and both are drag-and-drop reorderable within the bus.
+      const order=getBusDisplayOrder(sc,bid);
+      order.forEach((vid,idx)=>{
         const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
-        const isBagVolunteer=vid===bagVolId;
-        const bagCtrl=isBagVolunteer
-          ?'<span class="badge teal" style="font-size:9px;padding:0 4px;vertical-align:1px" title="Responsible for the bus bag during travel"><i class="ti ti-briefcase" style="font-size:9px"></i> Bus Bag</span>'
-          :`<span style="font-size:9px;color:var(--text3);cursor:pointer;padding:0 4px;border:.5px dashed var(--border-med);border-radius:999px;vertical-align:1px" title="Make this person the Bus Bag Volunteer" onclick="event.stopPropagation();setBusBagVolunteer('${bid}','${vid}')">+ Bag</span>`;
-        let jobSelectHtml='';
-        if(isNonGameEvent){
-          const customJobs=nonGameCustomJobsFor(sc);
-          const curJob=(sc.busJobAssignments&&sc.busJobAssignments[vid])||'';
-          const availJobs=customJobs.filter(j=>j.id===curJob||busJobCount(sc,j.id)<j.slots);
-          const jobOptsHtml='<option value="">— assign job —</option>'+availJobs.map(j=>`<option value="${j.id}"${j.id===curJob?' selected':''}>${esc(j.name)}</option>`).join('');
-          jobSelectHtml=`<select class="pos-ht-select" style="max-width:130px" onchange="setBusJobAssignment('${vid}',this.value)" title="Assign a job">${jobOptsHtml}</select>`;
+        const isDirect=directSet.has(vid);
+        const isBagVolunteer=idx===0;
+        const bagBadge=isBagVolunteer?' <span class="badge teal" style="font-size:9px;padding:0 4px;vertical-align:1px" title="Responsible for the bus bag during travel"><i class="ti ti-briefcase" style="font-size:9px"></i> Bus Bag</span>':'';
+        const row=document.createElement('div');row.draggable=true;row.dataset.insert=idx;
+        if(isDirect){
+          let jobSelectHtml='';
+          if(isNonGameEvent){
+            const customJobs=nonGameCustomJobsFor(sc);
+            const curJob=(sc.busJobAssignments&&sc.busJobAssignments[vid])||'';
+            const availJobs=customJobs.filter(j=>j.id===curJob||busJobCount(sc,j.id)<j.slots);
+            const jobOptsHtml='<option value="">— assign job —</option>'+availJobs.map(j=>`<option value="${j.id}"${j.id===curJob?' selected':''}>${esc(j.name)}</option>`).join('');
+            jobSelectHtml=`<select class="pos-ht-select" style="max-width:130px" onchange="setBusJobAssignment('${vid}',this.value)" title="Assign a job">${jobOptsHtml}</select>`;
+          }
+          row.className='pos-row'+(isBagVolunteer?' is-lead-row':'');
+          row.innerHTML=`<span class="pos-num"><i class="ti ti-grip-vertical" style="font-size:11px;cursor:grab"></i></span>
+            <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}${isAdminForEvent(sc,v)?' <span class="badge purple" style="font-size:9px;padding:0 4px;vertical-align:1px">Admin</span>':''}${bagBadge}</span>
+            ${jobSelectHtml}
+            <span class="pos-remove" onclick="removePos('${bid}','${vid}')" title="Remove">×</span>`;
+        } else {
+          const srcJob=eventJobs(sc).find(j=>(sc.assignments[j.id]||[]).includes(vid));
+          row.className='pos-row';row.style.background='var(--purple-lt)';
+          row.innerHTML=`<span class="pos-num"><i class="ti ti-grip-vertical" style="font-size:11px;cursor:grab"></i></span>
+            <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}${bagBadge}</span>
+            <span style="font-size:10px;color:var(--text2);white-space:nowrap">via ${esc(srcJob?srcJob.name:'job')}</span>`;
         }
-        const row=document.createElement('div');
-        row.className='pos-row'+(isBagVolunteer?' is-lead-row':'');row.draggable=true;row.dataset.insert=idx;
-        row.innerHTML=`<span class="pos-num"><i class="ti ti-grip-vertical" style="font-size:11px;cursor:grab"></i></span>
-          <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))}${isAdminForEvent(sc,v)?' <span class="badge purple" style="font-size:9px;padding:0 4px;vertical-align:1px">Admin</span>':''} ${bagCtrl}</span>
-          ${jobSelectHtml}
-          <span class="pos-remove" onclick="removePos('${bid}','${vid}')" title="Remove">×</span>`;
         row.addEventListener('dragstart',e=>{dragVid=vid;dragFrom=bid;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',vid);setTimeout(()=>row.classList.add('dragging'),0);});
         row.addEventListener('dragend',()=>row.classList.remove('dragging'));
         row.addEventListener('dragover',e=>dragOver(e,bid,idx));
         row.addEventListener('dragleave',e=>{if(!row.contains(e.relatedTarget))row.classList.remove('drag-over');});
         row.addEventListener('drop',e=>drop(e,bid,idx));
-        posWrap.appendChild(row);
-      });
-      indirect.forEach(vid=>{
-        const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
-        const srcJob=eventJobs(sc).find(j=>(sc.assignments[j.id]||[]).includes(vid));
-        const isBagVolunteer=vid===bagVolId;
-        const bagCtrl=isBagVolunteer
-          ?'<span class="badge teal" style="font-size:9px;padding:0 4px;vertical-align:1px" title="Responsible for the bus bag during travel"><i class="ti ti-briefcase" style="font-size:9px"></i> Bus Bag</span>'
-          :`<span style="font-size:9px;color:var(--text2);cursor:pointer;padding:0 4px;border:.5px dashed var(--text3);border-radius:999px;vertical-align:1px" title="Make this person the Bus Bag Volunteer" onclick="event.stopPropagation();setBusBagVolunteer('${bid}','${vid}')">+ Bag</span>`;
-        const row=document.createElement('div');
-        row.className='pos-row';row.style.background='var(--purple-lt)';
-        row.innerHTML=`<span class="pos-num"><i class="ti ti-link" style="font-size:11px"></i></span>
-          <span class="pos-name" title="${esc(fullName(v))}">${esc(fullName(v))} ${bagCtrl}</span>
-          <span style="font-size:10px;color:var(--text2);white-space:nowrap">via ${esc(srcJob?srcJob.name:'job')}</span>`;
         posWrap.appendChild(row);
       });
       for(let i=total;i<busSlotsFor(sc);i++){
@@ -1971,7 +1991,7 @@ function clearAssignments(){
   if(sc.firstHalfAssignments)sc.firstHalfAssignments={};
   if(sc.secondHalfAssignments)sc.secondHalfAssignments={};
   if(sc.busJobAssignments)sc.busJobAssignments={};
-  if(sc.busBagVolunteer)sc.busBagVolunteer={};
+  if(sc.busOrder)sc.busOrder={};
   save();renderBoard();
 }
 
@@ -2013,7 +2033,7 @@ function deleteAllVolunteers(){
     if(sc.secondHalfAssignments)sc.secondHalfAssignments={};
     if(sc.adminNameKeys)sc.adminNameKeys=[];
     if(sc.busJobAssignments)sc.busJobAssignments={};
-  if(sc.busBagVolunteer)sc.busBagVolunteer={};
+  if(sc.busOrder)sc.busOrder={};
   });
   save();renderVolunteers();renderSchedules();
   alert(`Deleted all volunteers from the ${modeLabel} master roster.`);
@@ -2663,7 +2683,7 @@ function printLogisticsSchedule(sc){
       const htName=htId?(AS().halftimeJobs.find(h=>h.id===htId)||{name:'—'}).name:'—';
       const isLead=idx===0;
       html+=`<tr style="border-bottom:.5px solid #eee">
-        <td style="padding:4px 8px;${isLead?'color:#0F6E56;font-weight:600':''}">${isLead?'★ Lead':'#'+(idx+1)}</td>
+        <td style="padding:4px 8px;${isLead?'color:#8C0A21;font-weight:600':''}">${isLead?'★ Lead':'#'+(idx+1)}</td>
         <td style="padding:4px 8px;font-weight:${isLead?'600':'400'}">${fullName(v)}</td>
         <td style="padding:4px 8px;color:#555">${htName}</td>
       </tr>`;
@@ -2706,7 +2726,7 @@ function printGeneralSchedule(sc){
     return a.v.lname.localeCompare(b.v.lname);
   });
   const volunteerLines=withBus.map(({v,bus})=>{
-    const isBagVolunteer=getBusBagVolunteerId(sc,bus)===v.id;
+    const isBagVolunteer=getBusDisplayOrder(sc,bus)[0]===v.id;
     return `${fullName(v)} - ${busLabelFromId(bus)}${isBagVolunteer?' (Bus Bag)':''}`;
   });
 
