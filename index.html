@@ -430,7 +430,7 @@
       </div>
       <div class="card" style="margin-top:1rem">
         <div style="font-size:15px;font-weight:500;margin-bottom:.25rem"><i class="ti ti-users-group" style="font-size:14px"></i> Admin</div>
-        <div style="font-size:12px;color:var(--text2)">Admin volunteers ("Game Day Admin" in the CSV) are imported directly, just like other volunteers — no separate list to maintain here. They can be assigned to a role in either module, and once assigned in one, they're no longer available in the other.</div>
+        <div style="font-size:12px;color:var(--text2)">Admin volunteers ("Game Day Admin" in the CSV) are imported directly, just like other volunteers — no separate list to maintain here. Admin status applies across both modules, but each module tracks its own role/bus assignment independently — an admin can be assigned in Logistics and General for the same event at the same time.</div>
       </div>
     </div>
 
@@ -646,7 +646,7 @@ function applyMode(mode){
   // and routes each row to the right one automatically. The exact text-to-role mapping is
   // configurable by admin on the Configuration tab.
   document.getElementById('csv-description').textContent =
-    'Skips the header row only (no footer row expected). Checks column 36 against your configured category mapping (Configuration tab, admin-only) — first name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). Matching is case-insensitive and tolerant of extra spacing. Each row is routed to the right module automatically, even if it doesn\'t match your current module. Admin rows are imported into both modules; once an admin volunteer is assigned a role in one, they\'re no longer available in the other. After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the relevant master roster automatically; volunteers already on that week\'s roster are skipped, not duplicated.';
+    'Skips the header row only (no footer row expected). Checks column 36 against your configured category mapping (Configuration tab, admin-only) — first name (col 49), last name (col 51), phone (col 52 or "unknown"), email (col 53). Matching is case-insensitive and tolerant of extra spacing. Each row is routed to the right module automatically, even if it doesn\'t match your current module. Admin rows are imported into both modules, and admin status applies across both — but each module tracks its own role/bus assignment independently, so an admin can be assigned a role in Logistics and General at the same time. After parsing you will choose which upcoming schedule this list belongs to. New volunteers are added to the relevant master roster automatically; volunteers already on that week\'s roster are skipped, not duplicated.';
 
   showTab('schedules');
 }
@@ -1513,16 +1513,51 @@ function setBusJobAssignment(vid,jobId){
 // Logistics and General keep independent volunteer records even for the same real person.
 function nameKey(v){ return (v.fname+' '+v.lname).toLowerCase().trim(); }
 function isAdminForEvent(sc,v){ return !!(sc&&sc.adminNameKeys&&sc.adminNameKeys.includes(nameKey(v))); }
-// Lets you manually mark/unmark someone as Admin for this event, same as the "Game Day Admin"
-// CSV category would — they get the Admin badge, the cross-module exclusivity, and show in print.
+// Lets you manually mark/unmark someone as Admin for this event. Applies to both modules
+// (same as the CSV "Game Day Admin" category does), so the Admin badge, print inclusion, etc.
+// show up everywhere — but admins can be assigned a role independently in each module; being
+// assigned in one no longer blocks them from being assigned in the other.
 function toggleManualAdmin(vid){
   const sc=activeSched();if(!sc)return;
   const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
   const key=nameKey(v);
   sc.adminNameKeys=sc.adminNameKeys||[];
   const idx=sc.adminNameKeys.indexOf(key);
+  const nowAdmin=idx<0;
   if(idx>=0)sc.adminNameKeys.splice(idx,1);else sc.adminNameKeys.push(key);
   save();renderBoard();renderVolunteers();
+
+  // Mirror the tag onto the other module's copy of this event, if it's shared
+  if(sc.shared){
+    const other=otherModeOf(_mode);
+    setAdminTagInMode(other,sc.id,key,nowAdmin);
+  }
+}
+// Applies or removes an admin name-key tag on a specific event within a specific mode's data —
+// used to keep manual Admin tagging in sync across both modules, mirroring what CSV import already does.
+async function setAdminTagInMode(mode,eventId,key,shouldBeAdmin){
+  let data = mode===_mode ? AS() : (mode==='general'?SG:S);
+  const wasLoaded=!!data;
+  if(!data){
+    if(onHttpsHost()){
+      try{ const r=await apiCall('load',undefined,sheetTabFor(mode)); data=r.data; }catch(e){ console.warn(e); }
+    }
+    if(!data){ try{ data=JSON.parse(localStorage.getItem(cacheKeyFor(mode))||'null'); }catch(e){} }
+    if(!data) return;
+  }
+  const sc=(data.schedules||[]).find(s=>s.id===eventId);
+  if(!sc)return;
+  sc.adminNameKeys=sc.adminNameKeys||[];
+  const idx=sc.adminNameKeys.indexOf(key);
+  if(shouldBeAdmin&&idx<0)sc.adminNameKeys.push(key);
+  else if(!shouldBeAdmin&&idx>=0)sc.adminNameKeys.splice(idx,1);
+  else return; // already in the desired state
+  if(mode==='general')SG=data; else S=data;
+  try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
+  if(onHttpsHost()){
+    try{ await apiCall('save',data,sheetTabFor(mode)); }catch(e){ console.warn('setAdminTagInMode save failed:',e); }
+  }
+  if(mode===_mode)renderBoard();
 }
 function adminAssignmentLabel(sc,v){
   const slotId=Object.keys(sc.assignments||{}).find(sid=>(sc.assignments[sid]||[]).includes(v.id));
@@ -1532,20 +1567,6 @@ function adminAssignmentLabel(sc,v){
   return j?j.name:'';
 }
 function otherModeOf(mode){ return mode==='general'?'logistics':'general'; }
-// True if this admin-tagged volunteer is already assigned to something in the OTHER module for this same event
-function isAdminClaimedElsewhere(sc,v){
-  if(!isAdminForEvent(sc,v))return false;
-  const other=otherModeOf(_mode);
-  const otherData=other==='general'?SG:S;
-  if(!otherData)return false;
-  const otherSc=(otherData.schedules||[]).find(s=>s.id===sc.id);
-  if(!otherSc)return false;
-  const key=nameKey(v);
-  const otherVol=(otherData.volunteers||[]).find(ov=>nameKey(ov)===key);
-  if(!otherVol)return false;
-  const assignedSet=new Set(Object.values(otherSc.assignments||{}).flat());
-  return assignedSet.has(otherVol.id);
-}
 // Bus helpers (General mode)
 function busIds(){ const n=(AS()&&AS().maxBuses)||15; return Array.from({length:n},(_,i)=>'bus'+(i+1)); }
 function busLabelFromId(bid){ return 'Bus '+String(bid).replace('bus',''); }
@@ -1686,23 +1707,20 @@ function scheduleVolunteers(sc){
     return sc.activeVolunteerIds.map(id=>AS().volunteers.find(v=>v.id===id)).filter(Boolean);
   return AS().volunteers.filter(v=>v.active);
 }
+// Same roster, but excludes deactivated volunteers — used anywhere we're deciding who's
+// eligible to be newly picked up (pool, Auto-assign, Copy from previous event). Someone
+// already assigned to something keeps showing there even if deactivated later — this only
+// controls who's offered as available going forward.
+function activeScheduleVolunteers(sc){ return scheduleVolunteers(sc).filter(v=>v.active); }
 function renderPool(){
   const pool=document.getElementById('pool');if(!pool)return;pool.innerHTML='';
   const sc=activeSched();if(!sc){pool.innerHTML='<span style="font-size:12px;color:var(--text3);align-self:center">No schedule selected.</span>';return;}
   const hasRoster=sc.activeVolunteerIds&&sc.activeVolunteerIds.length>0;
   const assigned=new Set(Object.values(sc.assignments||{}).flat());
-  const eligible=scheduleVolunteers(sc).filter(v=>!assigned.has(v.id));
-  const claimedElsewhere=eligible.filter(v=>isAdminClaimedElsewhere(sc,v));
-  const avail=eligible.filter(v=>!isAdminClaimedElsewhere(sc,v));
+  const avail=activeScheduleVolunteers(sc).filter(v=>!assigned.has(v.id));
   avail.forEach(v=>pool.appendChild(makePoolChip(v,sc)));
   if(!pool.children.length){
     pool.innerHTML=`<span style="font-size:12px;color:var(--text3);align-self:center">${hasRoster?'All volunteers assigned':'No roster loaded — use "Add volunteer" above or import a CSV.'}</span>`;
-  }
-  if(claimedElsewhere.length){
-    const note=document.createElement('div');
-    note.style.cssText='width:100%;font-size:11px;color:var(--text3);margin-top:4px';
-    note.textContent=`${claimedElsewhere.length} admin volunteer${claimedElsewhere.length===1?'':'s'} already assigned in ${otherModeOf(_mode)==='general'?'General':'Logistics'}: ${claimedElsewhere.map(v=>fullName(v)).join(', ')}`;
-    pool.appendChild(note);
   }
 }
 function renderJobSlots(){
@@ -1881,7 +1899,7 @@ function copyFromPreviousEvent(){
   alert(copiedCount?`Copied ${copiedCount} assignment${copiedCount===1?'':'s'} from the previous event.`:'Nothing to copy — either nobody from last time is on this week\'s roster, or everyone is already assigned.');
 }
 function copyFromPreviousEventLogistics(sc,prev){
-  const currentRoster=new Set(scheduleVolunteers(sc).map(v=>v.id));
+  const currentRoster=new Set(activeScheduleVolunteers(sc).map(v=>v.id));
   const alreadyAssigned=new Set(Object.values(sc.assignments||{}).flat());
   const validJobIds=new Set(eventJobs(sc).map(j=>j.id));
   let copied=0;
@@ -1900,7 +1918,7 @@ function copyFromPreviousEventLogistics(sc,prev){
   return copied;
 }
 function copyFromPreviousEventGeneral(sc,prev){
-  const currentRoster=new Set(scheduleVolunteers(sc).map(v=>v.id));
+  const currentRoster=new Set(activeScheduleVolunteers(sc).map(v=>v.id));
   const alreadyAssigned=new Set(Object.values(sc.assignments||{}).flat());
   const validSlotIds=new Set([...eventJobs(sc).map(j=>j.id),...busIds()]);
   function slotCapacity(id){ return id.indexOf('bus')===0?busSlotsFor(sc):(eventJobs(sc).find(j=>j.id===id)||{}).slots; }
@@ -1949,7 +1967,7 @@ function copyFromPreviousEventGeneral(sc,prev){
 function autoAssign(){
   const sc=activeSched();if(!sc)return;
   const assigned=new Set(Object.values(sc.assignments||{}).flat());
-  let pool=[...scheduleVolunteers(sc).filter(v=>!assigned.has(v.id)&&!isAdminClaimedElsewhere(sc,v)&&!isAdminForEvent(sc,v))].sort((a,b)=>a.lname.localeCompare(b.lname));
+  let pool=[...activeScheduleVolunteers(sc).filter(v=>!assigned.has(v.id)&&!isAdminForEvent(sc,v))].sort((a,b)=>a.lname.localeCompare(b.lname));
   if(!pool.length){alert('No unassigned volunteers.');return;}
   // In General mode, specialty roles (Colorguard/Uniforms/Percussion/Photographers) are only ever
   // filled via the CSV import's specialty tagging — Auto-assign never touches them. Non-game events
