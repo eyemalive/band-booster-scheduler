@@ -1227,17 +1227,16 @@ function importEventsCSV(e){
   resultEl.innerHTML='<span style="color:var(--text2)">Checking against the latest event list…</span>';
   const reader=new FileReader();
   reader.onload=async ev=>{
-    const lines=ev.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
-    if(lines.length<2){resultEl.innerHTML='<span style="color:var(--danger-text)">File has no data rows.</span>';try{e.target.value='';}catch(_){}
+    const allRows=parseCSVFile(ev.target.result);
+    if(allRows.length<2){resultEl.innerHTML='<span style="color:var(--danger-text)">File has no data rows.</span>';try{e.target.value='';}catch(_){}
       return;}
-    const dataLines=lines.slice(1); // skip header row
+    const dataRows=allRows.slice(1); // skip header row
     const dateRe=/^\d{4}-\d{2}-\d{2}$/;
     // Always check against the freshest possible event list, not whatever this browser
     // happened to have cached — avoids false "duplicate" results after a recent delete.
     await refreshEvents();
     const shells=[];let missingData=0,badDate=0,duplicate=0;
-    dataLines.forEach(line=>{
-      const cols=parseCSVLine(line);
+    dataRows.forEach(cols=>{
       const name=(cols[0]||'').trim();
       const date=(cols[1]||'').trim();
       if(!name){missingData++;return;}
@@ -2096,10 +2095,27 @@ function renderVolunteers(){
 }
 
 /* ── CSV IMPORT ── */
-function parseCSVLine(line){
-  const cols=[];let cur='',inQ=false;
-  for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){cols.push(cur.trim());cur='';}else cur+=ch;}
-  cols.push(cur.trim());return cols;
+// Parses an entire CSV file's text into rows of fields, correctly handling quoted fields that
+// contain embedded commas OR embedded newlines (a normal, valid CSV construct many exports use
+// for multi-line description fields) — a naive split on "\n" before parsing breaks those rows.
+function parseCSVFile(text){
+  const rows=[];let row=[];let field='';let inQuotes=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(inQuotes){
+      if(ch==='"'){
+        if(text[i+1]==='"'){ field+='"'; i++; } else { inQuotes=false; }
+      } else field+=ch;
+    } else {
+      if(ch==='"') inQuotes=true;
+      else if(ch===','){ row.push(field.trim()); field=''; }
+      else if(ch==='\r'){ /* skip — \n (or standalone \r) below ends the row */ }
+      else if(ch==='\n'){ row.push(field.trim()); field=''; rows.push(row); row=[]; }
+      else field+=ch;
+    }
+  }
+  if(field.length||row.length){ row.push(field.trim()); rows.push(row); }
+  return rows.filter(r=>!(r.length===1&&r[0]===''));
 }
 // Lowercases, trims, and collapses internal whitespace so minor export inconsistencies
 // (double spaces, trailing spaces) don't break category matching.
@@ -2111,12 +2127,11 @@ function importCSV(e){
   const file=e.target.files[0];if(!file)return;
   const reader=new FileReader();
   reader.onload=ev=>{
-    const allLines=ev.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
-    if(allLines.length<2){document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">File has too few lines.</span>';return;}
-    const dataLines=allLines.slice(1); // skip header row only — no footer row in real exports
+    const allRows=parseCSVFile(ev.target.result);
+    if(allRows.length<2){document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">File has too few rows.</span>';return;}
+    const dataRows=allRows.slice(1); // skip header row only — no footer row in real exports
     _csvParsedLogistics=[];_csvParsedGeneral=[];_csvParsedAdmin=[];
-    dataLines.forEach(line=>{
-      const cols=parseCSVLine(line);
+    dataRows.forEach(cols=>{
       const cat=normalizeCategory(cols[35]);
       const role=classifyCategory(cat);
       if(!role)return;
