@@ -1318,9 +1318,7 @@ function renderSchedules(){
     const d=new Date(sc.date+'T00:00:00');
     const dateLabel=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
     const assigned=new Set(Object.values(sc.assignments||{}).flat());
-    const schedVols=sc.activeVolunteerIds&&sc.activeVolunteerIds.length
-      ?sc.activeVolunteerIds.map(id=>AS().volunteers.find(v=>v.id===id)).filter(Boolean)
-      :AS().volunteers.filter(v=>v.active);
+    const schedVols=scheduleVolunteers(sc);
     const emptyJobs=eventJobs(sc).filter(j=>!jobHasAnyoneAssigned(sc,j)).length;
     const isThisWeek=sc.id===thisWeekSchedId;
     const canDelete=!sc.shared||_role==='admin';
@@ -1702,10 +1700,12 @@ function setBusSlotCount(val){
   sc.busSlotCount=n;
   save();renderBoard();
 }
+// A schedule's assignable roster is strictly whoever was explicitly added to it (via CSV
+// import or the manual Add button) — never a fallback to "everyone active in the master
+// roster," which would leak people imported for one event into every other event that
+// hasn't had its own roster set yet.
 function scheduleVolunteers(sc){
-  if(sc.activeVolunteerIds&&sc.activeVolunteerIds.length)
-    return sc.activeVolunteerIds.map(id=>AS().volunteers.find(v=>v.id===id)).filter(Boolean);
-  return AS().volunteers.filter(v=>v.active);
+  return (sc.activeVolunteerIds||[]).map(id=>AS().volunteers.find(v=>v.id===id)).filter(Boolean);
 }
 // Same roster, but excludes deactivated volunteers — used anywhere we're deciding who's
 // eligible to be newly picked up (pool, Auto-assign, Copy from previous event). Someone

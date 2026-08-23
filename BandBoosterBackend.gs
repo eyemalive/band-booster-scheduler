@@ -9,6 +9,8 @@
 //       AppData          ← logistics data (cell A1)
 //       AppDataGeneral   ← general volunteer data (cell A1)
 //       AppPasswords     ← role passwords (cell A1)
+//       AppEvents        ← shared event registry [{id,name,date}] (cell A1, auto-created)
+//       AppImportCategories ← shared CSV import category mapping [{id,text,role}] (cell A1, auto-created)
 //
 //  AppPasswords tab A1 must contain JSON like:
 //  {"logistics":"yourpassword","general":"yourpassword","admin":"yourpassword"}
@@ -17,7 +19,7 @@
 const API_KEY = 'YOUR_SECRET_KEY_HERE';  // ← change this
 
 // Allowed sheet tab names (whitelist for security)
-const ALLOWED_TABS = ['AppData', 'AppDataGeneral', 'AppPasswords'];
+const ALLOWED_TABS = ['AppData', 'AppDataGeneral', 'AppPasswords', 'AppEvents', 'AppImportCategories'];
 
 function doPost(e) {
   const out = ContentService.createTextOutput();
