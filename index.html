@@ -2946,7 +2946,7 @@ function printLogisticsSchedule(sc){
       <div style="font-weight:600;font-size:10.5px;background:#f1efe8;padding:2px 5px;border-radius:3px;margin-bottom:2px">${esc(j.name)}</div>`;
     asgn.forEach((vid,idx)=>{
       const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
-      const htId=(sc.halftimeAssignments&&sc.halftimeAssignments[vid])||'';
+      const htId=(sc.halftimeAssignments&&sc.halftimeAssignments[j.id+'_'+vid])||'';
       const htName=htId?(AS().halftimeJobs.find(h=>h.id===htId)||{name:''}).name:'';
       const isLead=idx===0;
       html+=`<div style="font-size:10px;line-height:1.55;padding-left:2px;${isLead?'color:#8C0A21;font-weight:600':''}">${isLead?'Lead — ':''}${esc(fullName(v))}${htName?` <span style="color:#888;font-weight:400">— Halftime: ${esc(htName)}</span>`:''}</div>`;
