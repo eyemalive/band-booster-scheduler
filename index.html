@@ -1359,7 +1359,7 @@ function renderSchedules(){
     div.innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
-          <div class="sched-card-name">${esc(sc.name)}${sc.shared?' <span class="badge purple" style="font-size:10px;vertical-align:middle" title="Shared with the other module">Shared</span>':''}${sc.eventType==='event'?' <span class="badge blue" style="font-size:10px;vertical-align:middle" title="Skips 1st/Halftime/2nd Half in General">Non-Game</span>':''}${sc.eventType!=='event'&&sc.gameLocation==='home'?' <span class="badge teal" style="font-size:10px;vertical-align:middle" title="No bus assignments — uses stadium march positions in General">Home</span>':''}</div>
+          <div class="sched-card-name">${esc(sc.name)}${sc.shared?' <span class="badge purple" style="font-size:10px;vertical-align:middle" title="Shared with the other module">Shared</span>':''}${sc.eventType==='event'?' <span class="badge blue" style="font-size:10px;vertical-align:middle" title="Skips 1st/Halftime/2nd Half in General">Non-Game</span>':''}${sc.eventType!=='event'&&sc.gameLocation==='home'?' <span class="badge teal" style="font-size:10px;vertical-align:middle" title="No bus assignments — uses stadium march positions in General">Home</span>':''}${sc.eventType!=='event'&&sc.gameLocation&&sc.gameLocation!=='home'?' <span class="badge blue" style="font-size:10px;vertical-align:middle" title="Uses bus assignments in General">Away</span>':''}</div>
           <div class="sched-card-date"><i class="ti ti-calendar" style="font-size:11px"></i> ${dateLabel}</div>
         </div>
         ${isPast?'<span class="badge gray">Past</span>':isThisWeek?'<span class="badge teal">Next Event</span>':''}
