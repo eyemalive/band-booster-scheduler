@@ -320,24 +320,6 @@
       <div id="weekly-roster-body"></div>
     </div>
     <div class="card">
-      <div style="font-size:15px;font-weight:500;margin-bottom:3px">CSV import — assign to a schedule</div>
-      <div id="csv-description" style="font-size:12px;color:var(--text2);margin-bottom:.75rem"></div>
-      <div class="row" style="gap:10px;align-items:center">
-        <input type="file" id="csv-file" accept=".csv" onchange="importCSV(event)" style="width:220px;font-size:12px">
-      </div>
-      <div id="import-result" style="font-size:12px;margin-top:.5rem"></div>
-    </div>
-    <div class="card">
-      <div style="font-size:15px;font-weight:500;margin-bottom:.75rem">Add volunteer manually</div>
-      <div class="grid4">
-        <div><label class="lbl">First name</label><input type="text" id="v-fname" placeholder="First"></div>
-        <div><label class="lbl">Last name</label><input type="text" id="v-lname" placeholder="Last"></div>
-        <div><label class="lbl">Email</label><input type="email" id="v-email" placeholder="email@example.com"></div>
-        <div><label class="lbl">Phone</label><input type="tel" id="v-phone" placeholder="555-555-5555"></div>
-        <button class="btn primary" onclick="addVolunteer()" style="white-space:nowrap"><i class="ti ti-plus"></i> Add</button>
-      </div>
-    </div>
-    <div class="card">
       <div class="row" style="justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
         <div class="row" style="gap:10px">
           <div style="font-size:15px;font-weight:500">Master roster</div>
@@ -356,6 +338,24 @@
         <thead><tr><th></th><th>First</th><th>Last</th><th>Email</th><th>Phone</th><th>This week</th><th>Admin</th><th></th></tr></thead>
         <tbody id="vol-body"></tbody>
       </table>
+    </div>
+    <div class="card">
+      <div style="font-size:15px;font-weight:500;margin-bottom:3px">CSV import — assign to a schedule</div>
+      <div id="csv-description" style="font-size:12px;color:var(--text2);margin-bottom:.75rem"></div>
+      <div class="row" style="gap:10px;align-items:center">
+        <input type="file" id="csv-file" accept=".csv" onchange="importCSV(event)" style="width:220px;font-size:12px">
+      </div>
+      <div id="import-result" style="font-size:12px;margin-top:.5rem"></div>
+    </div>
+    <div class="card">
+      <div style="font-size:15px;font-weight:500;margin-bottom:.75rem">Add volunteer manually</div>
+      <div class="grid4">
+        <div><label class="lbl">First name</label><input type="text" id="v-fname" placeholder="First"></div>
+        <div><label class="lbl">Last name</label><input type="text" id="v-lname" placeholder="Last"></div>
+        <div><label class="lbl">Email</label><input type="email" id="v-email" placeholder="email@example.com"></div>
+        <div><label class="lbl">Phone</label><input type="tel" id="v-phone" placeholder="555-555-5555"></div>
+        <button class="btn primary" onclick="addVolunteer()" style="white-space:nowrap"><i class="ti ti-plus"></i> Add</button>
+      </div>
     </div>
   </div>
 
@@ -1507,6 +1507,7 @@ function drop(e,jid,insertIdx){
       // getBusDisplayOrder), not raw array position, so exact insertIdx doesn't matter here.
       let ni=isBus?na.length:(insertIdx!=null?insertIdx:na.length);if(ni>na.length)ni=na.length;
       na.splice(ni,0,vid);sc.assignments[jid]=na;
+      if(!isBus)applyFSTHalftimeRule(sc,jid,vid);
     }
   }
   save();renderBoard();
@@ -1518,6 +1519,20 @@ const DEFAULT_BUS_SLOTS = 2;
 function busSlotsFor(sc){ return (sc&&sc.busSlotCount)||DEFAULT_BUS_SLOTS; }
 // Returns the job list for a specific schedule — per-event if set, else global
 function eventJobs(sc){ return (sc&&sc.jobs&&sc.jobs.length)?sc.jobs:AS().jobs; }
+// Anyone placed into the "FST - Food Services" job (Logistics) automatically gets a halftime
+// job that starts with "Distribute Snacks", if one exists and they don't already have a
+// halftime assignment for that position. Doesn't override a halftime choice already made.
+function applyFSTHalftimeRule(sc,jobId,vid){
+  if(_mode!=='logistics')return;
+  const job=eventJobs(sc).find(j=>j.id===jobId);
+  if(!job||job.name.trim().toLowerCase()!=='fst - food services')return;
+  sc.halftimeAssignments=sc.halftimeAssignments||{};
+  const key=jobId+'_'+vid;
+  if(sc.halftimeAssignments[key])return;
+  const htJob=(AS().halftimeJobs||[]).find(h=>h.name.trim().toLowerCase().startsWith('distribute snacks'));
+  if(!htJob)return;
+  sc.halftimeAssignments[key]=htJob.id;
+}
 // Non-Game Events: specialty roles (Colorguard/Uniforms/Percussion/Photographers) stay as
 // board cards, filled by import. Every other job is assigned via a dropdown on each bus
 // occupant's row instead of its own card — these two helpers separate the two groups.
@@ -2015,6 +2030,7 @@ function copyFromPreviousEventLogistics(sc,prev){
       arr.push(vid);alreadyAssigned.add(vid);copied++;
       const prevHtVal=prev.halftimeAssignments&&prev.halftimeAssignments[jobId+'_'+vid];
       if(prevHtVal){ sc.halftimeAssignments=sc.halftimeAssignments||{}; sc.halftimeAssignments[jobId+'_'+vid]=prevHtVal; }
+      else applyFSTHalftimeRule(sc,jobId,vid);
     });
   });
   return copied;
@@ -2132,9 +2148,9 @@ function autoAssign(){
     ? eventJobs(sc).filter(j=>!specialtyKeys.includes(j.name.toLowerCase()))
     : eventJobs(sc).filter(j=>j.name.toLowerCase()!=='logistics admin'));
   const emptyJobs=fillableJobs.filter(j=>!(sc.assignments[j.id]&&sc.assignments[j.id].length));
-  for(const j of emptyJobs){if(!pool.length)break;sc.assignments[j.id]=[pool.shift().id];}
+  for(const j of emptyJobs){if(!pool.length)break;const vid=pool.shift().id;sc.assignments[j.id]=[vid];applyFSTHalftimeRule(sc,j.id,vid);}
   let go=true;
-  while(pool.length&&go){go=false;for(const j of fillableJobs){if(!pool.length)break;const cur=(sc.assignments[j.id]||[]).length;if(cur<j.slots){sc.assignments[j.id]=sc.assignments[j.id]||[];sc.assignments[j.id].push(pool.shift().id);go=true;}}}
+  while(pool.length&&go){go=false;for(const j of fillableJobs){if(!pool.length)break;const cur=(sc.assignments[j.id]||[]).length;if(cur<j.slots){sc.assignments[j.id]=sc.assignments[j.id]||[];const vid=pool.shift().id;sc.assignments[j.id].push(vid);applyFSTHalftimeRule(sc,j.id,vid);go=true;}}}
   // General mode: distribute any leftover pool across buses. First round only fills buses
   // that are currently completely empty (skips any bus that already has someone), so buses
   // starting from zero catch up before anyone gets a second person. After that, fill normally,
