@@ -108,7 +108,7 @@
   .grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;align-items:end}
   .grid3c{display:grid;grid-template-columns:1fr 1fr auto auto;gap:8px;align-items:end}
   .grid2c{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
-  @media print{.no-print{display:none!important}.print-only{display:block!important}}
+  @media print{.no-print{display:none!important}.print-only{display:block!important}@page{margin:0.4in}}
   .print-only{display:none}
   .autosave-banner{background:var(--green-lt);color:var(--green-dk);border:.5px solid var(--green-dk);border-radius:var(--radius);padding:8px 14px;font-size:13px;margin-bottom:1rem;display:none}
   .sync-bar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);padding:4px 10px;border-radius:var(--radius);background:var(--surface2);border:.5px solid var(--border)}
@@ -2935,43 +2935,36 @@ function printSchedule(){
 
 function printLogisticsSchedule(sc){
   const pv=document.getElementById('print-view');
-  let html=`<h1 style="font-size:18px;font-weight:500;margin-bottom:4px;font-family:Georgia,serif">${esc(sc.name)}</h1>
-    <p style="font-size:13px;color:#555;margin-bottom:4px">${fmtDate(sc.date)}</p>
-    <p style="font-size:11px;color:#888;margin-bottom:20px">Logistics Volunteers</p>`;
+  let html=`<div style="font-family:Georgia,serif">
+    <h1 style="font-size:16px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h1>
+    <p style="font-size:11px;color:#555;margin-bottom:1px">${fmtDate(sc.date)}</p>
+    <p style="font-size:9px;color:#888;margin-bottom:8px">Logistics Volunteers</p>
+    <div style="column-count:3;column-gap:16px">`;
   eventJobs(sc).forEach(j=>{
     const asgn=(sc.assignments[j.id]||[]);if(!asgn.length)return;
-    html+=`<div style="margin-bottom:18px;break-inside:avoid">
-      <div style="font-weight:600;font-size:13px;background:#f1efe8;padding:5px 8px;border-radius:4px;margin-bottom:5px">${esc(j.name)}${j.desc?` <span style="font-weight:400;color:#666;font-size:12px">— ${esc(j.desc)}</span>`:''}</div>
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="border-bottom:1px solid #ddd">
-          <th style="text-align:left;padding:4px 8px;color:#666;font-weight:500;width:14%">Position</th>
-          <th style="text-align:left;padding:4px 8px;color:#666;font-weight:500;width:43%">Volunteer</th>
-          <th style="text-align:left;padding:4px 8px;color:#666;font-weight:500;width:43%">Halftime job</th>
-        </tr></thead><tbody>`;
+    html+=`<div style="break-inside:avoid;margin-bottom:8px">
+      <div style="font-weight:600;font-size:10px;background:#f1efe8;padding:2px 5px;border-radius:3px;margin-bottom:2px">${esc(j.name)}</div>`;
     asgn.forEach((vid,idx)=>{
       const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
       const htId=(sc.halftimeAssignments&&sc.halftimeAssignments[vid])||'';
-      const htName=htId?(AS().halftimeJobs.find(h=>h.id===htId)||{name:'—'}).name:'—';
+      const htName=htId?(AS().halftimeJobs.find(h=>h.id===htId)||{name:''}).name:'';
       const isLead=idx===0;
-      html+=`<tr style="border-bottom:.5px solid #eee">
-        <td style="padding:4px 8px;${isLead?'color:#8C0A21;font-weight:600':''}">${isLead?'★ Lead':'#'+(idx+1)}</td>
-        <td style="padding:4px 8px;font-weight:${isLead?'600':'400'}">${fullName(v)}</td>
-        <td style="padding:4px 8px;color:#555">${htName}</td>
-      </tr>`;
+      html+=`<div style="font-size:9.5px;line-height:1.5;padding-left:2px;${isLead?'color:#8C0A21;font-weight:600':''}">${isLead?'★':'#'+(idx+1)} ${esc(fullName(v))}${htName?` <span style="color:#888;font-weight:400">— ${esc(htName)}</span>`:''}</div>`;
     });
-    html+=`</tbody></table></div>`;
+    html+=`</div>`;
   });
+  html+=`</div>`;
   const unassigned=scheduleVolunteers(sc).filter(v=>!new Set(Object.values(sc.assignments||{}).flat()).has(v.id));
-  if(unassigned.length)html+=`<div style="margin-top:16px;padding:8px;border:1px dashed #ccc;border-radius:4px;font-size:12px;color:#777"><strong style="color:#555">Unassigned:</strong> ${unassigned.map(v=>fullName(v)).join(', ')}</div>`;
+  if(unassigned.length)html+=`<div style="margin-top:8px;padding:5px 7px;border:1px dashed #ccc;border-radius:4px;font-size:9.5px;color:#777"><strong style="color:#555">Unassigned:</strong> ${unassigned.map(v=>esc(fullName(v))).join(', ')}</div>`;
   const adminVols=scheduleVolunteers(sc).filter(v=>isAdminForEvent(sc,v));
   if(adminVols.length){
     const names=adminVols.map(v=>{
       const role=adminAssignmentLabel(sc,v);
       return role?`${fullName(v)} (${role})`:fullName(v);
     }).sort();
-    html+=`<div style="margin-top:12px;border:1px solid #ccc;border-radius:4px;padding:8px 10px;font-size:12px"><strong style="color:#555;letter-spacing:.5px">ADMIN</strong><br>${names.map(esc).join(', ')}</div>`;
+    html+=`<div style="margin-top:6px;border:1px solid #ccc;border-radius:4px;padding:5px 7px;font-size:9.5px"><strong style="color:#555;letter-spacing:.5px">ADMIN</strong><br>${names.map(esc).join(', ')}</div>`;
   }
-  html+=`<p style="margin-top:20px;font-size:10px;color:#aaa">Printed ${new Date().toLocaleString()}</p>`;
+  html+=`<p style="margin-top:10px;font-size:8px;color:#aaa">Printed ${new Date().toLocaleString()}</p></div>`;
   showPrint(pv,html);
 }
 
