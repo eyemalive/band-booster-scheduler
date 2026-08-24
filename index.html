@@ -1581,11 +1581,9 @@ function toggleManualAdmin(vid){
   if(idx>=0)sc.adminNameKeys.splice(idx,1);else sc.adminNameKeys.push(key);
   save();renderBoard();renderVolunteers();
 
-  // Mirror the tag onto the other module's copy of this event, if it's shared
-  if(sc.shared){
-    const other=otherModeOf(_mode);
-    setAdminTagInMode(other,sc.id,key,nowAdmin);
-  }
+  // Mirror the tag onto the other module's copy of this event — setAdminTagInMode safely
+  // no-ops if the event genuinely doesn't exist there, so no need to gate this on sc.shared.
+  setAdminTagInMode(otherModeOf(_mode),sc.id,key,nowAdmin);
 }
 // Applies or removes an admin name-key tag on a specific event within a specific mode's data —
 // used to keep manual Admin tagging in sync across both modules, mirroring what CSV import already does.
@@ -1650,7 +1648,10 @@ function setGameLocationForSchedule(scheduleId,loc){
   sc.gameLocation=loc;
   save();renderSchedules();
   if(sc.id===AS().activeSchedId)renderAssign();
-  if(sc.shared)setEventFieldInMode(otherModeOf(_mode),sc.id,'gameLocation',loc);
+  // Always attempt to sync to the other module — setEventFieldInMode safely no-ops if the
+  // event genuinely doesn't exist there, so there's no downside to not gating this on sc.shared
+  // (which may be missing/stale on some events and would otherwise silently block the sync).
+  setEventFieldInMode(otherModeOf(_mode),sc.id,'gameLocation',loc);
 }
 function adminAssignmentLabel(sc,v){
   const slotId=Object.keys(sc.assignments||{}).find(sid=>(sc.assignments[sid]||[]).includes(v.id));
@@ -3050,7 +3051,7 @@ function printLogisticsSchedule(sc){
     asgn.forEach((vid,idx)=>{
       const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
       const isLead=idx===0;
-      blockHtml+=`<div style="font-size:9.5px;line-height:1.4;padding-left:2px;${isLead?'color:#8C0A21;font-weight:600':''}">${isLead?'Lead — ':''}${esc(fullName(v))}</div>`;
+      blockHtml+=`<div style="font-size:9.5px;line-height:1.4;padding-left:2px">${esc(fullName(v))}${isLead?' <span style="color:#8C0A21;font-weight:600">— Lead</span>':''}</div>`;
       const htId=(sc.halftimeAssignments&&sc.halftimeAssignments[j.id+'_'+vid])||'';
       if(htId)(htGroups[htId]=htGroups[htId]||[]).push(fullName(v));
     });
