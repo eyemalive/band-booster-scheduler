@@ -1714,7 +1714,7 @@ function renderHalftimeStatusPanel(){
         const count=halftimeJobCount(sc,h.id);
         const under=hasTarget&&count<h.targetSlots;
         const over=hasTarget&&count>h.targetSlots;
-        const countPart=hasTarget?`: ${count}/${h.targetSlots}${under?' (need '+(h.targetSlots-count)+' more)':''}`:`: ${count} assigned`;
+        const countPart=hasTarget?`: ${count}/${h.targetSlots}${under?' (need '+(h.targetSlots-count)+' more)':''}${over?' ('+(count-h.targetSlots)+' over)':''}`:`: ${count} assigned`;
         return `<span class="tag" style="font-size:12px;${under?'color:var(--warning)':''}${over?'color:var(--danger-text)':''}">${esc(h.name)}${h.yardline?' <span style="color:var(--text3)">('+esc(h.yardline)+' yd)</span>':''}${countPart}</span>`;
       }).join('')}
     </div>`;
@@ -1981,12 +1981,24 @@ function setSpecialBusAssign(vid,busId){
   if(busId)sc.busViaSpecial[vid]=busId;else delete sc.busViaSpecial[vid];
   save();renderBoard();
 }
+// Warns if assigning someone to this halftime job would push it past its configured target —
+// checked against the count BEFORE this new assignment, so it only fires the moment you go over.
+function warnIfHalftimeOverTarget(sc,htId){
+  if(!htId)return;
+  const h=(AS().halftimeJobs||[]).find(h=>h.id===htId);
+  if(!h||h.targetSlots===undefined||h.targetSlots===null)return;
+  const count=halftimeJobCount(sc,htId);
+  if(count>=h.targetSlots){
+    alert(`Heads up: "${h.name}" already has its desired ${h.targetSlots} slot${h.targetSlots===1?'':'s'} filled.`);
+  }
+}
 function setHalftime(jid,vid,htId){
   const sc=activeSched();if(!sc)return;
   sc.halftimeAssignments=sc.halftimeAssignments||{};
   const key=jid+'_'+vid;
-  if(htId)sc.halftimeAssignments[key]=htId;else delete sc.halftimeAssignments[key];
-  save();
+  if(htId){ warnIfHalftimeOverTarget(sc,htId); sc.halftimeAssignments[key]=htId; }
+  else delete sc.halftimeAssignments[key];
+  save();renderHalftimeStatusPanel();
 }
 function renderStats(){
   const el=document.getElementById('assign-stats');if(!el)return;
@@ -2950,8 +2962,9 @@ function setGenAssign(vid,field,val){
   const fieldMap={h1:'firstHalfAssignments',ht:'halftimeAssignments',h2:'secondHalfAssignments'};
   const key=fieldMap[field];if(!key)return;
   sc[key]=sc[key]||{};
-  if(val)sc[key][vid]=val;else delete sc[key][vid];
-  save();
+  if(val){ if(field==='ht')warnIfHalftimeOverTarget(sc,val); sc[key][vid]=val; }
+  else delete sc[key][vid];
+  save();renderHalftimeStatusPanel();
 }
 
 /* ── PRINT PICKER ── */
