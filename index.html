@@ -61,6 +61,10 @@
   .sched-card-stats{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
   .sched-card-actions{display:flex;gap:6px;margin-top:10px}
   .pool{display:flex;flex-wrap:wrap;gap:6px;min-height:52px;padding:.75rem;background:var(--surface2);border:.5px dashed var(--border-med);border-radius:var(--radius-lg);margin-bottom:1rem}
+  .roster-col{min-height:120px;max-height:340px;overflow-y:auto;padding:.5rem;background:var(--surface2);border:.5px dashed var(--border-med);border-radius:var(--radius-lg);display:flex;flex-direction:column;gap:5px}
+  .roster-col.drag-over{border-color:var(--blue);background:var(--blue-lt)}
+  .roster-row{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:var(--radius);background:var(--surface);border:.5px solid var(--border);font-size:13px;cursor:grab}
+  .roster-row.dragging{opacity:.35}
   .pool.drag-over{border-color:var(--blue);background:var(--blue-lt)}
   .chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:500;cursor:grab;border:.5px solid var(--border-med);background:var(--surface);color:var(--text);white-space:nowrap;user-select:none;transition:box-shadow .15s}
   .chip:active{cursor:grabbing}
@@ -303,6 +307,10 @@
 
   <!-- VOLUNTEERS -->
   <div class="panel" id="panel-volunteers">
+    <div class="card" id="weekly-roster-card">
+      <div id="weekly-roster-header"></div>
+      <div id="weekly-roster-body"></div>
+    </div>
     <div class="card">
       <div style="font-size:15px;font-weight:500;margin-bottom:3px">CSV import — assign to a schedule</div>
       <div id="csv-description" style="font-size:12px;color:var(--text2);margin-bottom:.75rem"></div>
@@ -2065,8 +2073,69 @@ function deleteAllVolunteers(){
 }
 function toggleActive(id,val){const v=AS().volunteers.find(v=>v.id===id);if(v){v.active=val;save();renderVolunteers();}}
 function editVolField(id,field,val){const v=AS().volunteers.find(v=>v.id===id);if(v&&val.trim()){v[field]=val.trim();save();}}
+let _rosterDragVid=null,_rosterDragFrom=null;
+function renderWeeklyRosterCard(){
+  const header=document.getElementById('weekly-roster-header');
+  const body=document.getElementById('weekly-roster-body');
+  if(!header||!body||!AS())return;
+  const sc=activeSched();
+  if(!sc){
+    header.innerHTML=`<div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Weekly roster</div>`;
+    body.innerHTML=`<div style="font-size:13px;color:var(--text2);padding:.5rem 0">No event open. Open one from <strong>Schedules</strong> to manage its roster here.</div>`;
+    return;
+  }
+  header.innerHTML=`<div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Weekly roster — ${esc(sc.name)}</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">${fmtDate(sc.date)} — drag volunteers between the columns to add or remove them from this event's roster.</div>`;
+
+  const activeIds=new Set(sc.activeVolunteerIds||[]);
+  const signedUp=(sc.activeVolunteerIds||[]).map(id=>AS().volunteers.find(v=>v.id===id)).filter(Boolean).sort((a,b)=>a.lname.localeCompare(b.lname));
+  const available=AS().volunteers.filter(v=>v.active&&!activeIds.has(v.id)).sort((a,b)=>a.lname.localeCompare(b.lname));
+
+  function makeRow(v,col){
+    const row=document.createElement('div');
+    row.className='roster-row';row.draggable=true;
+    const inactiveTag=!v.active?' <span style="color:var(--text3);font-size:11px">(inactive)</span>':'';
+    row.innerHTML=`<i class="ti ti-grip-vertical" style="font-size:12px;color:var(--text3)"></i><span>${esc(fullName(v))}${inactiveTag}</span>`;
+    row.addEventListener('dragstart',e=>{_rosterDragVid=v.id;_rosterDragFrom=col;e.dataTransfer.effectAllowed='move';setTimeout(()=>row.classList.add('dragging'),0);});
+    row.addEventListener('dragend',()=>row.classList.remove('dragging'));
+    return row;
+  }
+
+  const signedUpCol=document.createElement('div');signedUpCol.className='roster-col';
+  signedUp.forEach(v=>signedUpCol.appendChild(makeRow(v,'signedup')));
+  if(!signedUp.length)signedUpCol.innerHTML='<div style="font-size:12px;color:var(--text3);padding:.5rem">Nobody signed up yet — drag from the right, or import a CSV.</div>';
+
+  const availableCol=document.createElement('div');availableCol.className='roster-col';
+  available.forEach(v=>availableCol.appendChild(makeRow(v,'available')));
+  if(!available.length)availableCol.innerHTML='<div style="font-size:12px;color:var(--text3);padding:.5rem">Everyone active is already signed up.</div>';
+
+  [[signedUpCol,'signedup'],[availableCol,'available']].forEach(([col,target])=>{
+    col.addEventListener('dragover',e=>{e.preventDefault();col.classList.add('drag-over');});
+    col.addEventListener('dragleave',e=>{if(!col.contains(e.relatedTarget))col.classList.remove('drag-over');});
+    col.addEventListener('drop',e=>{
+      e.preventDefault();col.classList.remove('drag-over');
+      const vid=_rosterDragVid,from=_rosterDragFrom;_rosterDragVid=null;_rosterDragFrom=null;
+      if(!vid||from===target)return;
+      if(target==='signedup')addVolunteerToRoster(vid);
+      else removeVolunteerFromRoster(vid);
+    });
+  });
+
+  body.innerHTML='';
+  const grid=document.createElement('div');
+  grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:12px';
+  const leftWrap=document.createElement('div');
+  leftWrap.innerHTML=`<div style="font-size:13px;font-weight:500;margin-bottom:.4rem">Signed up (${signedUp.length})</div>`;
+  leftWrap.appendChild(signedUpCol);
+  const rightWrap=document.createElement('div');
+  rightWrap.innerHTML=`<div style="font-size:13px;font-weight:500;margin-bottom:.4rem">Active, not signed up (${available.length})</div>`;
+  rightWrap.appendChild(availableCol);
+  grid.appendChild(leftWrap);grid.appendChild(rightWrap);
+  body.appendChild(grid);
+}
 function renderVolunteers(){
   const tbody=document.getElementById('vol-body');if(!tbody||!AS())return;tbody.innerHTML='';
+  renderWeeklyRosterCard();
   const showInactive=document.getElementById('show-inactive').checked;
   const q=(document.getElementById('v-search').value||'').toLowerCase();
   const sc=activeSched();
@@ -2931,7 +3000,11 @@ function addVolunteerToRoster(vid){
 }
 function removeVolunteerFromRoster(vid){
   const sc=activeSched();if(!sc)return;
-  if(!confirm("Remove from this week's roster? This also clears any job, bus, or halftime assignment they have for this event."))return;
+  const hasAssignment=Object.values(sc.assignments||{}).flat().includes(vid)
+    ||(sc.firstHalfAssignments&&sc.firstHalfAssignments[vid])
+    ||(sc.halftimeAssignments&&sc.halftimeAssignments[vid])
+    ||(sc.secondHalfAssignments&&sc.secondHalfAssignments[vid]);
+  if(hasAssignment&&!confirm("Remove from this week's roster? This also clears any job, bus, or halftime assignment they have for this event."))return;
   sc.activeVolunteerIds=(sc.activeVolunteerIds||[]).filter(id=>id!==vid);
   Object.keys(sc.assignments||{}).forEach(jid=>{sc.assignments[jid]=(sc.assignments[jid]||[]).filter(id=>id!==vid);});
   if(sc.halftimeAssignments)Object.keys(sc.halftimeAssignments).forEach(k=>{if(k===vid||k.endsWith('_'+vid))delete sc.halftimeAssignments[k];});
