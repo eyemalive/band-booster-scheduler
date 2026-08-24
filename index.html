@@ -619,20 +619,34 @@ function launchApp(mode){
 }
 async function ensureModeLoadedInBackground(mode){
   if(mode==='general'?SG:S) return;
+  // Only ever pre-fill from a real cached copy. We used to synchronously stuff a blank
+  // defaultState() into SG/S here as a placeholder — but that made the mode LOOK loaded
+  // to other code (pushEventShellToMode, etc.) during the window before the real fetch
+  // below resolves. If something saved during that window, it would overwrite the sheet
+  // with an empty template. Safer to leave SG/S untouched (null) until we have something real.
   let data=null;
   try{ data=JSON.parse(localStorage.getItem(cacheKeyFor(mode))||'null'); }catch(e){}
-  if(!data) data=defaultState(mode);
-  if(mode==='general') SG=data; else S=data;
-  if(mode==='general') migrateGeneralBusJobs(SG,'general');
+  if(data){
+    if(mode==='general') SG=data; else S=data;
+    if(mode==='general') migrateGeneralBusJobs(SG,'general');
+  }
   if(onHttpsHost()){
     try{
       const r=await apiCall('load',undefined,sheetTabFor(mode));
-      if(r.data){
-        if(mode==='general') SG=r.data; else S=r.data;
-        try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(mode==='general'?SG:S)); }catch(e){}
-        if(mode==='general') migrateGeneralBusJobs(SG,'general');
-      }
-    }catch(e){ console.warn('ensureModeLoadedInBackground failed:',e); }
+      // r.data is legitimately null when the sheet cell is genuinely empty (e.g. brand-new
+      // deployment) — defaultState() is the correct, safe result in that case, since the
+      // server has confirmed there's nothing there. That's different from the catch(e)
+      // below, where we simply failed to find out what's on the sheet.
+      const resolved = r.data || defaultState(mode);
+      if(mode==='general') SG=resolved; else S=resolved;
+      try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(mode==='general'?SG:S)); }catch(e){}
+      if(mode==='general') migrateGeneralBusJobs(SG,'general');
+    }catch(e){
+      console.warn('ensureModeLoadedInBackground failed:',e);
+      // Do NOT fall back to defaultState() here. Leave SG/S as whatever cache gave us
+      // (possibly still null) so any code that needs this mode's data goes through its
+      // own load-or-abort logic instead of silently treating "we don't know" as "empty".
+    }
   }
 }
 
@@ -858,14 +872,24 @@ async function pushEventShellToMode(mode,shell){
     return;
   }
   // That mode isn't loaded into memory this session — patch its server/cache copy directly
-  let data=null;
+  let data=null, loadFailed=false;
   if(onHttpsHost()){
-    try{ const r=await apiCall('load',undefined,sheetTabFor(mode)); data=r.data; }catch(e){ console.warn(e); }
+    try{ const r=await apiCall('load',undefined,sheetTabFor(mode)); data=r.data; }
+    catch(e){ console.warn(e); loadFailed=true; }
   }
   if(!data){
     try{ data=JSON.parse(localStorage.getItem(cacheKeyFor(mode))||'null'); }catch(e){}
   }
-  if(!data) data=defaultState(mode);
+  if(!data){
+    if(loadFailed){
+      // We couldn't confirm what's actually on the sheet (network/timeout/etc) and have no
+      // local copy either. Saving defaultState() here would overwrite real data with a blank
+      // template, so bail out instead — the event just won't get mirrored into that mode yet.
+      console.error(`Could not sync new event "${shell.name}" into ${mode} mode — its data failed to load and no local copy was found. Open ${mode} mode once you're back online to pick it up, or re-create the event there.`);
+      return;
+    }
+    data=defaultState(mode); // server confirmed the sheet is genuinely empty — safe to start fresh
+  }
   data.schedules=data.schedules||[];
   if(!data.schedules.find(s=>s.id===shell.id)){
     const jobsSnapshot=buildJobsSnapshotForMode(data,mode,shell.eventType);
@@ -1235,12 +1259,22 @@ async function pushEventShellsToMode(mode,shells){
     }
     return;
   }
-  let data=null;
+  let data=null, loadFailed=false;
   if(onHttpsHost()){
-    try{ const r=await apiCall('load',undefined,sheetTabFor(mode)); data=r.data; }catch(e){ console.warn(e); }
+    try{ const r=await apiCall('load',undefined,sheetTabFor(mode)); data=r.data; }
+    catch(e){ console.warn(e); loadFailed=true; }
   }
   if(!data){ try{ data=JSON.parse(localStorage.getItem(cacheKeyFor(mode))||'null'); }catch(e){} }
-  if(!data) data=defaultState(mode);
+  if(!data){
+    if(loadFailed){
+      // Couldn't confirm what's on the sheet and have no local copy — abort rather than
+      // save a blank template over whatever's really there (this is the bulk CSV import
+      // path, so this matters most when the OTHER mode hasn't been opened yet this session).
+      console.error(`Could not sync ${shells.length} imported event(s) into ${mode} mode — its data failed to load and no local copy was found. Open ${mode} mode once you're back online to pick them up.`);
+      return;
+    }
+    data=defaultState(mode); // server confirmed the sheet is genuinely empty — safe to start fresh
+  }
   data.schedules=data.schedules||[];
   shells.forEach(shell=>{
     if(!data.schedules.find(s=>s.id===shell.id)){
