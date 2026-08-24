@@ -2992,43 +2992,58 @@ function printSchedule(){
 // containers) rather than the browser's automatic column-flow, which some print engines render
 // unreliably (can collapse to a single column even when column-count is set). Greedily balances
 // by each block's line count so both columns end up roughly the same height.
+// Splits pre-built blocks into two side-by-side columns using a real CSS grid (two separate
+// containers) rather than the browser's automatic column-flow. column-count has proven
+// unreliable for this print output — it can render as a single column in some browsers even
+// though it looks fine on-screen — so this builds the two columns explicitly in JS instead,
+// greedily balancing by each block's line count so both sides end up roughly the same height.
+function twoColumnGrid(blocks){
+  let leftW=0,rightW=0,leftHtml='',rightHtml='';
+  blocks.forEach(b=>{
+    if(leftW<=rightW){leftHtml+=b.html;leftW+=b.weight;}
+    else{rightHtml+=b.html;rightW+=b.weight;}
+  });
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start"><div>${leftHtml}</div><div>${rightHtml}</div></div>`;
+}
 function printLogisticsSchedule(sc){
   const pv=document.getElementById('print-view');
   let html=`<div style="font-family:Georgia,serif">
     <h1 style="font-size:15px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h1>
     <p style="font-size:10px;color:#555;margin-bottom:1px">${fmtDate(sc.date)}</p>
-    <p style="font-size:8px;color:#888;margin-bottom:6px">Logistics Volunteers</p>
-    <div style="column-count:2;column-gap:20px;column-fill:auto">`;
+    <p style="font-size:8px;color:#888;margin-bottom:6px">Logistics Volunteers</p>`;
   // Top half: job assignments, Lead labeled, no halftime shown here
   const htGroups={};
+  const jobBlocks=[];
   eventJobs(sc).forEach(j=>{
     const asgn=(sc.assignments[j.id]||[]);if(!asgn.length)return;
-    html+=`<div style="break-inside:avoid;margin-bottom:7px">
+    let blockHtml=`<div style="break-inside:avoid;margin-bottom:7px">
       <div style="font-weight:600;font-size:10px;background:#f1efe8;padding:2px 5px;border-radius:3px;margin-bottom:1px">${esc(j.name)}</div>`;
     asgn.forEach((vid,idx)=>{
       const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
       const isLead=idx===0;
-      html+=`<div style="font-size:9.5px;line-height:1.4;padding-left:2px;${isLead?'color:#8C0A21;font-weight:600':''}">${isLead?'Lead — ':''}${esc(fullName(v))}</div>`;
+      blockHtml+=`<div style="font-size:9.5px;line-height:1.4;padding-left:2px;${isLead?'color:#8C0A21;font-weight:600':''}">${isLead?'Lead — ':''}${esc(fullName(v))}</div>`;
       const htId=(sc.halftimeAssignments&&sc.halftimeAssignments[j.id+'_'+vid])||'';
       if(htId)(htGroups[htId]=htGroups[htId]||[]).push(fullName(v));
     });
-    html+=`</div>`;
+    blockHtml+=`</div>`;
+    jobBlocks.push({weight:1+asgn.length,html:blockHtml});
   });
-  html+=`</div>`;
+  html+=twoColumnGrid(jobBlocks);
   // Bottom half: halftime jobs as headings, with whoever's assigned to each listed underneath
   const htJobsWithPeople=(AS().halftimeJobs||[]).filter(h=>htGroups[h.id]&&htGroups[h.id].length);
   if(htJobsWithPeople.length){
     html+=`<div style="margin-top:8px;padding-top:5px;border-top:1px solid #ccc">
-      <div style="font-weight:600;font-size:10px;letter-spacing:.5px;color:#555;margin-bottom:4px">HALFTIME ASSIGNMENTS</div>
-      <div style="column-count:2;column-gap:20px;column-fill:auto">`;
-    htJobsWithPeople.forEach(h=>{
+      <div style="font-weight:600;font-size:10px;letter-spacing:.5px;color:#555;margin-bottom:4px">HALFTIME ASSIGNMENTS</div>`;
+    const htBlocks=htJobsWithPeople.map(h=>{
       const names=htGroups[h.id].sort();
-      html+=`<div style="break-inside:avoid;margin-bottom:7px">
+      const blockHtml=`<div style="break-inside:avoid;margin-bottom:7px">
         <div style="font-weight:600;font-size:10px;background:#f1efe8;padding:2px 5px;border-radius:3px;margin-bottom:1px">${esc(h.name)}${h.yardline?` <span style="font-weight:400;color:#666">— ${esc(h.yardline)} yd line</span>`:''}</div>
         ${names.map(n=>`<div style="font-size:9.5px;line-height:1.4;padding-left:2px">${esc(n)}</div>`).join('')}
       </div>`;
+      return {weight:1+names.length,html:blockHtml};
     });
-    html+=`</div></div>`;
+    html+=twoColumnGrid(htBlocks);
+    html+=`</div>`;
   }
   html+=`<p style="margin-top:6px;font-size:7px;color:#aaa">Printed ${new Date().toLocaleString()}</p></div>`;
   showPrint(pv,html);
