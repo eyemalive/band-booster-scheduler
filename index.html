@@ -386,17 +386,18 @@
     </div>
     <div class="card" style="margin-top:1.5rem">
       <div style="font-size:15px;font-weight:500;margin-bottom:.75rem">Add halftime job</div>
-      <div class="grid2c">
+      <div class="grid3c">
         <div><label class="lbl">Name</label><input type="text" id="ht-name" placeholder="e.g. Water station, Props crew"></div>
+        <div><label class="lbl">Target slots</label><input type="number" id="ht-target" min="0" placeholder="Optional" style="width:100%"></div>
         <button class="btn primary" onclick="addHalftimeJob()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
       </div>
     </div>
     <div class="card">
       <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Halftime jobs</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">These appear as options in the halftime dropdown on each position. Click to edit inline.</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">These appear as options in the halftime dropdown on each position. Set a target to track how many you still need to assign — leave blank for no target. Click to edit inline.</div>
       <table class="jtable">
-        <colgroup><col style="width:88%"><col style="width:12%"></colgroup>
-        <thead><tr><th>Name</th><th></th></tr></thead>
+        <colgroup><col style="width:56%"><col style="width:20%"><col style="width:12%"><col style="width:12%"></colgroup>
+        <thead><tr><th>Name</th><th>Target slots</th><th>Assigned</th><th></th></tr></thead>
         <tbody id="ht-body"></tbody>
       </table>
     </div>
@@ -1444,6 +1445,7 @@ function renderAssign(){
     <div class="pool" id="pool" ondragover="dragOver(event,null,null)" ondrop="drop(event,null,null)" ondragleave="dragLeave(event)"></div>
     <div class="jobs-board" id="jobs-board"></div>
     ${_mode==='general'&&sc.eventType==='event'?`<div id="nongame-job-summary-wrap" style="margin-top:1.25rem"></div>`:''}
+    <div id="halftime-status-wrap" style="margin-top:1.25rem"></div>
     ${_mode==='general'?`<div id="general-vol-table-wrap" style="margin-top:1.25rem"></div>`:''}`;
   renderBoard();
 }
@@ -1682,7 +1684,23 @@ function reorderBusOccupant(sc,bid,vid,insertIdx){
   sc.busOrder=sc.busOrder||{};
   sc.busOrder[bid]=order;
 }
-function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJobsTable();if(_mode==='general'){renderGeneralVolTable();renderNonGameJobSummary();}}
+function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJobsTable();renderHalftimeStatusPanel();if(_mode==='general'){renderGeneralVolTable();renderNonGameJobSummary();}}
+function renderHalftimeStatusPanel(){
+  const wrap=document.getElementById('halftime-status-wrap');if(!wrap)return;
+  const sc=activeSched();if(!sc){wrap.innerHTML='';return;}
+  const jobsWithTarget=(AS().halftimeJobs||[]).filter(h=>h.targetSlots!==undefined&&h.targetSlots!==null);
+  if(!jobsWithTarget.length){wrap.innerHTML='';return;}
+  wrap.innerHTML=`
+    <div style="font-size:14px;font-weight:500;margin-bottom:.5rem"><i class="ti ti-clipboard-list" style="font-size:13px"></i> Halftime status</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      ${jobsWithTarget.map(h=>{
+        const count=halftimeJobCount(sc,h.id);
+        const under=count<h.targetSlots;
+        const over=count>h.targetSlots;
+        return `<span class="tag" style="font-size:12px;${under?'color:var(--warning)':''}${over?'color:var(--danger-text)':''}">${esc(h.name)}: ${count}/${h.targetSlots}${under?' (need '+(h.targetSlots-count)+' more)':''}</span>`;
+      }).join('')}
+    </div>`;
+}
 function renderNonGameJobSummary(){
   const wrap=document.getElementById('nongame-job-summary-wrap');if(!wrap)return;
   const sc=activeSched();if(!sc||sc.eventType!=='event'){wrap.innerHTML='';return;}
@@ -2644,7 +2662,11 @@ function renderImportCategoriesTable(){
 function addHalftimeJob(){
   const name=document.getElementById('ht-name').value.trim();if(!name){alert('Name required.');return;}
   if(AS().halftimeJobs.some(h=>h.name.toLowerCase()===name.toLowerCase())){alert('Already exists.');return;}
-  AS().halftimeJobs.push({id:uid(),name});document.getElementById('ht-name').value='';save();renderHalftimeTable();
+  const targetRaw=document.getElementById('ht-target').value;
+  const targetSlots=targetRaw!==''?Math.max(0,parseInt(targetRaw)||0):undefined;
+  AS().halftimeJobs.push({id:uid(),name,targetSlots});
+  document.getElementById('ht-name').value='';document.getElementById('ht-target').value='';
+  save();renderHalftimeTable();
 }
 function removeHalftimeJob(id){
   if(!confirm('Remove this halftime job?'))return;
@@ -2653,12 +2675,35 @@ function removeHalftimeJob(id){
   save();renderHalftimeTable();
 }
 function editHalftimeField(id,val){const h=AS().halftimeJobs.find(h=>h.id===id);if(h&&val.trim())h.name=val.trim();save();}
+function editHalftimeTarget(id,val){
+  const h=AS().halftimeJobs.find(h=>h.id===id);if(!h)return;
+  h.targetSlots=val!==''?Math.max(0,parseInt(val)||0):undefined;
+  save();renderHalftimeTable();
+}
+// Counts how many people currently hold a given halftime job for an event — works regardless
+// of which key format the assignment is stored under (Logistics keys by job+volunteer,
+// General keys by volunteer alone), since we're only ever counting the stored VALUES.
+function halftimeJobCount(sc,htJobId){
+  if(!sc||!sc.halftimeAssignments)return 0;
+  return Object.values(sc.halftimeAssignments).filter(v=>v===htJobId).length;
+}
 function renderHalftimeTable(){
   const tb=document.getElementById('ht-body');if(!tb||!AS())return;tb.innerHTML='';
-  if(!AS().halftimeJobs.length){tb.innerHTML='<tr><td colspan="2" style="padding:1rem;font-size:13px;color:var(--text2)">No halftime jobs yet.</td></tr>';return;}
+  if(!AS().halftimeJobs.length){tb.innerHTML='<tr><td colspan="4" style="padding:1rem;font-size:13px;color:var(--text2)">No halftime jobs yet.</td></tr>';return;}
+  const sc=activeSched();
   AS().halftimeJobs.forEach(h=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td><input class="inline-edit" value="${esc(h.name)}" onblur="editHalftimeField('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td><td><button class="btn xs danger" onclick="removeHalftimeJob('${h.id}')"><i class="ti ti-trash"></i></button></td>`;
+    const count=sc?halftimeJobCount(sc,h.id):null;
+    const hasTarget=h.targetSlots!==undefined&&h.targetSlots!==null;
+    const under=hasTarget&&count!==null&&count<h.targetSlots;
+    const assignedCell=sc
+      ?(hasTarget?`<span style="${under?'color:var(--warning)':''}">${count}/${h.targetSlots}</span>`:(count!==null?count:'—'))
+      :'<span style="color:var(--text3)">No event open</span>';
+    tr.innerHTML=`
+      <td><input class="inline-edit" value="${esc(h.name)}" onblur="editHalftimeField('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><input class="inline-edit" type="number" min="0" value="${hasTarget?h.targetSlots:''}" placeholder="—" onblur="editHalftimeTarget('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td style="font-size:12px">${assignedCell}</td>
+      <td><button class="btn xs danger" onclick="removeHalftimeJob('${h.id}')"><i class="ti ti-trash"></i></button></td>`;
     tb.appendChild(tr);
   });
 }
@@ -3067,7 +3112,7 @@ function printGeneralSchedule(sc){
         ${isNonGame?`<th style="text-align:left;padding:6px 8px;font-weight:600;width:36%;vertical-align:top">JOB ASSIGNMENTS</th>`:`<th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">1st Half</th>
         <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">Halftime</th>
         <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">2nd Half</th>`}
-        <th style="text-align:left;padding:6px 8px;font-weight:600;width:${isNonGame?'30':'17'}%;vertical-align:top">ADMIN</th>
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:${isNonGame?'30':'17'}%;vertical-align:top">GAME ADMIN</th>
       </tr></thead>
       <tbody><tr>
         <td style="padding:6px 8px;vertical-align:top;border-right:.5px solid #eee">
