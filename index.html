@@ -2988,6 +2988,10 @@ function printSchedule(){
   else printLogisticsSchedule(sc);
 }
 
+// Splits pre-built blocks into two side-by-side columns using a real CSS grid (two separate
+// containers) rather than the browser's automatic column-flow, which some print engines render
+// unreliably (can collapse to a single column even when column-count is set). Greedily balances
+// by each block's line count so both columns end up roughly the same height.
 function printLogisticsSchedule(sc){
   const pv=document.getElementById('print-view');
   let html=`<div style="font-family:Georgia,serif">
