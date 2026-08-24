@@ -2198,6 +2198,32 @@ function deleteAllVolunteers(){
 function toggleActive(id,val){const v=AS().volunteers.find(v=>v.id===id);if(v){v.active=val;save();renderVolunteers();}}
 function editVolField(id,field,val){const v=AS().volunteers.find(v=>v.id===id);if(v&&val.trim()){v[field]=val.trim();save();}}
 let _rosterDragVid=null,_rosterDragFrom=null;
+// Moves every "Signed up" volunteer back to "Active, not signed up" for the current event in
+// one step, instead of dragging each one back individually. Clears whatever assignments they
+// had for this event too (job, bus/position, halftime), same as removing them one at a time
+// would — but does not touch their master roster record or active/inactive status.
+function clearWeeklyRoster(){
+  const sc=activeSched();if(!sc)return;
+  if(!sc.activeVolunteerIds||!sc.activeVolunteerIds.length){alert('Nobody is signed up for this event yet.');return;}
+  const hasAnyAssignment=Object.values(sc.assignments||{}).flat().length>0
+    ||(sc.firstHalfAssignments&&Object.keys(sc.firstHalfAssignments).length)
+    ||(sc.halftimeAssignments&&Object.keys(sc.halftimeAssignments).length)
+    ||(sc.secondHalfAssignments&&Object.keys(sc.secondHalfAssignments).length);
+  const count=sc.activeVolunteerIds.length;
+  const msg=hasAnyAssignment
+    ?`Move all ${count} signed-up volunteer${count===1?'':'s'} back to "Active, not signed up"? This also clears every job, bus/position, and halftime assignment for this event.`
+    :`Move all ${count} signed-up volunteer${count===1?'':'s'} back to "Active, not signed up"?`;
+  if(!confirm(msg))return;
+  sc.activeVolunteerIds=[];
+  sc.assignments={};
+  sc.halftimeAssignments={};
+  if(sc.busViaSpecial)sc.busViaSpecial={};
+  if(sc.firstHalfAssignments)sc.firstHalfAssignments={};
+  if(sc.secondHalfAssignments)sc.secondHalfAssignments={};
+  if(sc.busJobAssignments)sc.busJobAssignments={};
+  if(sc.busOrder)sc.busOrder={};
+  save();renderVolunteers();renderBoard();
+}
 function renderWeeklyRosterCard(){
   const header=document.getElementById('weekly-roster-header');
   const body=document.getElementById('weekly-roster-body');
@@ -2208,7 +2234,11 @@ function renderWeeklyRosterCard(){
     body.innerHTML=`<div style="font-size:13px;color:var(--text2);padding:.5rem 0">No event open. Open one from <strong>Schedules</strong> to manage its roster here.</div>`;
     return;
   }
-  header.innerHTML=`<div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Weekly roster — ${esc(sc.name)}</div>
+  header.innerHTML=`
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:.25rem">
+      <div style="font-size:15px;font-weight:500">Weekly roster — ${esc(sc.name)}</div>
+      <button class="btn xs danger" onclick="clearWeeklyRoster()"><i class="ti ti-eraser"></i> Clear all signed up</button>
+    </div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">${fmtDate(sc.date)} — drag volunteers between the columns to add or remove them from this event's roster.</div>`;
 
   const activeIds=new Set(sc.activeVolunteerIds||[]);
