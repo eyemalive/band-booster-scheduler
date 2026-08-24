@@ -1567,6 +1567,22 @@ function setBusJobAssignment(vid,jobId){
 // Logistics and General keep independent volunteer records even for the same real person.
 function nameKey(v){ return (v.fname+' '+v.lname).toLowerCase().trim(); }
 function isAdminForEvent(sc,v){ return !!(sc&&sc.adminNameKeys&&sc.adminNameKeys.includes(nameKey(v))); }
+// True if this admin-tagged volunteer has a job/bus assignment anywhere for this event —
+// checked in the current module first, then the other module (matched by name, since
+// Logistics and General keep independent volunteer records for the same real person).
+function isAdminAllocatedAnywhere(sc,v){
+  const assignedSet=new Set(Object.values(sc.assignments||{}).flat());
+  if(assignedSet.has(v.id))return true;
+  const other=otherModeOf(_mode);
+  const otherData=other==='general'?SG:S;
+  if(!otherData)return false;
+  const otherSc=(otherData.schedules||[]).find(s=>s.id===sc.id);
+  if(!otherSc)return false;
+  const key=nameKey(v);
+  const otherVol=(otherData.volunteers||[]).find(ov=>nameKey(ov)===key);
+  if(!otherVol)return false;
+  return new Set(Object.values(otherSc.assignments||{}).flat()).has(otherVol.id);
+}
 // Lets you manually mark/unmark someone as Admin for this event. Applies to both modules
 // (same as the CSV "Game Day Admin" category does), so the Admin badge, print inclusion, etc.
 // show up everywhere — but admins can be assigned a role independently in each module; being
@@ -1869,8 +1885,9 @@ function renderJobSlots(){
       if(isGen){
         const curBus=(sc.busViaSpecial&&sc.busViaSpecial[v.id])||'';
         const availBuses=busIds(sc).filter(bid=>!busIsFull(sc,bid,v.id));
-        const busOptsHtml='<option value="">— assign bus —</option>'+availBuses.map(bid=>`<option value="${bid}"${bid===curBus?' selected':''}>${busLabelFromId(bid,sc)}</option>`).join('');
-        busSelectHtml=`<select class="pos-ht-select" style="max-width:110px" onchange="setSpecialBusAssign('${v.id}',this.value)" title="Assign to bus">${busOptsHtml}</select>`;
+        const busWord=isHomeGame(sc)?'march position':'bus';
+        const busOptsHtml=`<option value="">— assign ${busWord} —</option>`+availBuses.map(bid=>`<option value="${bid}"${bid===curBus?' selected':''}>${busLabelFromId(bid,sc)}</option>`).join('');
+        busSelectHtml=`<select class="pos-ht-select" style="max-width:110px" onchange="setSpecialBusAssign('${v.id}',this.value)" title="Assign to a ${busWord}">${busOptsHtml}</select>`;
       }
       const row=document.createElement('div');
       row.className='pos-row'+(isLead?' is-lead-row':'');row.draggable=true;row.dataset.insert=idx;
@@ -2008,10 +2025,20 @@ function renderStats(){
   const assigned=new Set(Object.values(sc.assignments||{}).flat());
   const activeAssigned=[...assigned].filter(id=>active.find(v=>v.id===id)).length;
   const emptyJobs=eventJobs(sc).filter(j=>!jobHasAnyoneAssigned(sc,j)).length;
+
+  // "Unassigned" excludes admins — being unassigned doesn't mean the same thing for them, since
+  // they're tracked separately below (allocated anywhere across either module, not just here).
+  const nonAdminActive=active.filter(v=>!isAdminForEvent(sc,v));
+  const nonAdminUnassigned=nonAdminActive.filter(v=>!assigned.has(v.id)).length;
+
+  const adminVols=active.filter(v=>isAdminForEvent(sc,v));
+  const adminUnallocated=adminVols.filter(v=>!isAdminAllocatedAnywhere(sc,v)).length;
+
   el.innerHTML=`
     <span class="tag"><i class="ti ti-users" style="font-size:13px"></i>${active.length} for this event</span>
     <span class="tag"><i class="ti ti-check" style="font-size:13px"></i>${activeAssigned} assigned</span>
-    <span class="tag"><i class="ti ti-circle-dashed" style="font-size:13px"></i>${active.length-activeAssigned} unassigned</span>
+    <span class="tag"><i class="ti ti-circle-dashed" style="font-size:13px"></i>${nonAdminUnassigned} unassigned</span>
+    ${adminVols.length?`<span class="tag" style="${adminUnallocated>0?'color:var(--warning)':''}"><i class="ti ti-shield" style="font-size:13px"></i>${adminUnallocated} admin not yet assigned</span>`:''}
     <span class="tag" style="${emptyJobs>0?'color:var(--warning)':''}"><i class="ti ti-briefcase" style="font-size:13px"></i>${emptyJobs} jobs with nobody</span>`;
 }
 /* ── COPY FROM PREVIOUS EVENT ── */
