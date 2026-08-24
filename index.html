@@ -2103,12 +2103,13 @@ function autoAssign(){
   // In General mode, specialty roles (Colorguard/Uniforms/Percussion/Photographers) are only ever
   // filled via the CSV import's specialty tagging — Auto-assign never touches them. Non-game events
   // don't fill any job cards at all — their custom jobs are assigned via each bus occupant's job
-  // dropdown after Auto-assign places them on a bus, not by a card-filling pass.
+  // dropdown after Auto-assign places them on a bus, not by a card-filling pass. In Logistics mode,
+  // a "Logistics Admin" job is likewise only ever filled manually — Auto-assign skips it too.
   const specialtyKeys=['colorguard','percussion','photographers','uniforms'];
   const isNonGameAutoAssign=_mode==='general'&&sc.eventType==='event';
   const fillableJobs=isNonGameAutoAssign?[]:(_mode==='general'
     ? eventJobs(sc).filter(j=>!specialtyKeys.includes(j.name.toLowerCase()))
-    : eventJobs(sc));
+    : eventJobs(sc).filter(j=>j.name.toLowerCase()!=='logistics admin'));
   const emptyJobs=fillableJobs.filter(j=>!(sc.assignments[j.id]&&sc.assignments[j.id].length));
   for(const j of emptyJobs){if(!pool.length)break;sc.assignments[j.id]=[pool.shift().id];}
   let go=true;
