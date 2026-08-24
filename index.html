@@ -251,14 +251,22 @@
       <div>
         <label class="lbl">Event type</label>
         <div style="display:flex;gap:16px">
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="ns-event-type" value="game" checked style="width:auto"> Game</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="ns-event-type" value="event" style="width:auto"> Non-Game Event</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="ns-event-type" value="game" checked style="width:auto" onchange="toggleNsGameLocationVisibility()"> Game</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="ns-event-type" value="event" style="width:auto" onchange="toggleNsGameLocationVisibility()"> Non-Game Event</label>
         </div>
         <div style="font-size:11px;color:var(--text2);margin-top:3px">Non-Game Events skip 1st/Halftime/2nd Half in General — just buses, the 4 specialty roles, and your configured non-game job list.</div>
       </div>
+      <div id="ns-game-location-wrap" style="margin-top:.75rem">
+        <label class="lbl">Home or away (General)</label>
+        <div style="display:flex;gap:16px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="ns-game-location" value="away" checked style="width:auto"> Away</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="ns-game-location" value="home" style="width:auto"> Home</label>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-top:3px">Away games use bus assignments. Home games skip buses entirely and use stadium march positions instead.</div>
+      </div>
       <div style="border-top:.5px solid var(--border);margin-top:1rem;padding-top:.85rem">
         <label class="lbl">Bulk import events from CSV</label>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:.5rem">First row is headers. Two columns: <strong>Name, Date</strong> (date format YYYY-MM-DD). Imported this way are always created as Game events.</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:.5rem">First row is headers. Two columns: <strong>Name, Date</strong> (date format YYYY-MM-DD). Imported this way are always created as Away Game events.</div>
         <input type="file" id="event-csv-file" accept=".csv" onchange="importEventsCSV(event)" style="width:220px;font-size:12px">
         <div id="event-import-result" style="font-size:12px;margin-top:.5rem"></div>
       </div>
@@ -396,11 +404,15 @@
     <!-- GENERAL MODE ONLY: Bus count + half-time job list -->
     <div class="general-only-config">
       <div class="card" style="margin-top:1.5rem">
-        <div style="font-size:15px;font-weight:500;margin-bottom:.25rem"><i class="ti ti-bus" style="font-size:14px"></i> Bus configuration</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Sets the number of buses available in the bus dropdown when assigning volunteers.</div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <label class="lbl" style="margin-bottom:0;white-space:nowrap">Max buses (1–30):</label>
+        <div style="font-size:15px;font-weight:500;margin-bottom:.25rem"><i class="ti ti-bus" style="font-size:14px"></i> Away game buses / Home game march positions</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Away games use the bus dropdown; Home games use stadium march positions instead — no bus assignments. Each has its own count.</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:.6rem">
+          <label class="lbl" style="margin-bottom:0;white-space:nowrap">Max buses, Away games (1–30):</label>
           <input type="number" id="max-buses-input" min="1" max="30" style="width:80px" onchange="saveMaxBuses(this.value)">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <label class="lbl" style="margin-bottom:0;white-space:nowrap">Max march positions, Home games (1–30):</label>
+          <input type="number" id="max-march-positions-input" min="1" max="30" style="width:80px" onchange="saveMaxMarchPositions(this.value)">
         </div>
       </div>
       <div class="card" style="margin-top:1rem">
@@ -643,8 +655,8 @@ function applyMode(mode){
   // Password card — only admin
   document.querySelectorAll('.pw-admin-only').forEach(el => el.style.display = _role==='admin' ? '' : 'none');
 
-  // CSS for config tab — visible to all roles
-  document.querySelectorAll('.config-tab').forEach(t => t.style.display = '');
+  // Config tab — admin only
+  document.querySelectorAll('.config-tab').forEach(t => t.style.display = _role==='admin' ? '' : 'none');
 
   // Subtitle
   document.getElementById('app-subtitle').textContent =
@@ -1016,6 +1028,7 @@ function defaultState(mode){
     ],
     // General mode extras
     maxBuses: isGeneral ? 15 : undefined,
+    maxMarchPositions: isGeneral ? 10 : undefined,
     halfJobs: isGeneral ? [
       {id:'hj1',name:"Women's Restroom"},
       {id:'hj2',name:"Men's Restroom"},
@@ -1104,6 +1117,7 @@ function migrateGeneralBusJobs(data,mode){
     if(data.halftimeJobs.length!==before)changed=true;
   }
   if(data.maxBuses===undefined){data.maxBuses=15;changed=true;}
+  if(data.maxMarchPositions===undefined){data.maxMarchPositions=10;changed=true;}
   if(!data.halfJobs||!data.halfJobs.length){
     data.halfJobs=[{id:uid(),name:"Women's Restroom"},{id:uid(),name:"Men's Restroom"},{id:uid(),name:'Concourse'},{id:uid(),name:'Float'}];
     changed=true;
@@ -1177,9 +1191,14 @@ function createSchedule(){
   if(!date){alert('Event date required.');return;}
   const typeInput=document.querySelector('input[name="ns-event-type"]:checked');
   const eventType=typeInput?typeInput.value:'game';
+  const locInput=document.querySelector('input[name="ns-game-location"]:checked');
+  const gameLocation=eventType==='game'?(locInput?locInput.value:'away'):undefined;
   document.getElementById('ns-name').value='';document.getElementById('ns-date').value='';
   const defaultTypeInput=document.querySelector('input[name="ns-event-type"][value="game"]');
   if(defaultTypeInput)defaultTypeInput.checked=true;
+  const defaultLocInput=document.querySelector('input[name="ns-game-location"][value="away"]');
+  if(defaultLocInput)defaultLocInput.checked=true;
+  toggleNsGameLocationVisibility();
 
   // Shared event — visible in both Logistics and General
   const id=uid();
@@ -1187,10 +1206,15 @@ function createSchedule(){
   EVENTS.push({id,name,date});
   EVENTS.sort((a,b)=>a.date.localeCompare(b.date));
   saveEvents();
-  const shell={id,name,date,eventType};
+  const shell={id,name,date,eventType,gameLocation};
   pushEventShellToMode('logistics',shell);
   pushEventShellToMode('general',shell);
   renderSchedules();
+}
+function toggleNsGameLocationVisibility(){
+  const typeInput=document.querySelector('input[name="ns-event-type"]:checked');
+  const wrap=document.getElementById('ns-game-location-wrap');
+  if(wrap)wrap.style.display=(typeInput&&typeInput.value==='game')?'':'none';
 }
 async function pushEventShellsToMode(mode,shells){
   const target = mode==='general'?SG:S;
@@ -1335,7 +1359,7 @@ function renderSchedules(){
     div.innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
-          <div class="sched-card-name">${esc(sc.name)}${sc.shared?' <span class="badge purple" style="font-size:10px;vertical-align:middle" title="Shared with the other module">Shared</span>':''}${sc.eventType==='event'?' <span class="badge blue" style="font-size:10px;vertical-align:middle" title="Skips 1st/Halftime/2nd Half in General">Non-Game</span>':''}</div>
+          <div class="sched-card-name">${esc(sc.name)}${sc.shared?' <span class="badge purple" style="font-size:10px;vertical-align:middle" title="Shared with the other module">Shared</span>':''}${sc.eventType==='event'?' <span class="badge blue" style="font-size:10px;vertical-align:middle" title="Skips 1st/Halftime/2nd Half in General">Non-Game</span>':''}${sc.eventType!=='event'&&sc.gameLocation==='home'?' <span class="badge teal" style="font-size:10px;vertical-align:middle" title="No bus assignments — uses stadium march positions in General">Home</span>':''}</div>
           <div class="sched-card-date"><i class="ti ti-calendar" style="font-size:11px"></i> ${dateLabel}</div>
         </div>
         ${isPast?'<span class="badge gray">Past</span>':isThisWeek?'<span class="badge teal">Next Event</span>':''}
@@ -1365,7 +1389,7 @@ function renderAssign(){
   p.innerHTML=`
     <div class="row" style="justify-content:space-between;margin-bottom:.5rem;flex-wrap:wrap;gap:8px">
       <div>
-        <div style="font-size:16px;font-weight:500">${esc(sc.name)}${_mode==='general'&&sc.eventType==='event'?' <span class="badge purple" style="font-size:10px;vertical-align:middle">Non-Game Event</span>':''}</div>
+        <div style="font-size:16px;font-weight:500">${esc(sc.name)}${_mode==='general'&&sc.eventType==='event'?' <span class="badge purple" style="font-size:10px;vertical-align:middle">Non-Game Event</span>':''}${_mode==='general'&&sc.eventType!=='event'&&sc.gameLocation?` <span class="badge ${sc.gameLocation==='home'?'teal':'blue'}" style="font-size:10px;vertical-align:middle">${sc.gameLocation==='home'?'Home':'Away'}</span>`:''}</div>
         <div style="font-size:12px;color:var(--text2);margin-top:1px">${fmtDate(sc.date)}</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1406,7 +1430,7 @@ function renderAssign(){
       </div>
     </details>
     ${_mode==='general'?`<div class="row" style="gap:8px;align-items:center;margin-bottom:.75rem">
-      <label class="lbl" style="margin-bottom:0">Seats per bus for this event:</label>
+      <label class="lbl" style="margin-bottom:0">${sc.gameLocation==='home'?'Volunteers per march position for this event:':'Seats per bus for this event:'}</label>
       <input type="number" id="bus-slot-count-input" min="1" max="12" value="${busSlotsFor(sc)}" style="width:70px" onchange="setBusSlotCount(this.value)">
       <span style="font-size:11px;color:var(--text2)">Applies only to ${esc(sc.name)} — other events keep their own setting.</span>
     </div>`:''}
@@ -1567,14 +1591,17 @@ async function setAdminTagInMode(mode,eventId,key,shouldBeAdmin){
 function adminAssignmentLabel(sc,v){
   const slotId=Object.keys(sc.assignments||{}).find(sid=>(sc.assignments[sid]||[]).includes(v.id));
   if(!slotId)return '';
-  if(slotId.indexOf('bus')===0)return busLabelFromId(slotId);
+  if(slotId.indexOf('bus')===0)return busLabelFromId(slotId,sc);
   const j=eventJobs(sc).find(j=>j.id===slotId);
   return j?j.name:'';
 }
 function otherModeOf(mode){ return mode==='general'?'logistics':'general'; }
-// Bus helpers (General mode)
-function busIds(){ const n=(AS()&&AS().maxBuses)||15; return Array.from({length:n},(_,i)=>'bus'+(i+1)); }
-function busLabelFromId(bid){ return 'Bus '+String(bid).replace('bus',''); }
+// Bus helpers (General mode). For a Home game, the same slot mechanism is repurposed as
+// "stadium march positions" instead of buses — no travel, so a different configured count
+// and a different label, but otherwise identical underlying data/drag-and-drop.
+function isHomeGame(sc){ return sc&&sc.gameLocation==='home'; }
+function busIds(sc){ const n=isHomeGame(sc)?((AS()&&AS().maxMarchPositions)||10):((AS()&&AS().maxBuses)||15); return Array.from({length:n},(_,i)=>'bus'+(i+1)); }
+function busLabelFromId(bid,sc){ return (isHomeGame(sc)?'Position ':'Bus ')+String(bid).replace('bus',''); }
 function busDirectVols(sc,bid){ return (sc.assignments&&sc.assignments[bid])||[]; }
 function busIndirectVols(sc,bid){ const via=sc.busViaSpecial||{}; return Object.keys(via).filter(vid=>via[vid]===bid); }
 function busEffectiveCount(sc,bid){ return busDirectVols(sc,bid).length + busIndirectVols(sc,bid).length; }
@@ -1584,7 +1611,7 @@ function busIsFull(sc,bid,excludeVid){
   return busDirectVols(sc,bid).length+indirect.length>=busSlotsFor(sc);
 }
 function getVolunteerBus(sc,vid){
-  for(const bid of busIds()){ if(busDirectVols(sc,bid).includes(vid))return bid; }
+  for(const bid of busIds(sc)){ if(busDirectVols(sc,bid).includes(vid))return bid; }
   if(sc.busViaSpecial&&sc.busViaSpecial[vid])return sc.busViaSpecial[vid];
   return null;
 }
@@ -1700,8 +1727,9 @@ function setBusSlotCount(val){
   const sc=activeSched();if(!sc)return;
   const n=parseInt(val);
   if(isNaN(n)||n<1||n>12){alert('Enter a number between 1 and 12.');renderAssign();return;}
-  const maxOccupancy=Math.max(0,...busIds().map(bid=>busEffectiveCount(sc,bid)));
-  if(n<maxOccupancy&&!confirm(`At least one bus currently has ${maxOccupancy} people assigned — more than ${n}. Existing assignments won't be removed, but no new people can be added to that bus until you free up space. Continue?`)){
+  const maxOccupancy=Math.max(0,...busIds(sc).map(bid=>busEffectiveCount(sc,bid)));
+  const label=isHomeGame(sc)?'position':'bus';
+  if(n<maxOccupancy&&!confirm(`At least one ${label} currently has ${maxOccupancy} people assigned — more than ${n}. Existing assignments won't be removed, but no new people can be added to that ${label} until you free up space. Continue?`)){
     renderAssign();return;
   }
   sc.busSlotCount=n;
@@ -1757,8 +1785,8 @@ function renderJobSlots(){
       let busSelectHtml='';
       if(isGen){
         const curBus=(sc.busViaSpecial&&sc.busViaSpecial[v.id])||'';
-        const availBuses=busIds().filter(bid=>!busIsFull(sc,bid,v.id));
-        const busOptsHtml='<option value="">— assign bus —</option>'+availBuses.map(bid=>`<option value="${bid}"${bid===curBus?' selected':''}>${busLabelFromId(bid)}</option>`).join('');
+        const availBuses=busIds(sc).filter(bid=>!busIsFull(sc,bid,v.id));
+        const busOptsHtml='<option value="">— assign bus —</option>'+availBuses.map(bid=>`<option value="${bid}"${bid===curBus?' selected':''}>${busLabelFromId(bid,sc)}</option>`).join('');
         busSelectHtml=`<select class="pos-ht-select" style="max-width:110px" onchange="setSpecialBusAssign('${v.id}',this.value)" title="Assign to bus">${busOptsHtml}</select>`;
       }
       const row=document.createElement('div');
@@ -1794,7 +1822,7 @@ function renderJobSlots(){
 
   // General mode: buses render as cards in the same board, right alongside jobs
   if(isGen){
-    busIds().forEach(bid=>{
+    busIds(sc).forEach(bid=>{
       const direct=busDirectVols(sc,bid);
       const indirect=busIndirectVols(sc,bid);
       const directSet=new Set(direct);
@@ -1810,7 +1838,7 @@ function renderJobSlots(){
         const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
         const isDirect=directSet.has(vid);
         const isBagVolunteer=idx===0;
-        const bagBadge=isBagVolunteer?' <span class="badge teal" style="font-size:9px;padding:0 4px;vertical-align:1px" title="Responsible for the bus bag during travel"><i class="ti ti-briefcase" style="font-size:9px"></i> Bus Bag</span>':'';
+        const bagBadge=(isBagVolunteer&&!isHomeGame(sc))?' <span class="badge teal" style="font-size:9px;padding:0 4px;vertical-align:1px" title="Responsible for the bus bag during travel"><i class="ti ti-briefcase" style="font-size:9px"></i> Bus Bag</span>':'';
         const row=document.createElement('div');row.draggable=true;row.dataset.insert=idx;
         if(isDirect){
           let jobSelectHtml='';
@@ -1848,7 +1876,7 @@ function renderJobSlots(){
         empty.addEventListener('drop',e=>drop(e,bid,i));
         posWrap.appendChild(empty);
       }
-      slot.innerHTML=`<div class="slot-header"><span class="slot-title"><i class="ti ti-bus" style="font-size:12px"></i> ${busLabelFromId(bid)}</span>${badge}</div>`;
+      slot.innerHTML=`<div class="slot-header"><span class="slot-title"><i class="ti ti-${isHomeGame(sc)?'map-pin':'bus'}" style="font-size:12px"></i> ${busLabelFromId(bid,sc)}</span>${badge}</div>`;
       slot.appendChild(posWrap);
       slot.addEventListener('dragover',e=>{if(e.target===slot||e.target.classList.contains('slot-header')||e.target.classList.contains('slot-title'))dragOver(e,bid,null);});
       slot.addEventListener('drop',e=>{if(e.target===slot||e.target.classList.contains('slot-header')||e.target.classList.contains('slot-title'))drop(e,bid,null);});
@@ -1927,7 +1955,7 @@ function copyFromPreviousEventLogistics(sc,prev){
 function copyFromPreviousEventGeneral(sc,prev){
   const currentRoster=new Set(activeScheduleVolunteers(sc).map(v=>v.id));
   const alreadyAssigned=new Set(Object.values(sc.assignments||{}).flat());
-  const validSlotIds=new Set([...eventJobs(sc).map(j=>j.id),...busIds()]);
+  const validSlotIds=new Set([...eventJobs(sc).map(j=>j.id),...busIds(sc)]);
   function slotCapacity(id){ return id.indexOf('bus')===0?busSlotsFor(sc):(eventJobs(sc).find(j=>j.id===id)||{}).slots; }
   let copied=0;
   Object.entries(prev.assignments||{}).forEach(([slotId,volIds])=>{
@@ -1994,7 +2022,7 @@ function autoAssign(){
   // starting from zero catch up before anyone gets a second person. After that, fill normally,
   // wrapping back to bus 1 for further passes if there are still people left over.
   if(_mode==='general'&&pool.length){
-    const buses=busIds();
+    const buses=busIds(sc);
     for(const bid of buses){
       if(!pool.length)break;
       if(busEffectiveCount(sc,bid)===0){
@@ -2400,6 +2428,8 @@ function renderGeneralOnlyConfig(){
   if(!isGen||!AS())return;
   const inp=document.getElementById('max-buses-input');
   if(inp)inp.value=AS().maxBuses||15;
+  const inp2=document.getElementById('max-march-positions-input');
+  if(inp2)inp2.value=AS().maxMarchPositions||10;
   renderHalfJobsTable();
   renderNonGameJobsTable();
 }
@@ -2618,6 +2648,10 @@ function saveMaxBuses(val){
   const n=parseInt(val);if(isNaN(n)||n<1||n>30)return;
   AS().maxBuses=n;save();
 }
+function saveMaxMarchPositions(val){
+  const n=parseInt(val);if(isNaN(n)||n<1||n>30)return;
+  AS().maxMarchPositions=n;save();
+}
 function addHalfJob(){
   const name=document.getElementById('hj-name').value.trim();if(!name){alert('Name required.');return;}
   AS().halfJobs=AS().halfJobs||[];
@@ -2687,7 +2721,7 @@ function renderGeneralVolTable(){
     const h2Sel=halfOpts.replace(`value="${h2Val}"`,`value="${h2Val}" selected`);
     rows+=`<tr>
       <td style="font-size:13px;font-weight:500;white-space:nowrap">${esc(fullName(v))}</td>
-      <td style="font-size:12px;color:${bus?'var(--text)':'var(--text3)'}">${bus?busLabelFromId(bus):'— unassigned —'}</td>
+      <td style="font-size:12px;color:${bus?'var(--text)':'var(--text3)'}">${bus?busLabelFromId(bus,sc):'— unassigned —'}</td>
       <td><select class="pos-ht-select" style="width:100%" onchange="setGenAssign('${v.id}','h1',this.value)">${h1Sel}</select></td>
       <td><select class="pos-ht-select" style="width:100%" onchange="setGenAssign('${v.id}','ht',this.value)">${htSel}</select></td>
       <td><select class="pos-ht-select" style="width:100%" onchange="setGenAssign('${v.id}','h2',this.value)">${h2Sel}</select></td>
@@ -2840,7 +2874,7 @@ function printGeneralSchedule(sc){
   });
   const volunteerLines=withBus.map(({v,bus})=>{
     const isBagVolunteer=getBusDisplayOrder(sc,bus)[0]===v.id;
-    return `${fullName(v)} - ${busLabelFromId(bus)}${isBagVolunteer?' (Bus Bag)':''}`;
+    return `${fullName(v)} - ${busLabelFromId(bus,sc)}${isBagVolunteer&&!isHomeGame(sc)?' (Bus Bag)':''}`;
   });
 
   const halfJobs=AS().halfJobs||[];
@@ -2895,13 +2929,14 @@ function printGeneralSchedule(sc){
   }).sort();
 
   const isNonGame=sc.eventType==='event';
+  const colHeaderLabel=isHomeGame(sc)?'STADIUM POSITIONS':'BUS ASSIGNMENTS';
   let html=`<div style="font-family:Georgia,serif">
     <h1 style="font-size:18px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h1>
     <p style="font-size:13px;color:#555;margin-bottom:2px">${fmtDate(sc.date)}</p>
-    <p style="font-size:11px;color:#888;margin-bottom:12px">General Volunteers${isNonGame?' — Non-Game Event':''}</p>
+    <p style="font-size:11px;color:#888;margin-bottom:12px">General Volunteers${isNonGame?' — Non-Game Event':sc.gameLocation?' — '+(sc.gameLocation==='home'?'Home':'Away')+' Game':''}</p>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="background:#f1efe8;border-bottom:1.5px solid #ccc">
-        <th style="text-align:left;padding:6px 8px;font-weight:600;width:${isNonGame?'34':'26'}%;vertical-align:top">BUS ASSIGNMENTS</th>
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:${isNonGame?'34':'26'}%;vertical-align:top">${colHeaderLabel}</th>
         ${isNonGame?`<th style="text-align:left;padding:6px 8px;font-weight:600;width:36%;vertical-align:top">JOB ASSIGNMENTS</th>`:`<th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">1st Half</th>
         <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">Halftime</th>
         <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">2nd Half</th>`}
