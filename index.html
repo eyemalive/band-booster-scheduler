@@ -386,18 +386,19 @@
     </div>
     <div class="card" style="margin-top:1.5rem">
       <div style="font-size:15px;font-weight:500;margin-bottom:.75rem">Add halftime job</div>
-      <div class="grid3c">
+      <div class="grid4">
         <div><label class="lbl">Name</label><input type="text" id="ht-name" placeholder="e.g. Water station, Props crew"></div>
+        <div><label class="lbl">Yardline</label><input type="text" id="ht-yardline" placeholder="e.g. 30, Home 30"></div>
         <div><label class="lbl">Target slots</label><input type="number" id="ht-target" min="0" placeholder="Optional" style="width:100%"></div>
         <button class="btn primary" onclick="addHalftimeJob()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
       </div>
     </div>
     <div class="card">
       <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Halftime jobs</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">These appear as options in the halftime dropdown on each position. Set a target to track how many you still need to assign — leave blank for no target. Click to edit inline.</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">These appear as options in the halftime dropdown on each position. Set a target to track how many you still need to assign, and a yardline for where that job will be positioned — both optional. Click to edit inline.</div>
       <table class="jtable">
-        <colgroup><col style="width:56%"><col style="width:20%"><col style="width:12%"><col style="width:12%"></colgroup>
-        <thead><tr><th>Name</th><th>Target slots</th><th>Assigned</th><th></th></tr></thead>
+        <colgroup><col style="width:38%"><col style="width:20%"><col style="width:18%"><col style="width:12%"><col style="width:12%"></colgroup>
+        <thead><tr><th>Name</th><th>Yardline</th><th>Target slots</th><th>Assigned</th><th></th></tr></thead>
         <tbody id="ht-body"></tbody>
       </table>
     </div>
@@ -1688,16 +1689,18 @@ function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJo
 function renderHalftimeStatusPanel(){
   const wrap=document.getElementById('halftime-status-wrap');if(!wrap)return;
   const sc=activeSched();if(!sc){wrap.innerHTML='';return;}
-  const jobsWithTarget=(AS().halftimeJobs||[]).filter(h=>h.targetSlots!==undefined&&h.targetSlots!==null);
-  if(!jobsWithTarget.length){wrap.innerHTML='';return;}
+  const jobsToShow=(AS().halftimeJobs||[]).filter(h=>(h.targetSlots!==undefined&&h.targetSlots!==null)||h.yardline);
+  if(!jobsToShow.length){wrap.innerHTML='';return;}
   wrap.innerHTML=`
     <div style="font-size:14px;font-weight:500;margin-bottom:.5rem"><i class="ti ti-clipboard-list" style="font-size:13px"></i> Halftime status</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px">
-      ${jobsWithTarget.map(h=>{
+      ${jobsToShow.map(h=>{
+        const hasTarget=h.targetSlots!==undefined&&h.targetSlots!==null;
         const count=halftimeJobCount(sc,h.id);
-        const under=count<h.targetSlots;
-        const over=count>h.targetSlots;
-        return `<span class="tag" style="font-size:12px;${under?'color:var(--warning)':''}${over?'color:var(--danger-text)':''}">${esc(h.name)}: ${count}/${h.targetSlots}${under?' (need '+(h.targetSlots-count)+' more)':''}</span>`;
+        const under=hasTarget&&count<h.targetSlots;
+        const over=hasTarget&&count>h.targetSlots;
+        const countPart=hasTarget?`: ${count}/${h.targetSlots}${under?' (need '+(h.targetSlots-count)+' more)':''}`:`: ${count} assigned`;
+        return `<span class="tag" style="font-size:12px;${under?'color:var(--warning)':''}${over?'color:var(--danger-text)':''}">${esc(h.name)}${h.yardline?' <span style="color:var(--text3)">('+esc(h.yardline)+' yd)</span>':''}${countPart}</span>`;
       }).join('')}
     </div>`;
 }
@@ -2664,8 +2667,9 @@ function addHalftimeJob(){
   if(AS().halftimeJobs.some(h=>h.name.toLowerCase()===name.toLowerCase())){alert('Already exists.');return;}
   const targetRaw=document.getElementById('ht-target').value;
   const targetSlots=targetRaw!==''?Math.max(0,parseInt(targetRaw)||0):undefined;
-  AS().halftimeJobs.push({id:uid(),name,targetSlots});
-  document.getElementById('ht-name').value='';document.getElementById('ht-target').value='';
+  const yardline=document.getElementById('ht-yardline').value.trim()||undefined;
+  AS().halftimeJobs.push({id:uid(),name,targetSlots,yardline});
+  document.getElementById('ht-name').value='';document.getElementById('ht-target').value='';document.getElementById('ht-yardline').value='';
   save();renderHalftimeTable();
 }
 function removeHalftimeJob(id){
@@ -2680,6 +2684,11 @@ function editHalftimeTarget(id,val){
   h.targetSlots=val!==''?Math.max(0,parseInt(val)||0):undefined;
   save();renderHalftimeTable();
 }
+function editHalftimeYardline(id,val){
+  const h=AS().halftimeJobs.find(h=>h.id===id);if(!h)return;
+  h.yardline=val.trim()||undefined;
+  save();renderHalftimeTable();
+}
 // Counts how many people currently hold a given halftime job for an event — works regardless
 // of which key format the assignment is stored under (Logistics keys by job+volunteer,
 // General keys by volunteer alone), since we're only ever counting the stored VALUES.
@@ -2689,7 +2698,7 @@ function halftimeJobCount(sc,htJobId){
 }
 function renderHalftimeTable(){
   const tb=document.getElementById('ht-body');if(!tb||!AS())return;tb.innerHTML='';
-  if(!AS().halftimeJobs.length){tb.innerHTML='<tr><td colspan="4" style="padding:1rem;font-size:13px;color:var(--text2)">No halftime jobs yet.</td></tr>';return;}
+  if(!AS().halftimeJobs.length){tb.innerHTML='<tr><td colspan="5" style="padding:1rem;font-size:13px;color:var(--text2)">No halftime jobs yet.</td></tr>';return;}
   const sc=activeSched();
   AS().halftimeJobs.forEach(h=>{
     const tr=document.createElement('tr');
@@ -2701,6 +2710,7 @@ function renderHalftimeTable(){
       :'<span style="color:var(--text3)">No event open</span>';
     tr.innerHTML=`
       <td><input class="inline-edit" value="${esc(h.name)}" onblur="editHalftimeField('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><input class="inline-edit" value="${esc(h.yardline||'')}" placeholder="—" onblur="editHalftimeYardline('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
       <td><input class="inline-edit" type="number" min="0" value="${hasTarget?h.targetSlots:''}" placeholder="—" onblur="editHalftimeTarget('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
       <td style="font-size:12px">${assignedCell}</td>
       <td><button class="btn xs danger" onclick="removeHalftimeJob('${h.id}')"><i class="ti ti-trash"></i></button></td>`;
@@ -2981,20 +2991,20 @@ function printSchedule(){
 function printLogisticsSchedule(sc){
   const pv=document.getElementById('print-view');
   let html=`<div style="font-family:Georgia,serif">
-    <h1 style="font-size:16px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h1>
-    <p style="font-size:11px;color:#555;margin-bottom:1px">${fmtDate(sc.date)}</p>
-    <p style="font-size:9px;color:#888;margin-bottom:8px">Logistics Volunteers</p>
-    <div style="column-count:2;column-gap:20px">`;
+    <h1 style="font-size:15px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h1>
+    <p style="font-size:10px;color:#555;margin-bottom:1px">${fmtDate(sc.date)}</p>
+    <p style="font-size:8px;color:#888;margin-bottom:6px">Logistics Volunteers</p>
+    <div style="column-count:2;column-gap:20px;column-fill:auto">`;
   // Top half: job assignments, Lead labeled, no halftime shown here
   const htGroups={};
   eventJobs(sc).forEach(j=>{
     const asgn=(sc.assignments[j.id]||[]);if(!asgn.length)return;
-    html+=`<div style="break-inside:avoid;margin-bottom:9px">
-      <div style="font-weight:600;font-size:10.5px;background:#f1efe8;padding:2px 5px;border-radius:3px;margin-bottom:2px">${esc(j.name)}</div>`;
+    html+=`<div style="break-inside:avoid;margin-bottom:7px">
+      <div style="font-weight:600;font-size:10px;background:#f1efe8;padding:2px 5px;border-radius:3px;margin-bottom:1px">${esc(j.name)}</div>`;
     asgn.forEach((vid,idx)=>{
       const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
       const isLead=idx===0;
-      html+=`<div style="font-size:10px;line-height:1.55;padding-left:2px;${isLead?'color:#8C0A21;font-weight:600':''}">${isLead?'Lead — ':''}${esc(fullName(v))}</div>`;
+      html+=`<div style="font-size:9.5px;line-height:1.4;padding-left:2px;${isLead?'color:#8C0A21;font-weight:600':''}">${isLead?'Lead — ':''}${esc(fullName(v))}</div>`;
       const htId=(sc.halftimeAssignments&&sc.halftimeAssignments[j.id+'_'+vid])||'';
       if(htId)(htGroups[htId]=htGroups[htId]||[]).push(fullName(v));
     });
@@ -3004,19 +3014,19 @@ function printLogisticsSchedule(sc){
   // Bottom half: halftime jobs as headings, with whoever's assigned to each listed underneath
   const htJobsWithPeople=(AS().halftimeJobs||[]).filter(h=>htGroups[h.id]&&htGroups[h.id].length);
   if(htJobsWithPeople.length){
-    html+=`<div style="margin-top:12px;padding-top:8px;border-top:1px solid #ccc">
-      <div style="font-weight:600;font-size:10.5px;letter-spacing:.5px;color:#555;margin-bottom:6px">HALFTIME ASSIGNMENTS</div>
-      <div style="column-count:2;column-gap:20px">`;
+    html+=`<div style="margin-top:8px;padding-top:5px;border-top:1px solid #ccc">
+      <div style="font-weight:600;font-size:10px;letter-spacing:.5px;color:#555;margin-bottom:4px">HALFTIME ASSIGNMENTS</div>
+      <div style="column-count:2;column-gap:20px;column-fill:auto">`;
     htJobsWithPeople.forEach(h=>{
       const names=htGroups[h.id].sort();
-      html+=`<div style="break-inside:avoid;margin-bottom:9px">
-        <div style="font-weight:600;font-size:10.5px;background:#f1efe8;padding:2px 5px;border-radius:3px;margin-bottom:2px">${esc(h.name)}</div>
-        ${names.map(n=>`<div style="font-size:10px;line-height:1.55;padding-left:2px">${esc(n)}</div>`).join('')}
+      html+=`<div style="break-inside:avoid;margin-bottom:7px">
+        <div style="font-weight:600;font-size:10px;background:#f1efe8;padding:2px 5px;border-radius:3px;margin-bottom:1px">${esc(h.name)}${h.yardline?` <span style="font-weight:400;color:#666">— ${esc(h.yardline)} yd line</span>`:''}</div>
+        ${names.map(n=>`<div style="font-size:9.5px;line-height:1.4;padding-left:2px">${esc(n)}</div>`).join('')}
       </div>`;
     });
     html+=`</div></div>`;
   }
-  html+=`<p style="margin-top:10px;font-size:8px;color:#aaa">Printed ${new Date().toLocaleString()}</p></div>`;
+  html+=`<p style="margin-top:6px;font-size:7px;color:#aaa">Printed ${new Date().toLocaleString()}</p></div>`;
   showPrint(pv,html);
 }
 
