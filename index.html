@@ -1389,7 +1389,14 @@ function renderAssign(){
   p.innerHTML=`
     <div class="row" style="justify-content:space-between;margin-bottom:.5rem;flex-wrap:wrap;gap:8px">
       <div>
-        <div style="font-size:16px;font-weight:500">${esc(sc.name)}${_mode==='general'&&sc.eventType==='event'?' <span class="badge purple" style="font-size:10px;vertical-align:middle">Non-Game Event</span>':''}${_mode==='general'&&sc.eventType!=='event'&&sc.gameLocation?` <span class="badge ${sc.gameLocation==='home'?'teal':'blue'}" style="font-size:10px;vertical-align:middle">${sc.gameLocation==='home'?'Home':'Away'}</span>`:''}</div>
+        <div style="font-size:16px;font-weight:500">${esc(sc.name)}${_mode==='general'&&sc.eventType==='event'?' <span class="badge purple" style="font-size:10px;vertical-align:middle">Non-Game Event</span>':''}${_mode==='general'&&sc.eventType!=='event'?(
+          _role==='admin'
+            ? `<select onchange="setGameLocation(this.value)" title="Change whether this is a home or away game" style="font-size:11px;padding:1px 6px;border-radius:999px;border:.5px solid var(--border-med);vertical-align:middle;margin-left:6px;background:var(--surface)">
+                 <option value="away"${sc.gameLocation!=='home'?' selected':''}>Away</option>
+                 <option value="home"${sc.gameLocation==='home'?' selected':''}>Home</option>
+               </select>`
+            : (sc.gameLocation?` <span class="badge ${sc.gameLocation==='home'?'teal':'blue'}" style="font-size:10px;vertical-align:middle">${sc.gameLocation==='home'?'Home':'Away'}</span>`:'')
+        ):''}</div>
         <div style="font-size:12px;color:var(--text2);margin-top:1px">${fmtDate(sc.date)}</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1587,6 +1594,44 @@ async function setAdminTagInMode(mode,eventId,key,shouldBeAdmin){
     try{ await apiCall('save',data,sheetTabFor(mode)); }catch(e){ console.warn('setAdminTagInMode save failed:',e); }
   }
   if(mode===_mode)renderBoard();
+}
+// Sets a single field on a specific event within a specific mode's data — used to keep an
+// event's shared metadata (like Home/Away) in sync across both modules after creation.
+async function setEventFieldInMode(mode,eventId,field,value){
+  let data = mode===_mode ? AS() : (mode==='general'?SG:S);
+  if(!data){
+    if(onHttpsHost()){
+      try{ const r=await apiCall('load',undefined,sheetTabFor(mode)); data=r.data; }catch(e){ console.warn(e); }
+    }
+    if(!data){ try{ data=JSON.parse(localStorage.getItem(cacheKeyFor(mode))||'null'); }catch(e){} }
+    if(!data) return;
+  }
+  const sc=(data.schedules||[]).find(s=>s.id===eventId);
+  if(!sc)return;
+  sc[field]=value;
+  if(mode==='general')SG=data; else S=data;
+  try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
+  if(onHttpsHost()){
+    try{ await apiCall('save',data,sheetTabFor(mode)); }catch(e){ console.warn('setEventFieldInMode save failed:',e); }
+  }
+  if(mode===_mode)renderBoard();
+}
+// Lets an admin change an existing game's Home/Away status after creation. Assignment data
+// itself is never touched or cleared — Home and Away just reuse the same underlying slots
+// (buses vs. march positions) with different labels and a different configured count, so
+// switching only changes how those slots are labeled and how many show up.
+function setGameLocation(loc){
+  const sc=activeSched();if(!sc)return;
+  if(_role!=='admin'){alert('Only an admin can change this.');renderAssign();return;}
+  if(sc.gameLocation===loc)return;
+  const newCount=loc==='home'?(AS().maxMarchPositions||10):(AS().maxBuses||15);
+  const oldCount=busIds(sc).length;
+  let msg=`Change this event to ${loc==='home'?'a Home':'an Away'} game?`;
+  if(newCount<oldCount)msg+=` Note: ${loc==='home'?'march positions':'buses'} are currently capped at ${newCount}, fewer than the ${oldCount} slots shown now — any assignments beyond that won't be visible until you raise the count in Configuration (they aren't deleted).`;
+  if(!confirm(msg)){renderAssign();return;}
+  sc.gameLocation=loc;
+  save();renderAssign();renderSchedules();
+  if(sc.shared)setEventFieldInMode(otherModeOf(_mode),sc.id,'gameLocation',loc);
 }
 function adminAssignmentLabel(sc,v){
   const slotId=Object.keys(sc.assignments||{}).find(sid=>(sc.assignments[sid]||[]).includes(v.id));
