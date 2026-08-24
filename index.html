@@ -2939,31 +2939,21 @@ function printLogisticsSchedule(sc){
     <h1 style="font-size:16px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h1>
     <p style="font-size:11px;color:#555;margin-bottom:1px">${fmtDate(sc.date)}</p>
     <p style="font-size:9px;color:#888;margin-bottom:8px">Logistics Volunteers</p>
-    <div style="column-count:3;column-gap:16px">`;
+    <div style="column-count:2;column-gap:20px">`;
   eventJobs(sc).forEach(j=>{
     const asgn=(sc.assignments[j.id]||[]);if(!asgn.length)return;
-    html+=`<div style="break-inside:avoid;margin-bottom:8px">
-      <div style="font-weight:600;font-size:10px;background:#f1efe8;padding:2px 5px;border-radius:3px;margin-bottom:2px">${esc(j.name)}</div>`;
+    html+=`<div style="break-inside:avoid;margin-bottom:9px">
+      <div style="font-weight:600;font-size:10.5px;background:#f1efe8;padding:2px 5px;border-radius:3px;margin-bottom:2px">${esc(j.name)}</div>`;
     asgn.forEach((vid,idx)=>{
       const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
       const htId=(sc.halftimeAssignments&&sc.halftimeAssignments[vid])||'';
       const htName=htId?(AS().halftimeJobs.find(h=>h.id===htId)||{name:''}).name:'';
       const isLead=idx===0;
-      html+=`<div style="font-size:9.5px;line-height:1.5;padding-left:2px;${isLead?'color:#8C0A21;font-weight:600':''}">${isLead?'★':'#'+(idx+1)} ${esc(fullName(v))}${htName?` <span style="color:#888;font-weight:400">— ${esc(htName)}</span>`:''}</div>`;
+      html+=`<div style="font-size:10px;line-height:1.55;padding-left:2px;${isLead?'color:#8C0A21;font-weight:600':''}">${isLead?'Lead — ':''}${esc(fullName(v))}${htName?` <span style="color:#888;font-weight:400">— Halftime: ${esc(htName)}</span>`:''}</div>`;
     });
     html+=`</div>`;
   });
   html+=`</div>`;
-  const unassigned=scheduleVolunteers(sc).filter(v=>!new Set(Object.values(sc.assignments||{}).flat()).has(v.id));
-  if(unassigned.length)html+=`<div style="margin-top:8px;padding:5px 7px;border:1px dashed #ccc;border-radius:4px;font-size:9.5px;color:#777"><strong style="color:#555">Unassigned:</strong> ${unassigned.map(v=>esc(fullName(v))).join(', ')}</div>`;
-  const adminVols=scheduleVolunteers(sc).filter(v=>isAdminForEvent(sc,v));
-  if(adminVols.length){
-    const names=adminVols.map(v=>{
-      const role=adminAssignmentLabel(sc,v);
-      return role?`${fullName(v)} (${role})`:fullName(v);
-    }).sort();
-    html+=`<div style="margin-top:6px;border:1px solid #ccc;border-radius:4px;padding:5px 7px;font-size:9.5px"><strong style="color:#555;letter-spacing:.5px">ADMIN</strong><br>${names.map(esc).join(', ')}</div>`;
-  }
   html+=`<p style="margin-top:10px;font-size:8px;color:#aaa">Printed ${new Date().toLocaleString()}</p></div>`;
   showPrint(pv,html);
 }
