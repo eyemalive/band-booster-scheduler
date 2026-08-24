@@ -61,10 +61,6 @@
   .sched-card-stats{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
   .sched-card-actions{display:flex;gap:6px;margin-top:10px}
   .pool{display:flex;flex-wrap:wrap;gap:6px;min-height:52px;padding:.75rem;background:var(--surface2);border:.5px dashed var(--border-med);border-radius:var(--radius-lg);margin-bottom:1rem}
-  .roster-col{min-height:120px;max-height:340px;overflow-y:auto;padding:.5rem;background:var(--surface2);border:.5px dashed var(--border-med);border-radius:var(--radius-lg);display:flex;flex-direction:column;gap:5px}
-  .roster-col.drag-over{border-color:var(--blue);background:var(--blue-lt)}
-  .roster-row{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:var(--radius);background:var(--surface);border:.5px solid var(--border);font-size:13px;cursor:grab}
-  .roster-row.dragging{opacity:.35}
   .pool.drag-over{border-color:var(--blue);background:var(--blue-lt)}
   .chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:500;cursor:grab;border:.5px solid var(--border-med);background:var(--surface);color:var(--text);white-space:nowrap;user-select:none;transition:box-shadow .15s}
   .chip:active{cursor:grabbing}
@@ -251,22 +247,14 @@
       <div>
         <label class="lbl">Event type</label>
         <div style="display:flex;gap:16px">
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="ns-event-type" value="game" checked style="width:auto" onchange="toggleNsGameLocationVisibility()"> Game</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="ns-event-type" value="event" style="width:auto" onchange="toggleNsGameLocationVisibility()"> Non-Game Event</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="ns-event-type" value="game" checked style="width:auto"> Game</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="ns-event-type" value="event" style="width:auto"> Non-Game Event</label>
         </div>
         <div style="font-size:11px;color:var(--text2);margin-top:3px">Non-Game Events skip 1st/Halftime/2nd Half in General — just buses, the 4 specialty roles, and your configured non-game job list.</div>
       </div>
-      <div id="ns-game-location-wrap" style="margin-top:.75rem">
-        <label class="lbl">Home or away (General)</label>
-        <div style="display:flex;gap:16px">
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="ns-game-location" value="away" checked style="width:auto"> Away</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="ns-game-location" value="home" style="width:auto"> Home</label>
-        </div>
-        <div style="font-size:11px;color:var(--text2);margin-top:3px">Away games use bus assignments. Home games skip buses entirely and use stadium march positions instead.</div>
-      </div>
       <div style="border-top:.5px solid var(--border);margin-top:1rem;padding-top:.85rem">
         <label class="lbl">Bulk import events from CSV</label>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:.5rem">First row is headers. Two columns: <strong>Name, Date</strong> (date format YYYY-MM-DD). Imported this way are always created as Away Game events.</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:.5rem">First row is headers. Two columns: <strong>Name, Date</strong> (date format YYYY-MM-DD). Imported this way are always created as Game events.</div>
         <input type="file" id="event-csv-file" accept=".csv" onchange="importEventsCSV(event)" style="width:220px;font-size:12px">
         <div id="event-import-result" style="font-size:12px;margin-top:.5rem"></div>
       </div>
@@ -315,10 +303,6 @@
 
   <!-- VOLUNTEERS -->
   <div class="panel" id="panel-volunteers">
-    <div class="card" id="weekly-roster-card">
-      <div id="weekly-roster-header"></div>
-      <div id="weekly-roster-body"></div>
-    </div>
     <div class="card">
       <div style="font-size:15px;font-weight:500;margin-bottom:3px">CSV import — assign to a schedule</div>
       <div id="csv-description" style="font-size:12px;color:var(--text2);margin-bottom:.75rem"></div>
@@ -404,15 +388,11 @@
     <!-- GENERAL MODE ONLY: Bus count + half-time job list -->
     <div class="general-only-config">
       <div class="card" style="margin-top:1.5rem">
-        <div style="font-size:15px;font-weight:500;margin-bottom:.25rem"><i class="ti ti-bus" style="font-size:14px"></i> Away game buses / Home game march positions</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Away games use the bus dropdown; Home games use stadium march positions instead — no bus assignments. Each has its own count.</div>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:.6rem">
-          <label class="lbl" style="margin-bottom:0;white-space:nowrap">Max buses, Away games (1–30):</label>
-          <input type="number" id="max-buses-input" min="1" max="30" style="width:80px" onchange="saveMaxBuses(this.value)">
-        </div>
+        <div style="font-size:15px;font-weight:500;margin-bottom:.25rem"><i class="ti ti-bus" style="font-size:14px"></i> Bus configuration</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Sets the number of buses available in the bus dropdown when assigning volunteers.</div>
         <div style="display:flex;align-items:center;gap:10px">
-          <label class="lbl" style="margin-bottom:0;white-space:nowrap">Max march positions, Home games (1–30):</label>
-          <input type="number" id="max-march-positions-input" min="1" max="30" style="width:80px" onchange="saveMaxMarchPositions(this.value)">
+          <label class="lbl" style="margin-bottom:0;white-space:nowrap">Max buses (1–30):</label>
+          <input type="number" id="max-buses-input" min="1" max="30" style="width:80px" onchange="saveMaxBuses(this.value)">
         </div>
       </div>
       <div class="card" style="margin-top:1rem">
@@ -655,8 +635,8 @@ function applyMode(mode){
   // Password card — only admin
   document.querySelectorAll('.pw-admin-only').forEach(el => el.style.display = _role==='admin' ? '' : 'none');
 
-  // Config tab — admin only
-  document.querySelectorAll('.config-tab').forEach(t => t.style.display = _role==='admin' ? '' : 'none');
+  // CSS for config tab — visible to all roles
+  document.querySelectorAll('.config-tab').forEach(t => t.style.display = '');
 
   // Subtitle
   document.getElementById('app-subtitle').textContent =
@@ -1028,7 +1008,6 @@ function defaultState(mode){
     ],
     // General mode extras
     maxBuses: isGeneral ? 15 : undefined,
-    maxMarchPositions: isGeneral ? 10 : undefined,
     halfJobs: isGeneral ? [
       {id:'hj1',name:"Women's Restroom"},
       {id:'hj2',name:"Men's Restroom"},
@@ -1117,7 +1096,6 @@ function migrateGeneralBusJobs(data,mode){
     if(data.halftimeJobs.length!==before)changed=true;
   }
   if(data.maxBuses===undefined){data.maxBuses=15;changed=true;}
-  if(data.maxMarchPositions===undefined){data.maxMarchPositions=10;changed=true;}
   if(!data.halfJobs||!data.halfJobs.length){
     data.halfJobs=[{id:uid(),name:"Women's Restroom"},{id:uid(),name:"Men's Restroom"},{id:uid(),name:'Concourse'},{id:uid(),name:'Float'}];
     changed=true;
@@ -1191,14 +1169,9 @@ function createSchedule(){
   if(!date){alert('Event date required.');return;}
   const typeInput=document.querySelector('input[name="ns-event-type"]:checked');
   const eventType=typeInput?typeInput.value:'game';
-  const locInput=document.querySelector('input[name="ns-game-location"]:checked');
-  const gameLocation=eventType==='game'?(locInput?locInput.value:'away'):undefined;
   document.getElementById('ns-name').value='';document.getElementById('ns-date').value='';
   const defaultTypeInput=document.querySelector('input[name="ns-event-type"][value="game"]');
   if(defaultTypeInput)defaultTypeInput.checked=true;
-  const defaultLocInput=document.querySelector('input[name="ns-game-location"][value="away"]');
-  if(defaultLocInput)defaultLocInput.checked=true;
-  toggleNsGameLocationVisibility();
 
   // Shared event — visible in both Logistics and General
   const id=uid();
@@ -1206,15 +1179,10 @@ function createSchedule(){
   EVENTS.push({id,name,date});
   EVENTS.sort((a,b)=>a.date.localeCompare(b.date));
   saveEvents();
-  const shell={id,name,date,eventType,gameLocation};
+  const shell={id,name,date,eventType};
   pushEventShellToMode('logistics',shell);
   pushEventShellToMode('general',shell);
   renderSchedules();
-}
-function toggleNsGameLocationVisibility(){
-  const typeInput=document.querySelector('input[name="ns-event-type"]:checked');
-  const wrap=document.getElementById('ns-game-location-wrap');
-  if(wrap)wrap.style.display=(typeInput&&typeInput.value==='game')?'':'none';
 }
 async function pushEventShellsToMode(mode,shells){
   const target = mode==='general'?SG:S;
@@ -1259,16 +1227,17 @@ function importEventsCSV(e){
   resultEl.innerHTML='<span style="color:var(--text2)">Checking against the latest event list…</span>';
   const reader=new FileReader();
   reader.onload=async ev=>{
-    const allRows=parseCSVFile(ev.target.result);
-    if(allRows.length<2){resultEl.innerHTML='<span style="color:var(--danger-text)">File has no data rows.</span>';try{e.target.value='';}catch(_){}
+    const lines=ev.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
+    if(lines.length<2){resultEl.innerHTML='<span style="color:var(--danger-text)">File has no data rows.</span>';try{e.target.value='';}catch(_){}
       return;}
-    const dataRows=allRows.slice(1); // skip header row
+    const dataLines=lines.slice(1); // skip header row
     const dateRe=/^\d{4}-\d{2}-\d{2}$/;
     // Always check against the freshest possible event list, not whatever this browser
     // happened to have cached — avoids false "duplicate" results after a recent delete.
     await refreshEvents();
     const shells=[];let missingData=0,badDate=0,duplicate=0;
-    dataRows.forEach(cols=>{
+    dataLines.forEach(line=>{
+      const cols=parseCSVLine(line);
       const name=(cols[0]||'').trim();
       const date=(cols[1]||'').trim();
       if(!name){missingData++;return;}
@@ -1349,7 +1318,9 @@ function renderSchedules(){
     const d=new Date(sc.date+'T00:00:00');
     const dateLabel=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
     const assigned=new Set(Object.values(sc.assignments||{}).flat());
-    const schedVols=scheduleVolunteers(sc);
+    const schedVols=sc.activeVolunteerIds&&sc.activeVolunteerIds.length
+      ?sc.activeVolunteerIds.map(id=>AS().volunteers.find(v=>v.id===id)).filter(Boolean)
+      :AS().volunteers.filter(v=>v.active);
     const emptyJobs=eventJobs(sc).filter(j=>!jobHasAnyoneAssigned(sc,j)).length;
     const isThisWeek=sc.id===thisWeekSchedId;
     const canDelete=!sc.shared||_role==='admin';
@@ -1359,7 +1330,7 @@ function renderSchedules(){
     div.innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
-          <div class="sched-card-name">${esc(sc.name)}${sc.shared?' <span class="badge purple" style="font-size:10px;vertical-align:middle" title="Shared with the other module">Shared</span>':''}${sc.eventType==='event'?' <span class="badge blue" style="font-size:10px;vertical-align:middle" title="Skips 1st/Halftime/2nd Half in General">Non-Game</span>':''}${sc.eventType!=='event'&&sc.gameLocation==='home'?' <span class="badge teal" style="font-size:10px;vertical-align:middle" title="No bus assignments — uses stadium march positions in General">Home</span>':''}${sc.eventType!=='event'&&sc.gameLocation&&sc.gameLocation!=='home'?' <span class="badge blue" style="font-size:10px;vertical-align:middle" title="Uses bus assignments in General">Away</span>':''}</div>
+          <div class="sched-card-name">${esc(sc.name)}${sc.shared?' <span class="badge purple" style="font-size:10px;vertical-align:middle" title="Shared with the other module">Shared</span>':''}${sc.eventType==='event'?' <span class="badge blue" style="font-size:10px;vertical-align:middle" title="Skips 1st/Halftime/2nd Half in General">Non-Game</span>':''}</div>
           <div class="sched-card-date"><i class="ti ti-calendar" style="font-size:11px"></i> ${dateLabel}</div>
         </div>
         ${isPast?'<span class="badge gray">Past</span>':isThisWeek?'<span class="badge teal">Next Event</span>':''}
@@ -1389,14 +1360,7 @@ function renderAssign(){
   p.innerHTML=`
     <div class="row" style="justify-content:space-between;margin-bottom:.5rem;flex-wrap:wrap;gap:8px">
       <div>
-        <div style="font-size:16px;font-weight:500">${esc(sc.name)}${_mode==='general'&&sc.eventType==='event'?' <span class="badge purple" style="font-size:10px;vertical-align:middle">Non-Game Event</span>':''}${_mode==='general'&&sc.eventType!=='event'?(
-          _role==='admin'
-            ? `<select onchange="setGameLocation(this.value)" title="Change whether this is a home or away game" style="font-size:11px;padding:1px 6px;border-radius:999px;border:.5px solid var(--border-med);vertical-align:middle;margin-left:6px;background:var(--surface)">
-                 <option value="away"${sc.gameLocation!=='home'?' selected':''}>Away</option>
-                 <option value="home"${sc.gameLocation==='home'?' selected':''}>Home</option>
-               </select>`
-            : (sc.gameLocation?` <span class="badge ${sc.gameLocation==='home'?'teal':'blue'}" style="font-size:10px;vertical-align:middle">${sc.gameLocation==='home'?'Home':'Away'}</span>`:'')
-        ):''}</div>
+        <div style="font-size:16px;font-weight:500">${esc(sc.name)}${_mode==='general'&&sc.eventType==='event'?' <span class="badge purple" style="font-size:10px;vertical-align:middle">Non-Game Event</span>':''}</div>
         <div style="font-size:12px;color:var(--text2);margin-top:1px">${fmtDate(sc.date)}</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1437,7 +1401,7 @@ function renderAssign(){
       </div>
     </details>
     ${_mode==='general'?`<div class="row" style="gap:8px;align-items:center;margin-bottom:.75rem">
-      <label class="lbl" style="margin-bottom:0">${sc.gameLocation==='home'?'Volunteers per march position for this event:':'Seats per bus for this event:'}</label>
+      <label class="lbl" style="margin-bottom:0">Seats per bus for this event:</label>
       <input type="number" id="bus-slot-count-input" min="1" max="12" value="${busSlotsFor(sc)}" style="width:70px" onchange="setBusSlotCount(this.value)">
       <span style="font-size:11px;color:var(--text2)">Applies only to ${esc(sc.name)} — other events keep their own setting.</span>
     </div>`:''}
@@ -1595,58 +1559,17 @@ async function setAdminTagInMode(mode,eventId,key,shouldBeAdmin){
   }
   if(mode===_mode)renderBoard();
 }
-// Sets a single field on a specific event within a specific mode's data — used to keep an
-// event's shared metadata (like Home/Away) in sync across both modules after creation.
-async function setEventFieldInMode(mode,eventId,field,value){
-  let data = mode===_mode ? AS() : (mode==='general'?SG:S);
-  if(!data){
-    if(onHttpsHost()){
-      try{ const r=await apiCall('load',undefined,sheetTabFor(mode)); data=r.data; }catch(e){ console.warn(e); }
-    }
-    if(!data){ try{ data=JSON.parse(localStorage.getItem(cacheKeyFor(mode))||'null'); }catch(e){} }
-    if(!data) return;
-  }
-  const sc=(data.schedules||[]).find(s=>s.id===eventId);
-  if(!sc)return;
-  sc[field]=value;
-  if(mode==='general')SG=data; else S=data;
-  try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
-  if(onHttpsHost()){
-    try{ await apiCall('save',data,sheetTabFor(mode)); }catch(e){ console.warn('setEventFieldInMode save failed:',e); }
-  }
-  if(mode===_mode)renderBoard();
-}
-// Lets an admin change an existing game's Home/Away status after creation. Assignment data
-// itself is never touched or cleared — Home and Away just reuse the same underlying slots
-// (buses vs. march positions) with different labels and a different configured count, so
-// switching only changes how those slots are labeled and how many show up.
-function setGameLocation(loc){
-  const sc=activeSched();if(!sc)return;
-  if(_role!=='admin'){alert('Only an admin can change this.');renderAssign();return;}
-  if(sc.gameLocation===loc)return;
-  const newCount=loc==='home'?(AS().maxMarchPositions||10):(AS().maxBuses||15);
-  const oldCount=busIds(sc).length;
-  let msg=`Change this event to ${loc==='home'?'a Home':'an Away'} game?`;
-  if(newCount<oldCount)msg+=` Note: ${loc==='home'?'march positions':'buses'} are currently capped at ${newCount}, fewer than the ${oldCount} slots shown now — any assignments beyond that won't be visible until you raise the count in Configuration (they aren't deleted).`;
-  if(!confirm(msg)){renderAssign();return;}
-  sc.gameLocation=loc;
-  save();renderAssign();renderSchedules();
-  if(sc.shared)setEventFieldInMode(otherModeOf(_mode),sc.id,'gameLocation',loc);
-}
 function adminAssignmentLabel(sc,v){
   const slotId=Object.keys(sc.assignments||{}).find(sid=>(sc.assignments[sid]||[]).includes(v.id));
   if(!slotId)return '';
-  if(slotId.indexOf('bus')===0)return busLabelFromId(slotId,sc);
+  if(slotId.indexOf('bus')===0)return busLabelFromId(slotId);
   const j=eventJobs(sc).find(j=>j.id===slotId);
   return j?j.name:'';
 }
 function otherModeOf(mode){ return mode==='general'?'logistics':'general'; }
-// Bus helpers (General mode). For a Home game, the same slot mechanism is repurposed as
-// "stadium march positions" instead of buses — no travel, so a different configured count
-// and a different label, but otherwise identical underlying data/drag-and-drop.
-function isHomeGame(sc){ return sc&&sc.gameLocation==='home'; }
-function busIds(sc){ const n=isHomeGame(sc)?((AS()&&AS().maxMarchPositions)||10):((AS()&&AS().maxBuses)||15); return Array.from({length:n},(_,i)=>'bus'+(i+1)); }
-function busLabelFromId(bid,sc){ return (isHomeGame(sc)?'Position ':'Bus ')+String(bid).replace('bus',''); }
+// Bus helpers (General mode)
+function busIds(){ const n=(AS()&&AS().maxBuses)||15; return Array.from({length:n},(_,i)=>'bus'+(i+1)); }
+function busLabelFromId(bid){ return 'Bus '+String(bid).replace('bus',''); }
 function busDirectVols(sc,bid){ return (sc.assignments&&sc.assignments[bid])||[]; }
 function busIndirectVols(sc,bid){ const via=sc.busViaSpecial||{}; return Object.keys(via).filter(vid=>via[vid]===bid); }
 function busEffectiveCount(sc,bid){ return busDirectVols(sc,bid).length + busIndirectVols(sc,bid).length; }
@@ -1656,7 +1579,7 @@ function busIsFull(sc,bid,excludeVid){
   return busDirectVols(sc,bid).length+indirect.length>=busSlotsFor(sc);
 }
 function getVolunteerBus(sc,vid){
-  for(const bid of busIds(sc)){ if(busDirectVols(sc,bid).includes(vid))return bid; }
+  for(const bid of busIds()){ if(busDirectVols(sc,bid).includes(vid))return bid; }
   if(sc.busViaSpecial&&sc.busViaSpecial[vid])return sc.busViaSpecial[vid];
   return null;
 }
@@ -1772,20 +1695,17 @@ function setBusSlotCount(val){
   const sc=activeSched();if(!sc)return;
   const n=parseInt(val);
   if(isNaN(n)||n<1||n>12){alert('Enter a number between 1 and 12.');renderAssign();return;}
-  const maxOccupancy=Math.max(0,...busIds(sc).map(bid=>busEffectiveCount(sc,bid)));
-  const label=isHomeGame(sc)?'position':'bus';
-  if(n<maxOccupancy&&!confirm(`At least one ${label} currently has ${maxOccupancy} people assigned — more than ${n}. Existing assignments won't be removed, but no new people can be added to that ${label} until you free up space. Continue?`)){
+  const maxOccupancy=Math.max(0,...busIds().map(bid=>busEffectiveCount(sc,bid)));
+  if(n<maxOccupancy&&!confirm(`At least one bus currently has ${maxOccupancy} people assigned — more than ${n}. Existing assignments won't be removed, but no new people can be added to that bus until you free up space. Continue?`)){
     renderAssign();return;
   }
   sc.busSlotCount=n;
   save();renderBoard();
 }
-// A schedule's assignable roster is strictly whoever was explicitly added to it (via CSV
-// import or the manual Add button) — never a fallback to "everyone active in the master
-// roster," which would leak people imported for one event into every other event that
-// hasn't had its own roster set yet.
 function scheduleVolunteers(sc){
-  return (sc.activeVolunteerIds||[]).map(id=>AS().volunteers.find(v=>v.id===id)).filter(Boolean);
+  if(sc.activeVolunteerIds&&sc.activeVolunteerIds.length)
+    return sc.activeVolunteerIds.map(id=>AS().volunteers.find(v=>v.id===id)).filter(Boolean);
+  return AS().volunteers.filter(v=>v.active);
 }
 // Same roster, but excludes deactivated volunteers — used anywhere we're deciding who's
 // eligible to be newly picked up (pool, Auto-assign, Copy from previous event). Someone
@@ -1830,8 +1750,8 @@ function renderJobSlots(){
       let busSelectHtml='';
       if(isGen){
         const curBus=(sc.busViaSpecial&&sc.busViaSpecial[v.id])||'';
-        const availBuses=busIds(sc).filter(bid=>!busIsFull(sc,bid,v.id));
-        const busOptsHtml='<option value="">— assign bus —</option>'+availBuses.map(bid=>`<option value="${bid}"${bid===curBus?' selected':''}>${busLabelFromId(bid,sc)}</option>`).join('');
+        const availBuses=busIds().filter(bid=>!busIsFull(sc,bid,v.id));
+        const busOptsHtml='<option value="">— assign bus —</option>'+availBuses.map(bid=>`<option value="${bid}"${bid===curBus?' selected':''}>${busLabelFromId(bid)}</option>`).join('');
         busSelectHtml=`<select class="pos-ht-select" style="max-width:110px" onchange="setSpecialBusAssign('${v.id}',this.value)" title="Assign to bus">${busOptsHtml}</select>`;
       }
       const row=document.createElement('div');
@@ -1867,7 +1787,7 @@ function renderJobSlots(){
 
   // General mode: buses render as cards in the same board, right alongside jobs
   if(isGen){
-    busIds(sc).forEach(bid=>{
+    busIds().forEach(bid=>{
       const direct=busDirectVols(sc,bid);
       const indirect=busIndirectVols(sc,bid);
       const directSet=new Set(direct);
@@ -1883,7 +1803,7 @@ function renderJobSlots(){
         const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
         const isDirect=directSet.has(vid);
         const isBagVolunteer=idx===0;
-        const bagBadge=(isBagVolunteer&&!isHomeGame(sc))?' <span class="badge teal" style="font-size:9px;padding:0 4px;vertical-align:1px" title="Responsible for the bus bag during travel"><i class="ti ti-briefcase" style="font-size:9px"></i> Bus Bag</span>':'';
+        const bagBadge=isBagVolunteer?' <span class="badge teal" style="font-size:9px;padding:0 4px;vertical-align:1px" title="Responsible for the bus bag during travel"><i class="ti ti-briefcase" style="font-size:9px"></i> Bus Bag</span>':'';
         const row=document.createElement('div');row.draggable=true;row.dataset.insert=idx;
         if(isDirect){
           let jobSelectHtml='';
@@ -1921,7 +1841,7 @@ function renderJobSlots(){
         empty.addEventListener('drop',e=>drop(e,bid,i));
         posWrap.appendChild(empty);
       }
-      slot.innerHTML=`<div class="slot-header"><span class="slot-title"><i class="ti ti-${isHomeGame(sc)?'map-pin':'bus'}" style="font-size:12px"></i> ${busLabelFromId(bid,sc)}</span>${badge}</div>`;
+      slot.innerHTML=`<div class="slot-header"><span class="slot-title"><i class="ti ti-bus" style="font-size:12px"></i> ${busLabelFromId(bid)}</span>${badge}</div>`;
       slot.appendChild(posWrap);
       slot.addEventListener('dragover',e=>{if(e.target===slot||e.target.classList.contains('slot-header')||e.target.classList.contains('slot-title'))dragOver(e,bid,null);});
       slot.addEventListener('drop',e=>{if(e.target===slot||e.target.classList.contains('slot-header')||e.target.classList.contains('slot-title'))drop(e,bid,null);});
@@ -2000,7 +1920,7 @@ function copyFromPreviousEventLogistics(sc,prev){
 function copyFromPreviousEventGeneral(sc,prev){
   const currentRoster=new Set(activeScheduleVolunteers(sc).map(v=>v.id));
   const alreadyAssigned=new Set(Object.values(sc.assignments||{}).flat());
-  const validSlotIds=new Set([...eventJobs(sc).map(j=>j.id),...busIds(sc)]);
+  const validSlotIds=new Set([...eventJobs(sc).map(j=>j.id),...busIds()]);
   function slotCapacity(id){ return id.indexOf('bus')===0?busSlotsFor(sc):(eventJobs(sc).find(j=>j.id===id)||{}).slots; }
   let copied=0;
   Object.entries(prev.assignments||{}).forEach(([slotId,volIds])=>{
@@ -2067,7 +1987,7 @@ function autoAssign(){
   // starting from zero catch up before anyone gets a second person. After that, fill normally,
   // wrapping back to bus 1 for further passes if there are still people left over.
   if(_mode==='general'&&pool.length){
-    const buses=busIds(sc);
+    const buses=busIds();
     for(const bid of buses){
       if(!pool.length)break;
       if(busEffectiveCount(sc,bid)===0){
@@ -2146,69 +2066,8 @@ function deleteAllVolunteers(){
 }
 function toggleActive(id,val){const v=AS().volunteers.find(v=>v.id===id);if(v){v.active=val;save();renderVolunteers();}}
 function editVolField(id,field,val){const v=AS().volunteers.find(v=>v.id===id);if(v&&val.trim()){v[field]=val.trim();save();}}
-let _rosterDragVid=null,_rosterDragFrom=null;
-function renderWeeklyRosterCard(){
-  const header=document.getElementById('weekly-roster-header');
-  const body=document.getElementById('weekly-roster-body');
-  if(!header||!body||!AS())return;
-  const sc=activeSched();
-  if(!sc){
-    header.innerHTML=`<div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Weekly roster</div>`;
-    body.innerHTML=`<div style="font-size:13px;color:var(--text2);padding:.5rem 0">No event open. Open one from <strong>Schedules</strong> to manage its roster here.</div>`;
-    return;
-  }
-  header.innerHTML=`<div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Weekly roster — ${esc(sc.name)}</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">${fmtDate(sc.date)} — drag volunteers between the columns to add or remove them from this event's roster.</div>`;
-
-  const activeIds=new Set(sc.activeVolunteerIds||[]);
-  const signedUp=(sc.activeVolunteerIds||[]).map(id=>AS().volunteers.find(v=>v.id===id)).filter(Boolean).sort((a,b)=>a.lname.localeCompare(b.lname));
-  const available=AS().volunteers.filter(v=>v.active&&!activeIds.has(v.id)).sort((a,b)=>a.lname.localeCompare(b.lname));
-
-  function makeRow(v,col){
-    const row=document.createElement('div');
-    row.className='roster-row';row.draggable=true;
-    const inactiveTag=!v.active?' <span style="color:var(--text3);font-size:11px">(inactive)</span>':'';
-    row.innerHTML=`<i class="ti ti-grip-vertical" style="font-size:12px;color:var(--text3)"></i><span>${esc(fullName(v))}${inactiveTag}</span>`;
-    row.addEventListener('dragstart',e=>{_rosterDragVid=v.id;_rosterDragFrom=col;e.dataTransfer.effectAllowed='move';setTimeout(()=>row.classList.add('dragging'),0);});
-    row.addEventListener('dragend',()=>row.classList.remove('dragging'));
-    return row;
-  }
-
-  const signedUpCol=document.createElement('div');signedUpCol.className='roster-col';
-  signedUp.forEach(v=>signedUpCol.appendChild(makeRow(v,'signedup')));
-  if(!signedUp.length)signedUpCol.innerHTML='<div style="font-size:12px;color:var(--text3);padding:.5rem">Nobody signed up yet — drag from the right, or import a CSV.</div>';
-
-  const availableCol=document.createElement('div');availableCol.className='roster-col';
-  available.forEach(v=>availableCol.appendChild(makeRow(v,'available')));
-  if(!available.length)availableCol.innerHTML='<div style="font-size:12px;color:var(--text3);padding:.5rem">Everyone active is already signed up.</div>';
-
-  [[signedUpCol,'signedup'],[availableCol,'available']].forEach(([col,target])=>{
-    col.addEventListener('dragover',e=>{e.preventDefault();col.classList.add('drag-over');});
-    col.addEventListener('dragleave',e=>{if(!col.contains(e.relatedTarget))col.classList.remove('drag-over');});
-    col.addEventListener('drop',e=>{
-      e.preventDefault();col.classList.remove('drag-over');
-      const vid=_rosterDragVid,from=_rosterDragFrom;_rosterDragVid=null;_rosterDragFrom=null;
-      if(!vid||from===target)return;
-      if(target==='signedup')addVolunteerToRoster(vid);
-      else removeVolunteerFromRoster(vid);
-    });
-  });
-
-  body.innerHTML='';
-  const grid=document.createElement('div');
-  grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:12px';
-  const leftWrap=document.createElement('div');
-  leftWrap.innerHTML=`<div style="font-size:13px;font-weight:500;margin-bottom:.4rem">Signed up (${signedUp.length})</div>`;
-  leftWrap.appendChild(signedUpCol);
-  const rightWrap=document.createElement('div');
-  rightWrap.innerHTML=`<div style="font-size:13px;font-weight:500;margin-bottom:.4rem">Active, not signed up (${available.length})</div>`;
-  rightWrap.appendChild(availableCol);
-  grid.appendChild(leftWrap);grid.appendChild(rightWrap);
-  body.appendChild(grid);
-}
 function renderVolunteers(){
   const tbody=document.getElementById('vol-body');if(!tbody||!AS())return;tbody.innerHTML='';
-  renderWeeklyRosterCard();
   const showInactive=document.getElementById('show-inactive').checked;
   const q=(document.getElementById('v-search').value||'').toLowerCase();
   const sc=activeSched();
@@ -2237,27 +2096,10 @@ function renderVolunteers(){
 }
 
 /* ── CSV IMPORT ── */
-// Parses an entire CSV file's text into rows of fields, correctly handling quoted fields that
-// contain embedded commas OR embedded newlines (a normal, valid CSV construct many exports use
-// for multi-line description fields) — a naive split on "\n" before parsing breaks those rows.
-function parseCSVFile(text){
-  const rows=[];let row=[];let field='';let inQuotes=false;
-  for(let i=0;i<text.length;i++){
-    const ch=text[i];
-    if(inQuotes){
-      if(ch==='"'){
-        if(text[i+1]==='"'){ field+='"'; i++; } else { inQuotes=false; }
-      } else field+=ch;
-    } else {
-      if(ch==='"') inQuotes=true;
-      else if(ch===','){ row.push(field.trim()); field=''; }
-      else if(ch==='\r'){ /* skip — \n (or standalone \r) below ends the row */ }
-      else if(ch==='\n'){ row.push(field.trim()); field=''; rows.push(row); row=[]; }
-      else field+=ch;
-    }
-  }
-  if(field.length||row.length){ row.push(field.trim()); rows.push(row); }
-  return rows.filter(r=>!(r.length===1&&r[0]===''));
+function parseCSVLine(line){
+  const cols=[];let cur='',inQ=false;
+  for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){cols.push(cur.trim());cur='';}else cur+=ch;}
+  cols.push(cur.trim());return cols;
 }
 // Lowercases, trims, and collapses internal whitespace so minor export inconsistencies
 // (double spaces, trailing spaces) don't break category matching.
@@ -2269,11 +2111,12 @@ function importCSV(e){
   const file=e.target.files[0];if(!file)return;
   const reader=new FileReader();
   reader.onload=ev=>{
-    const allRows=parseCSVFile(ev.target.result);
-    if(allRows.length<2){document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">File has too few rows.</span>';return;}
-    const dataRows=allRows.slice(1); // skip header row only — no footer row in real exports
+    const allLines=ev.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
+    if(allLines.length<2){document.getElementById('import-result').innerHTML='<span style="color:var(--danger-text)">File has too few lines.</span>';return;}
+    const dataLines=allLines.slice(1); // skip header row only — no footer row in real exports
     _csvParsedLogistics=[];_csvParsedGeneral=[];_csvParsedAdmin=[];
-    dataRows.forEach(cols=>{
+    dataLines.forEach(line=>{
+      const cols=parseCSVLine(line);
       const cat=normalizeCategory(cols[35]);
       const role=classifyCategory(cat);
       if(!role)return;
@@ -2473,8 +2316,6 @@ function renderGeneralOnlyConfig(){
   if(!isGen||!AS())return;
   const inp=document.getElementById('max-buses-input');
   if(inp)inp.value=AS().maxBuses||15;
-  const inp2=document.getElementById('max-march-positions-input');
-  if(inp2)inp2.value=AS().maxMarchPositions||10;
   renderHalfJobsTable();
   renderNonGameJobsTable();
 }
@@ -2693,10 +2534,6 @@ function saveMaxBuses(val){
   const n=parseInt(val);if(isNaN(n)||n<1||n>30)return;
   AS().maxBuses=n;save();
 }
-function saveMaxMarchPositions(val){
-  const n=parseInt(val);if(isNaN(n)||n<1||n>30)return;
-  AS().maxMarchPositions=n;save();
-}
 function addHalfJob(){
   const name=document.getElementById('hj-name').value.trim();if(!name){alert('Name required.');return;}
   AS().halfJobs=AS().halfJobs||[];
@@ -2766,7 +2603,7 @@ function renderGeneralVolTable(){
     const h2Sel=halfOpts.replace(`value="${h2Val}"`,`value="${h2Val}" selected`);
     rows+=`<tr>
       <td style="font-size:13px;font-weight:500;white-space:nowrap">${esc(fullName(v))}</td>
-      <td style="font-size:12px;color:${bus?'var(--text)':'var(--text3)'}">${bus?busLabelFromId(bus,sc):'— unassigned —'}</td>
+      <td style="font-size:12px;color:${bus?'var(--text)':'var(--text3)'}">${bus?busLabelFromId(bus):'— unassigned —'}</td>
       <td><select class="pos-ht-select" style="width:100%" onchange="setGenAssign('${v.id}','h1',this.value)">${h1Sel}</select></td>
       <td><select class="pos-ht-select" style="width:100%" onchange="setGenAssign('${v.id}','ht',this.value)">${htSel}</select></td>
       <td><select class="pos-ht-select" style="width:100%" onchange="setGenAssign('${v.id}','h2',this.value)">${h2Sel}</select></td>
@@ -2919,7 +2756,7 @@ function printGeneralSchedule(sc){
   });
   const volunteerLines=withBus.map(({v,bus})=>{
     const isBagVolunteer=getBusDisplayOrder(sc,bus)[0]===v.id;
-    return `${fullName(v)} - ${busLabelFromId(bus,sc)}${isBagVolunteer&&!isHomeGame(sc)?' (Bus Bag)':''}`;
+    return `${fullName(v)} - ${busLabelFromId(bus)}${isBagVolunteer?' (Bus Bag)':''}`;
   });
 
   const halfJobs=AS().halfJobs||[];
@@ -2974,14 +2811,13 @@ function printGeneralSchedule(sc){
   }).sort();
 
   const isNonGame=sc.eventType==='event';
-  const colHeaderLabel=isHomeGame(sc)?'STADIUM POSITIONS':'BUS ASSIGNMENTS';
   let html=`<div style="font-family:Georgia,serif">
     <h1 style="font-size:18px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h1>
     <p style="font-size:13px;color:#555;margin-bottom:2px">${fmtDate(sc.date)}</p>
-    <p style="font-size:11px;color:#888;margin-bottom:12px">General Volunteers${isNonGame?' — Non-Game Event':sc.gameLocation?' — '+(sc.gameLocation==='home'?'Home':'Away')+' Game':''}</p>
+    <p style="font-size:11px;color:#888;margin-bottom:12px">General Volunteers${isNonGame?' — Non-Game Event':''}</p>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="background:#f1efe8;border-bottom:1.5px solid #ccc">
-        <th style="text-align:left;padding:6px 8px;font-weight:600;width:${isNonGame?'34':'26'}%;vertical-align:top">${colHeaderLabel}</th>
+        <th style="text-align:left;padding:6px 8px;font-weight:600;width:${isNonGame?'34':'26'}%;vertical-align:top">BUS ASSIGNMENTS</th>
         ${isNonGame?`<th style="text-align:left;padding:6px 8px;font-weight:600;width:36%;vertical-align:top">JOB ASSIGNMENTS</th>`:`<th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">1st Half</th>
         <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">Halftime</th>
         <th style="text-align:left;padding:6px 8px;font-weight:600;width:19%;vertical-align:top">2nd Half</th>`}
@@ -3080,11 +2916,7 @@ function addVolunteerToRoster(vid){
 }
 function removeVolunteerFromRoster(vid){
   const sc=activeSched();if(!sc)return;
-  const hasAssignment=Object.values(sc.assignments||{}).flat().includes(vid)
-    ||(sc.firstHalfAssignments&&sc.firstHalfAssignments[vid])
-    ||(sc.halftimeAssignments&&sc.halftimeAssignments[vid])
-    ||(sc.secondHalfAssignments&&sc.secondHalfAssignments[vid]);
-  if(hasAssignment&&!confirm("Remove from this week's roster? This also clears any job, bus, or halftime assignment they have for this event."))return;
+  if(!confirm("Remove from this week's roster? This also clears any job, bus, or halftime assignment they have for this event."))return;
   sc.activeVolunteerIds=(sc.activeVolunteerIds||[]).filter(id=>id!==vid);
   Object.keys(sc.assignments||{}).forEach(jid=>{sc.assignments[jid]=(sc.assignments[jid]||[]).filter(id=>id!==vid);});
   if(sc.halftimeAssignments)Object.keys(sc.halftimeAssignments).forEach(k=>{if(k===vid||k.endsWith('_'+vid))delete sc.halftimeAssignments[k];});
