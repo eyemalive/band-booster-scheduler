@@ -2991,18 +2991,28 @@ function renderGeneralVolTable(){
     const h1Sel=halfOpts.replace(`value="${h1Val}"`,`value="${h1Val}" selected`);
     const htSel=htOpts.replace(`value="${htVal}"`,`value="${htVal}" selected`);
     const h2Sel=halfOpts.replace(`value="${h2Val}"`,`value="${h2Val}" selected`);
-    rows+=`<tr>
-      <td style="font-size:13px;font-weight:500;white-space:nowrap">${esc(fullName(v))}</td>
+    // Fairness flag: this volunteer is here (has a bus/job/half already), but has neither a
+    // 1st Half nor a 2nd Half role — highlight the row so they're not missed when handing
+    // out the remaining half assignments.
+    const needsHalf=!h1Val&&!h2Val;
+    rows+=`<tr${needsHalf?' style="background:var(--amber-lt)"':''}>
+      <td style="font-size:13px;font-weight:500;white-space:nowrap">${esc(fullName(v))}${needsHalf?' <i class="ti ti-alert-circle" style="font-size:12px;color:var(--warning)" title="No 1st or 2nd Half assignment yet"></i>':''}</td>
       <td style="font-size:12px;color:${bus?'var(--text)':'var(--text3)'}">${bus?busLabelFromId(bus,sc):'— unassigned —'}</td>
-      <td><select class="pos-ht-select" style="width:100%" onchange="setGenAssign('${v.id}','h1',this.value)">${h1Sel}</select></td>
+      <td><select class="pos-ht-select" style="width:100%${needsHalf?';border-color:var(--warning)':''}" onchange="setGenAssign('${v.id}','h1',this.value)">${h1Sel}</select></td>
       <td><select class="pos-ht-select" style="width:100%" onchange="setGenAssign('${v.id}','ht',this.value)">${htSel}</select></td>
-      <td><select class="pos-ht-select" style="width:100%" onchange="setGenAssign('${v.id}','h2',this.value)">${h2Sel}</select></td>
+      <td><select class="pos-ht-select" style="width:100%${needsHalf?';border-color:var(--warning)':''}" onchange="setGenAssign('${v.id}','h2',this.value)">${h2Sel}</select></td>
     </tr>`;
   });
 
+  const needsHalfCount=sorted.filter(v=>{
+    const h1Val=(sc.firstHalfAssignments&&sc.firstHalfAssignments[v.id])||'';
+    const h2Val=(sc.secondHalfAssignments&&sc.secondHalfAssignments[v.id])||'';
+    return !h1Val&&!h2Val;
+  }).length;
+
   wrap.innerHTML=`
-    <div style="font-size:14px;font-weight:500;margin-bottom:.6rem"><i class="ti ti-layout-rows" style="font-size:13px"></i> Volunteer assignments</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">Only shows volunteers with at least one assignment (bus, job, or half). Bus is set via the Buses board above. Assign 1st half, halftime, and 2nd half jobs here.</div>
+    <div style="font-size:14px;font-weight:500;margin-bottom:.6rem"><i class="ti ti-layout-rows" style="font-size:13px"></i> Volunteer assignments${needsHalfCount?` <span style="font-weight:400;font-size:12px;color:var(--warning)">— ${needsHalfCount} need a 1st/2nd Half assignment</span>`:''}</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">Only shows volunteers with at least one assignment (bus, job, or half). Bus is set via the Buses board above. Assign 1st half, halftime, and 2nd half jobs here. Rows highlighted in amber have no 1st or 2nd Half assignment yet.</div>
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead>
