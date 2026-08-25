@@ -2975,6 +2975,12 @@ function renderGeneralVolTable(){
   const halfOpts='<option value="">— none —</option>'+halfJobs.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
   const htOpts='<option value="">— none —</option>'+htJobs.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
 
+  // Volunteers on a specialty job (Colorguard, Uniforms, Percussion, Photographers) or tagged
+  // Admin already have a fixed role for the whole event and aren't part of the 1st/2nd Half
+  // rotation, so they're exempt from the fairness highlight below.
+  const specialtyJobIds=new Set(eventJobs(sc).filter(j=>isSpecialtyJobName(j.name)).map(j=>j.id));
+  const isExempt=v=>isAdminForEvent(sc,v)||[...specialtyJobIds].some(jid=>(sc.assignments&&sc.assignments[jid]||[]).includes(v.id));
+
   const sorted=[...vols].sort((a,b)=>{
     const ba=getVolunteerBus(sc,a.id)||'zzz';
     const bb=getVolunteerBus(sc,b.id)||'zzz';
@@ -2993,8 +2999,8 @@ function renderGeneralVolTable(){
     const h2Sel=halfOpts.replace(`value="${h2Val}"`,`value="${h2Val}" selected`);
     // Fairness flag: this volunteer is here (has a bus/job/half already), but has neither a
     // 1st Half nor a 2nd Half role — highlight the row so they're not missed when handing
-    // out the remaining half assignments.
-    const needsHalf=!h1Val&&!h2Val;
+    // out the remaining half assignments. Admins and specialty-job volunteers are exempt.
+    const needsHalf=!h1Val&&!h2Val&&!isExempt(v);
     rows+=`<tr${needsHalf?' style="background:var(--amber-lt)"':''}>
       <td style="font-size:13px;font-weight:500;white-space:nowrap">${esc(fullName(v))}${needsHalf?' <i class="ti ti-alert-circle" style="font-size:12px;color:var(--warning)" title="No 1st or 2nd Half assignment yet"></i>':''}</td>
       <td style="font-size:12px;color:${bus?'var(--text)':'var(--text3)'}">${bus?busLabelFromId(bus,sc):'— unassigned —'}</td>
@@ -3007,12 +3013,12 @@ function renderGeneralVolTable(){
   const needsHalfCount=sorted.filter(v=>{
     const h1Val=(sc.firstHalfAssignments&&sc.firstHalfAssignments[v.id])||'';
     const h2Val=(sc.secondHalfAssignments&&sc.secondHalfAssignments[v.id])||'';
-    return !h1Val&&!h2Val;
+    return !h1Val&&!h2Val&&!isExempt(v);
   }).length;
 
   wrap.innerHTML=`
     <div style="font-size:14px;font-weight:500;margin-bottom:.6rem"><i class="ti ti-layout-rows" style="font-size:13px"></i> Volunteer assignments${needsHalfCount?` <span style="font-weight:400;font-size:12px;color:var(--warning)">— ${needsHalfCount} need a 1st/2nd Half assignment</span>`:''}</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">Only shows volunteers with at least one assignment (bus, job, or half). Bus is set via the Buses board above. Assign 1st half, halftime, and 2nd half jobs here. Rows highlighted in amber have no 1st or 2nd Half assignment yet.</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">Only shows volunteers with at least one assignment (bus, job, or half). Bus is set via the Buses board above. Assign 1st half, halftime, and 2nd half jobs here. Rows highlighted in amber have no 1st or 2nd Half assignment yet (Admins and specialty jobs — Colorguard, Uniforms, Percussion, Photographers — are exempt).</div>
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead>
@@ -3036,7 +3042,7 @@ function setGenAssign(vid,field,val){
   sc[key]=sc[key]||{};
   if(val){ if(field==='ht')warnIfHalftimeOverTarget(sc,val); sc[key][vid]=val; }
   else delete sc[key][vid];
-  save();renderHalftimeStatusPanel();
+  save();renderHalftimeStatusPanel();renderGeneralVolTable();
 }
 
 /* ── PRINT PICKER ── */
@@ -3189,22 +3195,35 @@ function printGeneralSchedule(sc){
   }
   const halfJobs=withFloatLast(AS().halfJobs||[]);
   const htJobs=AS().halftimeJobs||[];
+  const floatJob=halfJobs.find(j=>(j.name||'').trim().toLowerCase()==='float');
 
-  // Build a role-grouped column: for each role in jobsList, list names assigned to it for this period
-  function roleGroupedHtml(jobsList,assignField){
+  // Same exemption used on the assignment screen: volunteers on a specialty job (Colorguard,
+  // Uniforms, Percussion, Photographers) or tagged Admin already have a fixed role for the
+  // whole event, so a blank 1st/2nd Half doesn't mean they need a Float assignment.
+  const specialtyJobIdsForPrint=new Set(eventJobs(sc).filter(j=>isSpecialtyJobName(j.name)).map(j=>j.id));
+  const isExemptFromHalf=v=>isAdminForEvent(sc,v)||[...specialtyJobIdsForPrint].some(jid=>(sc.assignments&&sc.assignments[jid]||[]).includes(v.id));
+
+  // Build a role-grouped column: for each role in jobsList, list names assigned to it for this
+  // period. When defaultToFloat is set (1st/2nd Half only — not Halftime), anyone with no
+  // assignment for this half is bucketed under Float instead of just being omitted, unless
+  // they're exempt (admin/specialty job).
+  function roleGroupedHtml(jobsList,assignField,defaultToFloat){
     let out='';
     jobsList.forEach(job=>{
-      const names=vols.filter(v=>sc[assignField]&&sc[assignField][v.id]===job.id)
-        .sort((a,b)=>a.lname.localeCompare(b.lname)).map(v=>fullName(v));
+      const names=vols.filter(v=>{
+        const assigned=sc[assignField]&&sc[assignField][v.id];
+        if(assigned)return assigned===job.id;
+        return !!(defaultToFloat&&floatJob&&job.id===floatJob.id&&!isExemptFromHalf(v));
+      }).sort((a,b)=>a.lname.localeCompare(b.lname)).map(v=>fullName(v));
       if(!names.length)return;
       out+=`<div style="font-weight:600;font-size:11px;margin-top:8px">${esc(job.name)}</div>`;
       names.forEach(n=>{ out+=`<div style="font-size:12px;padding-left:4px">${esc(n)}</div>`; });
     });
     return out||`<div style="font-size:11px;color:#999">—</div>`;
   }
-  const firstHalfHtml=roleGroupedHtml(halfJobs,'firstHalfAssignments');
-  const halftimeHtml=roleGroupedHtml(htJobs,'halftimeAssignments');
-  const secondHalfHtml=roleGroupedHtml(halfJobs,'secondHalfAssignments');
+  const firstHalfHtml=roleGroupedHtml(halfJobs,'firstHalfAssignments',true);
+  const halftimeHtml=roleGroupedHtml(htJobs,'halftimeAssignments',false);
+  const secondHalfHtml=roleGroupedHtml(halfJobs,'secondHalfAssignments',true);
 
   // Job Assignments column (non-game events): each job as a sub-heading with its assigned
   // volunteers listed underneath — same grouped style as the half columns above. Specialty
