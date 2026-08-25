@@ -3169,7 +3169,15 @@ function printGeneralSchedule(sc){
     return `${fullName(v)} - ${busLabelFromId(bus,sc)}${isBagVolunteer&&!isHomeGame(sc)?' (Bus Bag)':''}`;
   });
 
-  const halfJobs=AS().halfJobs||[];
+  // Float always prints last in the 1st/2nd Half columns, no matter what order it's
+  // stored in (e.g. if it was ever dragged/reordered or added mid-list via import).
+  // This only affects the printed report — it doesn't touch the underlying job order
+  // used anywhere else in the app.
+  function withFloatLast(jobsList){
+    const isFloat=j=>(j.name||'').trim().toLowerCase()==='float';
+    return [...jobsList.filter(j=>!isFloat(j)), ...jobsList.filter(isFloat)];
+  }
+  const halfJobs=withFloatLast(AS().halfJobs||[]);
   const htJobs=AS().halftimeJobs||[];
 
   // Build a role-grouped column: for each role in jobsList, list names assigned to it for this period
