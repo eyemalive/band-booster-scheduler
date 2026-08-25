@@ -1385,7 +1385,7 @@ function renderSchedules(){
     const d=new Date(sc.date+'T00:00:00');
     const dateLabel=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
     const assigned=new Set(Object.values(sc.assignments||{}).flat());
-    const schedVols=scheduleVolunteers(sc);
+    const schedVols=activeScheduleVolunteers(sc);
     const emptyJobs=eventJobs(sc).filter(j=>!jobHasAnyoneAssigned(sc,j)).length;
     const isThisWeek=sc.id===thisWeekSchedId;
     const canDelete=!sc.shared||_role==='admin';
@@ -1408,7 +1408,7 @@ function renderSchedules(){
         ${isPast?'<span class="badge gray">Past</span>':isThisWeek?'<span class="badge teal">Next Event</span>':''}
       </div>
       <div class="sched-card-stats">
-        <span class="tag" style="font-size:11px"><i class="ti ti-users" style="font-size:11px"></i>${schedVols.length} volunteers</span>
+        <span class="tag" style="font-size:11px" title="Signed up for this event and currently active (excludes deactivated volunteers)"><i class="ti ti-users" style="font-size:11px"></i>${schedVols.length} volunteers</span>
         <span class="tag" style="font-size:11px"><i class="ti ti-check" style="font-size:11px"></i>${assigned.size} assigned</span>
         ${emptyJobs>0?`<span class="tag" style="font-size:11px;color:var(--warning)"><i class="ti ti-alert-circle" style="font-size:11px"></i>${emptyJobs} empty jobs</span>`:'<span class="tag" style="font-size:11px"><i class="ti ti-circle-check" style="font-size:11px"></i>All jobs covered</span>'}
       </div>
