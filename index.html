@@ -369,7 +369,10 @@
         <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px;align-items:end;margin-bottom:.5rem">
           <div><label class="lbl">Job title</label><input type="text" id="ej-name" placeholder="Job title"></div>
           <div><label class="lbl">Notes</label><input type="text" id="ej-desc" placeholder="Optional"></div>
-          <div><label class="lbl">Slots</label><select id="ej-slots" style="width:70px">${Array.from({length:10},(_,i)=>`<option>${i+1}</option>`).join('')}</select></div>
+          <div><label class="lbl">Slots</label><select id="ej-slots" style="width:70px">
+            <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+            <option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
+          </select></div>
           <button class="btn sm primary" onclick="addEventJob()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
         </div>
         <table class="jtable" id="event-jobs-table">
