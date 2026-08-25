@@ -232,8 +232,7 @@
   <div class="tabs" id="main-tabs">
     <div class="tab active" onclick="showTab('schedules')"><i class="ti ti-calendar-event"></i> Schedules</div>
     <div class="tab" onclick="showTab('assign')"><i class="ti ti-layout-board"></i> Assign</div>
-    <div class="tab" onclick="showTab('volunteers')"><i class="ti ti-users"></i> Master roster</div>
-    <div class="tab config-tab" onclick="showTab('config')"><i class="ti ti-settings"></i> Configuration</div>
+    <div class="tab" onclick="showTab('config')"><i class="ti ti-settings"></i> Configuration</div>
     <div class="tab" onclick="showTab('history')"><i class="ti ti-clock-hour-4"></i> History</div>
   </div>
 
@@ -314,7 +313,11 @@
   </div>
 
   <!-- VOLUNTEERS -->
-  <div class="panel" id="panel-volunteers">
+  <!-- CONFIGURATION (Master Roster + event-specific settings visible to all; global settings admin-only) -->
+  <div class="panel" id="panel-config">
+    <div style="font-size:16px;font-weight:600;margin-bottom:.25rem">This event's roster &amp; jobs</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:1rem">Available to everyone. Manage who's signed up, the master roster, and this specific event's jobs and slot count here.</div>
+
     <div class="card" id="weekly-roster-card">
       <div id="weekly-roster-header"></div>
       <div id="weekly-roster-body"></div>
@@ -357,11 +360,37 @@
         <button class="btn primary" onclick="addVolunteer()" style="white-space:nowrap"><i class="ti ti-plus"></i> Add</button>
       </div>
     </div>
-  </div>
 
-  <!-- CONFIGURATION (admin only) -->
-  <div class="panel" id="panel-config">
     <div class="card">
+      <div id="event-config-header" style="margin-bottom:.5rem"></div>
+      <div id="event-jobs-section">
+        <div style="font-size:15px;font-weight:500;margin-bottom:.25rem"><i class="ti ti-briefcase" style="font-size:14px"></i> Jobs for this event</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:.65rem">These jobs are specific to this event. Changes here don't affect the global template or other events.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px;align-items:end;margin-bottom:.5rem">
+          <div><label class="lbl">Job title</label><input type="text" id="ej-name" placeholder="Job title"></div>
+          <div><label class="lbl">Notes</label><input type="text" id="ej-desc" placeholder="Optional"></div>
+          <div><label class="lbl">Slots</label><select id="ej-slots" style="width:70px">${Array.from({length:10},(_,i)=>`<option>${i+1}</option>`).join('')}</select></div>
+          <button class="btn sm primary" onclick="addEventJob()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
+        </div>
+        <table class="jtable" id="event-jobs-table">
+          <colgroup><col style="width:30%"><col style="width:38%"><col style="width:12%"><col style="width:12%"><col style="width:8%"></colgroup>
+          <thead><tr><th>Job title</th><th>Notes</th><th>Slots</th><th>Assigned</th><th></th></tr></thead>
+          <tbody id="event-jobs-body"></tbody>
+        </table>
+        <button class="btn sm" style="margin-top:.5rem" onclick="resetEventJobs()"><i class="ti ti-refresh"></i> Reset to global template</button>
+      </div>
+      <div id="bus-slot-section" style="margin-top:1.25rem;padding-top:1rem;border-top:.5px solid var(--border)">
+        <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">
+          <label class="lbl" id="bus-slot-label" style="margin-bottom:0">Seats per bus for this event:</label>
+          <input type="number" id="bus-slot-count-input" min="1" max="12" style="width:70px" onchange="setBusSlotCount(this.value)">
+          <span id="bus-slot-note" style="font-size:11px;color:var(--text2)"></span>
+        </div>
+      </div>
+    </div>
+
+    <div style="font-size:16px;font-weight:600;margin:2rem 0 .25rem;padding-top:1.25rem;border-top:1px solid var(--border)" class="pw-admin-only">Global settings <span style="font-weight:400;font-size:12px;color:var(--text2)">— admin only</span></div>
+
+    <div class="card pw-admin-only">
       <div style="font-size:15px;font-weight:500;margin-bottom:.75rem">Add job</div>
       <div class="grid3c">
         <div><label class="lbl">Job title</label><input type="text" id="j-name" placeholder="Job title"></div>
@@ -375,7 +404,7 @@
         <button class="btn primary" onclick="addJob()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
       </div>
     </div>
-    <div class="card">
+    <div class="card pw-admin-only">
       <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Job roster</div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Click any cell to edit inline. Position #1 is always the lead.</div>
       <table class="jtable">
@@ -384,7 +413,7 @@
         <tbody id="job-body"></tbody>
       </table>
     </div>
-    <div class="card" style="margin-top:1.5rem">
+    <div class="card pw-admin-only" style="margin-top:1.5rem">
       <div style="font-size:15px;font-weight:500;margin-bottom:.75rem">Add halftime job</div>
       <div class="grid4">
         <div><label class="lbl">Name</label><input type="text" id="ht-name" placeholder="e.g. Water station, Props crew"></div>
@@ -393,7 +422,7 @@
         <button class="btn primary" onclick="addHalftimeJob()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
       </div>
     </div>
-    <div class="card">
+    <div class="card pw-admin-only">
       <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Halftime jobs</div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">These appear as options in the halftime dropdown on each position. Set a target to track how many you still need to assign, and a yardline for where that job will be positioned — both optional. Click to edit inline.</div>
       <table class="jtable">
@@ -403,7 +432,7 @@
       </table>
     </div>
 
-    <!-- GENERAL MODE ONLY: Bus count + half-time job list -->
+    <!-- GENERAL MODE + ADMIN ONLY: Bus count + half-time job list -->
     <div class="general-only-config">
       <div class="card" style="margin-top:1.5rem">
         <div style="font-size:15px;font-weight:500;margin-bottom:.25rem"><i class="ti ti-bus" style="font-size:14px"></i> Away game buses / Home game march positions</div>
@@ -514,7 +543,8 @@
   <div id="add-roster-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:center;justify-content:center">
     <div style="background:var(--surface);border-radius:var(--radius-lg);padding:1.5rem;max-width:420px;width:92%;box-shadow:0 8px 32px rgba(0,0,0,.25)">
       <div style="font-size:16px;font-weight:500;margin-bottom:.25rem">Add volunteer to this week</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Pick from master roster volunteers not already on this schedule.</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Pick from master roster volunteers not already on this schedule, or add someone brand new.</div>
+      <button class="btn sm primary" style="width:100%;margin-bottom:.65rem" onclick="openAddNewVolunteerModal()"><i class="ti ti-user-plus"></i> Add New Volunteer</button>
       <input type="text" id="add-roster-search" placeholder="Search by name…" oninput="renderAddRosterList()" style="margin-bottom:.65rem">
       <div id="add-roster-list" style="display:flex;flex-direction:column;gap:5px;max-height:260px;overflow-y:auto;margin-bottom:1rem"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -522,6 +552,25 @@
       </div>
     </div>
   </div>
+
+  <!-- ADD NEW VOLUNTEER MODAL (from Assign tab's Add volunteer flow) -->
+  <div id="add-new-volunteer-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:var(--surface);border-radius:var(--radius-lg);padding:1.5rem;max-width:400px;width:92%;box-shadow:0 8px 32px rgba(0,0,0,.25)">
+      <div style="font-size:16px;font-weight:500;margin-bottom:.25rem">Add new volunteer</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Creates them on the master roster and adds them to this week's roster.</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem">
+        <div><label class="lbl">First name</label><input type="text" id="anv-fname" placeholder="First"></div>
+        <div><label class="lbl">Last name</label><input type="text" id="anv-lname" placeholder="Last"></div>
+        <div><label class="lbl">Email</label><input type="email" id="anv-email" placeholder="email@example.com"></div>
+        <div><label class="lbl">Phone</label><input type="tel" id="anv-phone" placeholder="555-555-5555"></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn sm" onclick="closeAddNewVolunteerModal()">Cancel</button>
+        <button class="btn sm primary" onclick="submitAddNewVolunteer()"><i class="ti ti-plus"></i> Add &amp; sign up</button>
+      </div>
+    </div>
+  </div>
+
 
   <!-- PRINT PICKER MODAL -->
   <div id="print-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:center;justify-content:center">
@@ -1197,14 +1246,13 @@ function buildEntries(sc){
 
 /* ── TABS ── */
 function showTab(t){
-  const tabNames=['schedules','assign','volunteers','config','history'];
+  const tabNames=['schedules','assign','config','history'];
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',tabNames[i]===t));
   document.querySelectorAll('.panel').forEach(el=>el.classList.remove('active'));
   document.getElementById('panel-'+t).classList.add('active');
   if(t==='schedules'){autoSavePastEvents();renderSchedules();}
   if(t==='assign')renderAssign();
-  if(t==='volunteers')renderVolunteers();
-  if(t==='config'){renderJobsTable();renderHalftimeTable();renderGeneralOnlyConfig();renderImportCategoriesTable();}
+  if(t==='config'){renderVolunteers();renderEventConfigSection();renderJobsTable();renderHalftimeTable();renderGeneralOnlyConfig();renderImportCategoriesTable();}
   if(t==='history')renderHistory();
 }
 
@@ -1444,39 +1492,12 @@ function renderAssign(){
     <div id="assign-stats" style="margin-bottom:.75rem"></div>
     ${!hasRoster?`<div style="background:var(--amber-lt);border:.5px solid var(--warning);border-radius:var(--radius);padding:10px 14px;margin-bottom:.75rem;font-size:13px;color:var(--amber-dk)">
       <strong><i class="ti ti-alert-triangle"></i> No roster loaded for this event.</strong>
-      Import a CSV from the <strong>Master Roster</strong> tab to set this week's volunteers, or add them individually below.
+      Import a CSV from the <strong>Configuration</strong> tab to set this week's volunteers, or add them individually below.
     </div>`:''}
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:.4rem">
-      <div style="font-size:12px;color:var(--text2)">Drag from pool or any position row — drop onto a job or bus to append, onto a row to insert, or back to pool to unassign.${_mode==='general'?' Buses appear alongside jobs below.':''}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:.75rem">
+      <div style="font-size:12px;color:var(--text2)">Drag from pool or any position row — drop onto a job or bus to append, onto a row to insert, or back to pool to unassign.${_mode==='general'?' Buses appear alongside jobs below.':''} Manage this event's job list and bus/position slot count from <strong>Configuration</strong>.</div>
       <button class="btn sm" onclick="openAddRosterModal()"><i class="ti ti-user-plus"></i> Add volunteer</button>
     </div>
-    <details id="event-jobs-editor" style="margin-bottom:.75rem;background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius-lg)">
-      <summary style="padding:.6rem 1rem;font-size:13px;font-weight:500;cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:6px">
-        <i class="ti ti-briefcase" style="font-size:13px"></i> Jobs for this event
-        <span id="event-jobs-count" class="badge gray" style="margin-left:4px"></span>
-        <span style="margin-left:auto;font-size:11px;color:var(--text2)">click to expand</span>
-      </summary>
-      <div style="padding:.75rem 1rem;border-top:.5px solid var(--border)">
-        <div style="font-size:12px;color:var(--text2);margin-bottom:.65rem">These jobs are specific to this event. Changes here don't affect the global template or other events.</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px;align-items:end;margin-bottom:.5rem">
-          <div><label class="lbl">Job title</label><input type="text" id="ej-name" placeholder="Job title"></div>
-          <div><label class="lbl">Notes</label><input type="text" id="ej-desc" placeholder="Optional"></div>
-          <div><label class="lbl">Slots</label><select id="ej-slots" style="width:70px">${Array.from({length:10},(_,i)=>`<option>${i+1}</option>`).join('')}</select></div>
-          <button class="btn sm primary" onclick="addEventJob()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
-        </div>
-        <table class="jtable" id="event-jobs-table">
-          <colgroup><col style="width:30%"><col style="width:38%"><col style="width:12%"><col style="width:12%"><col style="width:8%"></colgroup>
-          <thead><tr><th>Job title</th><th>Notes</th><th>Slots</th><th>Assigned</th><th></th></tr></thead>
-          <tbody id="event-jobs-body"></tbody>
-        </table>
-        <button class="btn sm" style="margin-top:.5rem" onclick="resetEventJobs()"><i class="ti ti-refresh"></i> Reset to global template</button>
-      </div>
-    </details>
-    ${_mode==='general'?`<div class="row" style="gap:8px;align-items:center;margin-bottom:.75rem">
-      <label class="lbl" style="margin-bottom:0">${sc.gameLocation==='home'?'Volunteers per march position for this event:':'Seats per bus for this event:'}</label>
-      <input type="number" id="bus-slot-count-input" min="1" max="12" value="${busSlotsFor(sc)}" style="width:70px" onchange="setBusSlotCount(this.value)">
-      <span style="font-size:11px;color:var(--text2)">Applies only to ${esc(sc.name)} — other events keep their own setting.</span>
-    </div>`:''}
     <div class="pool" id="pool" ondragover="dragOver(event,null,null)" ondrop="drop(event,null,null)" ondragleave="dragLeave(event)"></div>
     <div class="jobs-board" id="jobs-board"></div>
     ${_mode==='general'&&sc.eventType==='event'?`<div id="nongame-job-summary-wrap" style="margin-top:1.25rem"></div>`:''}
@@ -1751,7 +1772,7 @@ function reorderBusOccupant(sc,bid,vid,insertIdx){
   sc.busOrder=sc.busOrder||{};
   sc.busOrder[bid]=order;
 }
-function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJobsTable();renderHalftimeStatusPanel();if(_mode==='general'){renderGeneralVolTable();renderNonGameJobSummary();}}
+function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJobsTable();renderEventConfigSection();renderHalftimeStatusPanel();if(_mode==='general'){renderGeneralVolTable();renderNonGameJobSummary();}}
 function renderHalftimeStatusPanel(){
   const wrap=document.getElementById('halftime-status-wrap');if(!wrap)return;
   const sc=activeSched();if(!sc){wrap.innerHTML='';return;}
@@ -1859,14 +1880,45 @@ function resetEventJobs(){
 function setBusSlotCount(val){
   const sc=activeSched();if(!sc)return;
   const n=parseInt(val);
-  if(isNaN(n)||n<1||n>12){alert('Enter a number between 1 and 12.');renderAssign();return;}
+  if(isNaN(n)||n<1||n>12){alert('Enter a number between 1 and 12.');renderEventConfigSection();return;}
   const maxOccupancy=Math.max(0,...busIds(sc).map(bid=>busEffectiveCount(sc,bid)));
   const label=isHomeGame(sc)?'position':'bus';
   if(n<maxOccupancy&&!confirm(`At least one ${label} currently has ${maxOccupancy} people assigned — more than ${n}. Existing assignments won't be removed, but no new people can be added to that ${label} until you free up space. Continue?`)){
-    renderAssign();return;
+    renderEventConfigSection();return;
   }
   sc.busSlotCount=n;
-  save();renderBoard();
+  save();renderBoard();renderEventConfigSection();
+}
+// Populates the "This event's roster & jobs" header and bus/march-position slot control on the
+// Configuration tab, based on whichever event is currently open (same one the Assign tab uses).
+function renderEventConfigSection(){
+  const header=document.getElementById('event-config-header');
+  const jobsSection=document.getElementById('event-jobs-section');
+  const busSection=document.getElementById('bus-slot-section');
+  if(!header)return;
+  const sc=activeSched();
+  if(!sc){
+    header.innerHTML='<div style="font-size:13px;color:var(--text2)">No event open. Select one from <strong>Schedules</strong> to configure its jobs and slot count here.</div>';
+    if(jobsSection)jobsSection.style.display='none';
+    if(busSection)busSection.style.display='none';
+    return;
+  }
+  header.innerHTML=`<div style="font-size:15px;font-weight:500">${esc(sc.name)}</div><div style="font-size:12px;color:var(--text2)">${fmtDate(sc.date)}</div>`;
+  if(jobsSection)jobsSection.style.display='';
+  renderEventJobsTable();
+  if(busSection){
+    if(_mode==='general'&&sc.eventType!=='event'){
+      busSection.style.display='';
+      const label=document.getElementById('bus-slot-label');
+      if(label)label.textContent=sc.gameLocation==='home'?'Volunteers per march position for this event:':'Seats per bus for this event:';
+      const input=document.getElementById('bus-slot-count-input');
+      if(input)input.value=busSlotsFor(sc);
+      const note=document.getElementById('bus-slot-note');
+      if(note)note.textContent=`Applies only to ${sc.name} — other events keep their own setting.`;
+    } else {
+      busSection.style.display='none';
+    }
+  }
 }
 // A schedule's assignable roster is strictly whoever was explicitly added to it (via CSV
 // import or the manual Add button) — never a fallback to "everyone active in the master
@@ -2662,7 +2714,7 @@ function renderJobsTable(){
 
 function renderGeneralOnlyConfig(){
   const isGen=_mode==='general';
-  document.querySelectorAll('.general-only-config').forEach(el=>el.style.display=isGen?'':'none');
+  document.querySelectorAll('.general-only-config').forEach(el=>el.style.display=(isGen&&_role==='admin')?'':'none');
   if(!isGen||!AS())return;
   const inp=document.getElementById('max-buses-input');
   if(inp)inp.value=AS().maxBuses||15;
@@ -3333,6 +3385,26 @@ function openAddRosterModal(){
   document.getElementById('add-roster-modal').style.display='flex';
 }
 function closeAddRosterModal(){document.getElementById('add-roster-modal').style.display='none';}
+/* ── ADD NEW VOLUNTEER (from within the Add-to-roster flow) ── */
+function openAddNewVolunteerModal(){
+  const sc=activeSched();if(!sc)return;
+  ['anv-fname','anv-lname','anv-email','anv-phone'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('add-new-volunteer-modal').style.display='flex';
+}
+function closeAddNewVolunteerModal(){document.getElementById('add-new-volunteer-modal').style.display='none';}
+function submitAddNewVolunteer(){
+  const sc=activeSched();if(!sc)return;
+  const fname=document.getElementById('anv-fname').value.trim();
+  const lname=document.getElementById('anv-lname').value.trim();
+  if(!fname&&!lname){alert('Name required.');return;}
+  const email=document.getElementById('anv-email').value.trim();
+  const phone=document.getElementById('anv-phone').value.trim()||'unknown';
+  const vol={id:uid(),fname,lname,email,phone,active:true};
+  AS().volunteers.push(vol);
+  closeAddNewVolunteerModal();
+  addVolunteerToRoster(vol.id); // also saves, and refreshes pool/board/roster views
+  closeAddRosterModal();
+}
 function renderAddRosterList(){
   const sc=activeSched();if(!sc)return;
   const q=(document.getElementById('add-roster-search').value||'').toLowerCase();
