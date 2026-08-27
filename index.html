@@ -1546,27 +1546,56 @@ function drop(e,jid,insertIdx){
   // Specialty-linked occupants can only leave their bus via their source job's dropdown, not by dragging.
   if(wasIndirect){ renderBoard(); return; }
 
-  if(fromJob)sc.assignments[fromJob]=(sc.assignments[fromJob]||[]).filter(x=>x!==vid);
-  if(fromJob&&fromJob.indexOf('bus')===0&&jid!==fromJob&&sc.busJobAssignments&&sc.busJobAssignments[vid])delete sc.busJobAssignments[vid];
+  // Reordering within the same (non-bus) job — just reposition, nothing else changes.
+  if(jid&&jid===fromJob&&!fromIsBus){
+    const arr=sc.assignments[jid]||[];
+    const oi=arr.indexOf(vid);
+    if(oi>=0){
+      arr.splice(oi,1);
+      let ni=insertIdx!=null?insertIdx:arr.length;if(ni>arr.length)ni=arr.length;
+      arr.splice(ni,0,vid);
+      sc.assignments[jid]=arr;
+    }
+    save();renderBoard();
+    return;
+  }
+
+  // Check the destination has room BEFORE removing from the source — otherwise a full
+  // destination would strand the person with no assignment at all.
   if(jid){
     const isBus=jid.indexOf('bus')===0;
     const slots=isBus?busSlotsFor(sc):(eventJobs(sc).find(j=>j.id===jid)||{}).slots;
     if(slots===undefined)return;
-    const arr=sc.assignments[jid]||[];
-    if(arr.includes(vid)){
-      const oi=arr.indexOf(vid);arr.splice(oi,1);
-      let ni=insertIdx!=null?insertIdx:arr.length;if(ni>arr.length)ni=arr.length;
-      arr.splice(ni,0,vid);sc.assignments[jid]=arr;
-    } else {
-      const effectiveCount=isBus?busEffectiveCount(sc,jid):arr.length;
-      if(effectiveCount>=slots){alert(isBus?'This bus is full!':'This job slot is full!');renderBoard();return;}
-      const na=[...arr];
-      // Buses always append — precise visual position is governed by display order (see
-      // getBusDisplayOrder), not raw array position, so exact insertIdx doesn't matter here.
-      let ni=isBus?na.length:(insertIdx!=null?insertIdx:na.length);if(ni>na.length)ni=na.length;
-      na.splice(ni,0,vid);sc.assignments[jid]=na;
-      if(!isBus)applyFSTHalftimeRule(sc,jid,vid);
+    const effectiveCount=isBus?busEffectiveCount(sc,jid):(sc.assignments[jid]||[]).length;
+    if(effectiveCount>=slots){alert(isBus?'This bus is full!':'This job slot is full!');renderBoard();return;}
+  }
+
+  if(fromJob)sc.assignments[fromJob]=(sc.assignments[fromJob]||[]).filter(x=>x!==vid);
+  if(fromJob&&fromIsBus&&jid!==fromJob&&sc.busJobAssignments&&sc.busJobAssignments[vid])delete sc.busJobAssignments[vid];
+
+  // Halftime (Logistics — keyed by job+volunteer, since halftime is set per position): moving
+  // to a different job carries the existing choice forward onto the new job's key, so it still
+  // shows correctly there. Moving to the pool or a bus drops it, since it no longer applies.
+  if(fromJob&&!fromIsBus&&jid!==fromJob){
+    const oldKey=fromJob+'_'+vid;
+    const htVal=sc.halftimeAssignments&&sc.halftimeAssignments[oldKey];
+    if(htVal){
+      delete sc.halftimeAssignments[oldKey];
+      if(jid&&jid.indexOf('bus')!==0){
+        sc.halftimeAssignments=sc.halftimeAssignments||{};
+        sc.halftimeAssignments[jid+'_'+vid]=htVal;
+      }
     }
+  }
+
+  if(jid){
+    const isBus=jid.indexOf('bus')===0;
+    const na=[...(sc.assignments[jid]||[])];
+    // Buses always append — precise visual position is governed by display order (see
+    // getBusDisplayOrder), not raw array position, so exact insertIdx doesn't matter here.
+    let ni=isBus?na.length:(insertIdx!=null?insertIdx:na.length);if(ni>na.length)ni=na.length;
+    na.splice(ni,0,vid);sc.assignments[jid]=na;
+    if(!isBus)applyFSTHalftimeRule(sc,jid,vid);
   }
   save();renderBoard();
 }
@@ -3170,7 +3199,8 @@ function twoColumnGrid(blocks){
 function printLogisticsSchedule(sc){
   const pv=document.getElementById('print-view');
   let html=`<div style="font-family:Georgia,serif">
-    <h1 style="font-size:15px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h1>
+    <h1 style="font-size:22px;font-weight:700;margin-bottom:6px">Logistics Volunteer Assignments</h1>
+    <h2 style="font-size:15px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h2>
     <p style="font-size:10px;color:#555;margin-bottom:1px">${fmtDate(sc.date)}</p>
     <p style="font-size:8px;color:#888;margin-bottom:6px">Logistics Volunteers</p>`;
   // Top half: job assignments, Lead labeled, no halftime shown here
@@ -3315,7 +3345,8 @@ function printGeneralSchedule(sc){
   const isNonGame=sc.eventType==='event';
   const colHeaderLabel=isHomeGame(sc)?'PARADE MARCH POSITIONS':'BUS ASSIGNMENTS';
   let html=`<div style="font-family:Georgia,serif">
-    <h1 style="font-size:18px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h1>
+    <h1 style="font-size:22px;font-weight:700;margin-bottom:6px">General Volunteer Assignments</h1>
+    <h2 style="font-size:18px;font-weight:500;margin-bottom:2px">${esc(sc.name)}</h2>
     <p style="font-size:13px;color:#555;margin-bottom:2px">${fmtDate(sc.date)}</p>
     <p style="font-size:11px;color:#888;margin-bottom:12px">General Volunteers${isNonGame?' — Non-Game Event':sc.gameLocation?' — '+(sc.gameLocation==='home'?'Home':'Away')+' Game':''}</p>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
