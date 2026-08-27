@@ -3201,8 +3201,7 @@ function printLogisticsSchedule(sc){
   let html=`<div style="font-family:Georgia,serif">
     <h1 style="font-size:22px;font-weight:700;margin-bottom:6px;text-align:center">Logistics Volunteer Assignments</h1>
     <h2 style="font-size:15px;font-weight:500;margin-bottom:2px;text-align:center">${esc(sc.name)}</h2>
-    <p style="font-size:10px;color:#555;margin-bottom:1px">${fmtDate(sc.date)}</p>
-    <p style="font-size:8px;color:#888;margin-bottom:6px">Logistics Volunteers</p>`;
+    <p style="font-size:10px;color:#555;margin-bottom:6px;text-align:center">${fmtDate(sc.date)}</p>`;
   // Top half: job assignments, Lead labeled, no halftime shown here
   const htGroups={};
   const jobBlocks=[];
@@ -3347,8 +3346,7 @@ function printGeneralSchedule(sc){
   let html=`<div style="font-family:Georgia,serif">
     <h1 style="font-size:22px;font-weight:700;margin-bottom:6px;text-align:center">General Volunteer Assignments</h1>
     <h2 style="font-size:18px;font-weight:500;margin-bottom:2px;text-align:center">${esc(sc.name)}</h2>
-    <p style="font-size:13px;color:#555;margin-bottom:2px">${fmtDate(sc.date)}</p>
-    <p style="font-size:11px;color:#888;margin-bottom:12px">General Volunteers${isNonGame?' — Non-Game Event':sc.gameLocation?' — '+(sc.gameLocation==='home'?'Home':'Away')+' Game':''}</p>
+    <p style="font-size:13px;color:#555;margin-bottom:12px;text-align:center">${fmtDate(sc.date)}${isNonGame?' — Non-Game Event':sc.gameLocation?' — '+(sc.gameLocation==='home'?'Home':'Away')+' Game':''}</p>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="background:#f1efe8;border-bottom:1.5px solid #ccc">
         <th style="text-align:left;padding:6px 8px;font-weight:600;width:${isNonGame?'34':'26'}%;vertical-align:top">${colHeaderLabel}</th>
