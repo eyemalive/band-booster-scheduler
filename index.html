@@ -1133,8 +1133,7 @@ function activeSched(){ return AS()&&AS().schedules?AS().schedules.find(sc=>sc.i
 function refreshAllPanels(){
   const active = document.querySelector('.tab.active');
   if(active){
-    const tabs = [...document.querySelectorAll('.tab')].filter(t=>t.style.display!=='none');
-    const tabNames = ['schedules','assign','volunteers','config','history'];
+    const tabNames = ['schedules','assign','config','history'];
     const allTabs = [...document.querySelectorAll('.tab')];
     const idx = allTabs.indexOf(active);
     if(idx>=0 && tabNames[idx]) showTab(tabNames[idx]);
@@ -1254,9 +1253,11 @@ function buildEntries(sc){
 /* ── TABS ── */
 function showTab(t){
   const tabNames=['schedules','assign','config','history'];
+  const panel=document.getElementById('panel-'+t);
+  if(!panel){ console.warn('showTab: unknown tab "'+t+'", falling back to schedules'); if(t!=='schedules')showTab('schedules'); return; }
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',tabNames[i]===t));
   document.querySelectorAll('.panel').forEach(el=>el.classList.remove('active'));
-  document.getElementById('panel-'+t).classList.add('active');
+  panel.classList.add('active');
   if(t==='schedules'){autoSavePastEvents();renderSchedules();}
   if(t==='assign')renderAssign();
   if(t==='config'){renderVolunteers();renderEventConfigSection();renderJobsTable();renderHalftimeTable();renderGeneralOnlyConfig();renderImportCategoriesTable();}
@@ -3541,7 +3542,7 @@ function removeVolunteerFromRoster(vid){
     try{
       const r = await apiCall('load');
       if(r.data){ setAS(r.data); localStorage.setItem(cacheKey(),JSON.stringify(AS())); refreshAllPanels(); setSyncStatus('ok','Refreshed '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})); }
-    } catch(e){ /* silent */ }
+    } catch(e){ console.warn('Background refresh failed:',e); }
   }, 120000);
 })();
 </script>
