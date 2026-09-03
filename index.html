@@ -361,11 +361,11 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" style="border:1.5px solid var(--blue);background:var(--blue-lt)">
       <div id="event-config-header" style="margin-bottom:.5rem"></div>
       <div id="event-jobs-section">
-        <div style="font-size:15px;font-weight:500;margin-bottom:.25rem"><i class="ti ti-briefcase" style="font-size:14px"></i> Jobs for this event</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:.65rem">These jobs are specific to this event. Changes here don't affect the global template or other events.</div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:.25rem"><i class="ti ti-briefcase" style="font-size:14px"></i> Jobs for this event only <span class="badge blue" style="font-size:10px;vertical-align:middle">THIS EVENT ONLY</span></div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:.65rem"><strong>Editing here changes only the event shown above</strong> — not the template new events are created from, and not any other event you've already created. (There's a separate "Global job template" further down the page, admin-only, that controls what brand-new events start with.)</div>
         <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px;align-items:end;margin-bottom:.5rem">
           <div><label class="lbl">Job title</label><input type="text" id="ej-name" placeholder="Job title"></div>
           <div><label class="lbl">Notes</label><input type="text" id="ej-desc" placeholder="Optional"></div>
@@ -375,7 +375,7 @@
           </select></div>
           <button class="btn sm primary" onclick="addEventJob()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
         </div>
-        <table class="jtable" id="event-jobs-table">
+        <table class="jtable" id="event-jobs-table" style="background:var(--surface)">
           <colgroup><col style="width:30%"><col style="width:38%"><col style="width:12%"><col style="width:12%"><col style="width:8%"></colgroup>
           <thead><tr><th>Job title</th><th>Notes</th><th>Slots</th><th>Assigned</th><th></th></tr></thead>
           <tbody id="event-jobs-body"></tbody>
@@ -394,7 +394,7 @@
     <div style="font-size:16px;font-weight:600;margin:2rem 0 .25rem;padding-top:1.25rem;border-top:1px solid var(--border)" class="pw-admin-only">Global settings <span style="font-weight:400;font-size:12px;color:var(--text2)">— admin only</span></div>
 
     <div class="card pw-admin-only">
-      <div style="font-size:15px;font-weight:500;margin-bottom:.75rem">Add job</div>
+      <div style="font-size:15px;font-weight:500;margin-bottom:.75rem">Add to global job template <span class="badge purple" style="font-size:10px;vertical-align:middle">TEMPLATE</span></div>
       <div class="grid3c">
         <div><label class="lbl">Job title</label><input type="text" id="j-name" placeholder="Job title"></div>
         <div><label class="lbl">Notes</label><input type="text" id="j-desc" placeholder="Optional notes"></div>
@@ -408,8 +408,8 @@
       </div>
     </div>
     <div class="card pw-admin-only">
-      <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Job roster</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Click any cell to edit inline. Position #1 is always the lead.</div>
+      <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Global job template</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem"><strong>This is the starting list every brand-new event is created with</strong> — it does not affect any event that's already been created (use the blue "Jobs for this event only" box further up the page for that). Click any cell to edit inline. Position #1 is always the lead.</div>
       <table class="jtable">
         <colgroup><col style="width:32%"><col style="width:44%"><col style="width:12%"><col style="width:12%"></colgroup>
         <thead><tr><th>Job title</th><th>Notes</th><th>Slots</th><th></th></tr></thead>
@@ -420,17 +420,17 @@
       <div style="font-size:15px;font-weight:500;margin-bottom:.75rem">Add halftime job</div>
       <div class="grid4">
         <div><label class="lbl">Name</label><input type="text" id="ht-name" placeholder="e.g. Water station, Props crew"></div>
-        <div><label class="lbl">Yardline</label><input type="text" id="ht-yardline" placeholder="e.g. 30, Home 30"></div>
+        <div><label class="lbl">Field Position</label><input type="text" id="ht-fieldpos" placeholder="e.g. 30 yard line, End zone"></div>
         <div><label class="lbl">Target slots</label><input type="number" id="ht-target" min="0" placeholder="Optional" style="width:100%"></div>
         <button class="btn primary" onclick="addHalftimeJob()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
       </div>
     </div>
     <div class="card pw-admin-only">
       <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Halftime jobs</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">These appear as options in the halftime dropdown on each position. Set a target to track how many you still need to assign, and a yardline for where that job will be positioned — both optional. Click to edit inline.</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">These appear as options in the halftime dropdown on each position. Set a target to track how many you still need to assign, and a Field Position for where that job will be positioned — both optional. Click to edit inline.</div>
       <table class="jtable">
         <colgroup><col style="width:38%"><col style="width:20%"><col style="width:18%"><col style="width:12%"><col style="width:12%"></colgroup>
-        <thead><tr><th>Name</th><th>Yardline</th><th>Target slots</th><th>Assigned</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Field Position</th><th>Target slots</th><th>Assigned</th><th></th></tr></thead>
         <tbody id="ht-body"></tbody>
       </table>
     </div>
@@ -890,8 +890,10 @@ async function refreshImportCategories(){
 async function saveImportCategories(){
   try{ localStorage.setItem(CACHE_KEY_IMPORT_CATS,JSON.stringify(IMPORT_CATEGORIES)); }catch(e){}
   if(onHttpsHost()){
-    try{ await apiCall('save',IMPORT_CATEGORIES,IMPORT_CATS_TAB); }catch(e){ console.warn('saveImportCategories failed:',e); }
+    try{ await apiCall('save',IMPORT_CATEGORIES,IMPORT_CATS_TAB); return true; }
+    catch(e){ console.warn('saveImportCategories failed:',e); return false; }
   }
+  return true; // not on the deployed host (e.g. local testing) — nothing to sync, don't falsely warn
 }
 // Looks up which role a normalized CSV category value maps to, or null if unmapped
 function classifyCategory(normalizedCat){
@@ -1813,7 +1815,7 @@ function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJo
 function renderHalftimeStatusPanel(){
   const wrap=document.getElementById('halftime-status-wrap');if(!wrap)return;
   const sc=activeSched();if(!sc){wrap.innerHTML='';return;}
-  const jobsToShow=(AS().halftimeJobs||[]).filter(h=>(h.targetSlots!==undefined&&h.targetSlots!==null)||h.yardline);
+  const jobsToShow=(AS().halftimeJobs||[]).filter(h=>(h.targetSlots!==undefined&&h.targetSlots!==null)||h.fieldPosition);
   if(!jobsToShow.length){wrap.innerHTML='';return;}
   wrap.innerHTML=`
     <div style="font-size:14px;font-weight:500;margin-bottom:.5rem"><i class="ti ti-clipboard-list" style="font-size:13px"></i> Halftime status</div>
@@ -1824,7 +1826,7 @@ function renderHalftimeStatusPanel(){
         const under=hasTarget&&count<h.targetSlots;
         const over=hasTarget&&count>h.targetSlots;
         const countPart=hasTarget?`: ${count}/${h.targetSlots}${under?' (need '+(h.targetSlots-count)+' more)':''}${over?' ('+(count-h.targetSlots)+' over)':''}`:`: ${count} assigned`;
-        return `<span class="tag" style="font-size:12px;${under?'color:var(--warning)':''}${over?'color:var(--danger-text)':''}">${esc(h.name)}${h.yardline?' <span style="color:var(--text3)">('+esc(h.yardline)+' yd)</span>':''}${countPart}</span>`;
+        return `<span class="tag" style="font-size:12px;${under?'color:var(--warning)':''}${over?'color:var(--danger-text)':''}">${esc(h.name)}${h.fieldPosition?' <span style="color:var(--text3)">('+esc(h.fieldPosition)+')</span>':''}${countPart}</span>`;
       }).join('')}
     </div>`;
 }
@@ -2799,7 +2801,7 @@ function renderNonGameJobsTable(){
 
 /* ── CSV IMPORT CATEGORY MAPPING (shared, admin-only) ── */
 function roleLabel(role){ const r=IMPORT_CAT_ROLES.find(r=>r.value===role); return r?r.label:role; }
-function addImportCategory(){
+async function addImportCategory(){
   const text=document.getElementById('ic-text').value.trim();
   if(!text){alert('Enter the text that appears in column 36.');return;}
   const role=document.getElementById('ic-role').value;
@@ -2807,18 +2809,28 @@ function addImportCategory(){
   if(IMPORT_CATEGORIES.some(r=>normalizeCategory(r.text)===normalizeCategory(text))){alert('That text is already mapped.');return;}
   IMPORT_CATEGORIES.push({id:uid(),text,role});
   document.getElementById('ic-text').value='';
-  saveImportCategories();renderImportCategoriesTable();
+  renderImportCategoriesTable();
+  const ok=await saveImportCategories();
+  if(!ok)alert(`⚠ "${text}" was added here, but failed to sync to the shared sheet — it will likely be LOST the next time this page reloads (yours or anyone else's). Check your connection and try re-adding it, or use the Diagnose button in Settings to check the sheet connection.`);
 }
-function editImportCategoryText(id,val){
-  const r=(IMPORT_CATEGORIES||[]).find(r=>r.id===id);if(r&&val.trim())r.text=val.trim();saveImportCategories();
+async function editImportCategoryText(id,val){
+  const r=(IMPORT_CATEGORIES||[]).find(r=>r.id===id);if(!r||!val.trim())return;
+  r.text=val.trim();
+  const ok=await saveImportCategories();
+  if(!ok)alert('⚠ That edit failed to sync to the shared sheet and will likely be lost on next reload. Check your connection and try again.');
 }
-function editImportCategoryRole(id,val){
-  const r=(IMPORT_CATEGORIES||[]).find(r=>r.id===id);if(r)r.role=val;saveImportCategories();
+async function editImportCategoryRole(id,val){
+  const r=(IMPORT_CATEGORIES||[]).find(r=>r.id===id);if(!r)return;
+  r.role=val;
+  const ok=await saveImportCategories();
+  if(!ok)alert('⚠ That change failed to sync to the shared sheet and will likely be lost on next reload. Check your connection and try again.');
 }
-function removeImportCategory(id){
+async function removeImportCategory(id){
   if(!confirm('Remove this mapping?'))return;
   IMPORT_CATEGORIES=(IMPORT_CATEGORIES||[]).filter(r=>r.id!==id);
-  saveImportCategories();renderImportCategoriesTable();
+  renderImportCategoriesTable();
+  const ok=await saveImportCategories();
+  if(!ok)alert('⚠ The removal failed to sync to the shared sheet — it may reappear next reload. Check your connection and try again.');
 }
 function renderImportCategoriesTable(){
   const addRoleSel=document.getElementById('ic-role');
@@ -2846,9 +2858,9 @@ function addHalftimeJob(){
   if(AS().halftimeJobs.some(h=>h.name.toLowerCase()===name.toLowerCase())){alert('Already exists.');return;}
   const targetRaw=document.getElementById('ht-target').value;
   const targetSlots=targetRaw!==''?Math.max(0,parseInt(targetRaw)||0):undefined;
-  const yardline=document.getElementById('ht-yardline').value.trim()||undefined;
-  AS().halftimeJobs.push({id:uid(),name,targetSlots,yardline});
-  document.getElementById('ht-name').value='';document.getElementById('ht-target').value='';document.getElementById('ht-yardline').value='';
+  const fieldPosition=document.getElementById('ht-fieldpos').value.trim()||undefined;
+  AS().halftimeJobs.push({id:uid(),name,targetSlots,fieldPosition});
+  document.getElementById('ht-name').value='';document.getElementById('ht-target').value='';document.getElementById('ht-fieldpos').value='';
   save();renderHalftimeTable();
 }
 function removeHalftimeJob(id){
@@ -2863,9 +2875,9 @@ function editHalftimeTarget(id,val){
   h.targetSlots=val!==''?Math.max(0,parseInt(val)||0):undefined;
   save();renderHalftimeTable();
 }
-function editHalftimeYardline(id,val){
+function editHalftimeFieldPosition(id,val){
   const h=AS().halftimeJobs.find(h=>h.id===id);if(!h)return;
-  h.yardline=val.trim()||undefined;
+  h.fieldPosition=val.trim()||undefined;
   save();renderHalftimeTable();
 }
 // Counts how many people currently hold a given halftime job for an event — works regardless
@@ -2889,7 +2901,7 @@ function renderHalftimeTable(){
       :'<span style="color:var(--text3)">No event open</span>';
     tr.innerHTML=`
       <td><input class="inline-edit" value="${esc(h.name)}" onblur="editHalftimeField('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
-      <td><input class="inline-edit" value="${esc(h.yardline||'')}" placeholder="—" onblur="editHalftimeYardline('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><input class="inline-edit" value="${esc(h.fieldPosition||'')}" placeholder="—" onblur="editHalftimeFieldPosition('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
       <td><input class="inline-edit" type="number" min="0" value="${hasTarget?h.targetSlots:''}" placeholder="—" onblur="editHalftimeTarget('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
       <td style="font-size:12px">${assignedCell}</td>
       <td><button class="btn xs danger" onclick="removeHalftimeJob('${h.id}')"><i class="ti ti-trash"></i></button></td>`;
@@ -3235,7 +3247,7 @@ function printLogisticsSchedule(sc){
     const htBlocks=htJobsWithPeople.map(h=>{
       const names=htGroups[h.id].sort();
       const blockHtml=`<div style="break-inside:avoid;margin-bottom:7px">
-        <div style="font-weight:600;font-size:10px;background:#f1efe8;padding:2px 5px;border-radius:3px;margin-bottom:1px">${esc(h.name)}${h.yardline?` <span style="font-weight:400;color:#666">— ${esc(h.yardline)} yd line</span>`:''}</div>
+        <div style="font-weight:600;font-size:10px;background:#f1efe8;padding:2px 5px;border-radius:3px;margin-bottom:1px">${esc(h.name)}${h.fieldPosition?` <span style="font-weight:400;color:#666">— ${esc(h.fieldPosition)}</span>`:''}</div>
         ${names.map(n=>`<div style="font-size:9.5px;line-height:1.4;padding-left:2px">${esc(n)}</div>`).join('')}
       </div>`;
       return {weight:1+names.length,html:blockHtml};
