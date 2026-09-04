@@ -3248,7 +3248,7 @@ function printLogisticsSchedule(sc){
   eventJobs(sc).forEach(j=>{
     const asgn=(sc.assignments[j.id]||[]);if(!asgn.length)return;
     let blockHtml=`<div style="break-inside:avoid;margin-bottom:9px">
-      <div style="font-weight:600;font-size:12px;background:#f1efe8;padding:3px 6px;border-radius:3px;margin-bottom:2px">${esc(j.name)}</div>`;
+      <div style="font-weight:600;font-size:10px;background:#f1efe8;padding:3px 6px;border-radius:3px;margin-bottom:2px">${esc(j.name)}</div>`;
     asgn.forEach((vid,idx)=>{
       const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
       const isLead=idx===0;
@@ -3292,7 +3292,7 @@ function printLogisticsSchedule(sc){
         <tbody>
           ${allAssigned.map(({v,jobName,isLead,htName})=>`<tr style="border-bottom:.5px solid #ddd">
             <td style="padding:3px 6px">${esc(fullName(v))}</td>
-            <td style="padding:3px 6px">${esc(jobName)}${isLead?' <span style="color:#8C0A21;font-weight:600">(Lead)</span>':''}</td>
+            <td style="padding:3px 6px;font-size:10px">${esc(jobName)}${isLead?' <span style="color:#8C0A21;font-weight:600">(Lead)</span>':''}</td>
             <td style="padding:3px 6px">${htName?esc(htName):'<span style="color:#999">—</span>'}</td>
           </tr>`).join('')}
         </tbody>
