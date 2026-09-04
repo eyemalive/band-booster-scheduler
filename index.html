@@ -3248,11 +3248,11 @@ function printLogisticsSchedule(sc){
   eventJobs(sc).forEach(j=>{
     const asgn=(sc.assignments[j.id]||[]);if(!asgn.length)return;
     let blockHtml=`<div style="break-inside:avoid;margin-bottom:9px">
-      <div style="font-weight:600;font-size:13px;background:#f1efe8;padding:3px 6px;border-radius:3px;margin-bottom:2px">${esc(j.name)}</div>`;
+      <div style="font-weight:600;font-size:12px;background:#f1efe8;padding:3px 6px;border-radius:3px;margin-bottom:2px">${esc(j.name)}</div>`;
     asgn.forEach((vid,idx)=>{
       const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
       const isLead=idx===0;
-      blockHtml+=`<div style="font-size:12px;line-height:1.5;padding-left:2px">${esc(fullName(v))}${isLead?' <span style="color:#8C0A21;font-weight:600">— Lead</span>':''}</div>`;
+      blockHtml+=`<div style="font-size:11px;line-height:1.4;padding-left:2px">${esc(fullName(v))}${isLead?' <span style="color:#8C0A21;font-weight:600">— Lead</span>':''}</div>`;
       const htId=(sc.halftimeAssignments&&sc.halftimeAssignments[j.id+'_'+vid])||'';
       const htName=htId?(AS().halftimeJobs.find(h=>h.id===htId)||{}).name||'':'';
       if(htId)(htGroups[htId]=htGroups[htId]||[]).push(fullName(v));
@@ -3266,12 +3266,12 @@ function printLogisticsSchedule(sc){
   const htJobsWithPeople=(AS().halftimeJobs||[]).filter(h=>htGroups[h.id]&&htGroups[h.id].length);
   if(htJobsWithPeople.length){
     html+=`<div style="margin-top:10px;padding-top:6px;border-top:1px solid #ccc">
-      <div style="font-weight:600;font-size:13px;letter-spacing:.5px;color:#555;margin-bottom:5px">HALFTIME ASSIGNMENTS</div>`;
+      <div style="font-weight:600;font-size:12px;letter-spacing:.5px;color:#555;margin-bottom:5px">HALFTIME ASSIGNMENTS</div>`;
     const htBlocks=htJobsWithPeople.map(h=>{
       const names=htGroups[h.id].sort();
       const blockHtml=`<div style="break-inside:avoid;margin-bottom:9px">
-        <div style="font-weight:600;font-size:13px;background:#f1efe8;padding:3px 6px;border-radius:3px;margin-bottom:2px">${esc(h.name)}${h.fieldPosition?` <span style="font-weight:400;color:#666">— ${esc(h.fieldPosition)}</span>`:''}</div>
-        ${names.map(n=>`<div style="font-size:12px;line-height:1.5;padding-left:2px">${esc(n)}</div>`).join('')}
+        <div style="font-weight:600;font-size:12px;background:#f1efe8;padding:3px 6px;border-radius:3px;margin-bottom:2px">${esc(h.name)}${h.fieldPosition?` <span style="font-weight:400;color:#666">— ${esc(h.fieldPosition)}</span>`:''}</div>
+        ${names.map(n=>`<div style="font-size:11px;line-height:1.4;padding-left:2px">${esc(n)}</div>`).join('')}
       </div>`;
       return {weight:1+names.length,html:blockHtml};
     });
@@ -3282,8 +3282,8 @@ function printLogisticsSchedule(sc){
   if(allAssigned.length){
     allAssigned.sort((a,b)=>a.v.lname.localeCompare(b.v.lname)||a.v.fname.localeCompare(b.v.fname));
     html+=`<div style="margin-top:14px;padding-top:8px;border-top:1px solid #ccc;break-inside:avoid">
-      <div style="font-weight:600;font-size:13px;letter-spacing:.5px;color:#555;margin-bottom:5px">ALL VOLUNTEERS — A TO Z BY LAST NAME</div>
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <div style="font-weight:600;font-size:12px;letter-spacing:.5px;color:#555;margin-bottom:5px">ALL VOLUNTEERS — A TO Z BY LAST NAME</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead><tr style="border-bottom:1px solid #999">
           <th style="text-align:left;padding:3px 6px;font-weight:600">Volunteer</th>
           <th style="text-align:left;padding:3px 6px;font-weight:600">Job</th>
