@@ -1052,8 +1052,28 @@ async function runDiagnostic(){
     msg.innerHTML = '✓ Proxy reachable.<br>⏳ Testing Apps Script…';
     const r = await fetch('/api/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'load',tab:sheetTab()})});
     const data = await r.json();
-    if(data.ok===false){ msg.innerHTML='✗ Apps Script error: <code>'+data.error+'</code>'; }
-    else{ markConnected(); setSyncStatus('ok','Connected'); msg.innerHTML='✓ Everything working!'; if(data.data){ setAS(data.data); localStorage.setItem(cacheKey(),JSON.stringify(AS())); refreshAllPanels(); } }
+    if(data.ok===false){ msg.innerHTML='✗ Apps Script error: <code>'+data.error+'</code>'; return; }
+    markConnected(); setSyncStatus('ok','Connected');
+    if(data.data){ setAS(data.data); localStorage.setItem(cacheKey(),JSON.stringify(AS())); refreshAllPanels(); }
+
+    // Also check the shared tabs individually — these were added after the main data tabs,
+    // so an out-of-date Apps Script deployment can pass the check above but still fail on these.
+    msg.innerHTML = '✓ Proxy reachable.<br>✓ Main data tab OK.<br>⏳ Checking shared tabs…';
+    const sharedTabs = [
+      {tab:'AppEvents', label:'Shared events'},
+      {tab:'AppImportCategories', label:'CSV import category mapping'},
+    ];
+    const results = [];
+    for(const {tab,label} of sharedTabs){
+      try{
+        const rr = await fetch('/api/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'load',tab})});
+        const dd = await rr.json();
+        results.push(dd.ok===false ? `✗ ${label} (<code>${tab}</code>): <code>${dd.error}</code>` : `✓ ${label} OK`);
+      }catch(err){ results.push(`✗ ${label} (<code>${tab}</code>): ${err.message}`); }
+    }
+    const anyFailed = results.some(r=>r.startsWith('✗'));
+    msg.innerHTML = '✓ Proxy reachable.<br>✓ Main data tab OK.<br>' + results.join('<br>')
+      + (anyFailed ? '<br><br><strong>A shared tab failed.</strong> This usually means your Apps Script deployment is running older code than what\'s in the editor — open the Apps Script editor, click Deploy → Manage deployments → edit your deployment → choose "New version" → Deploy.' : '<br><br>✓ Everything working!');
   } catch(err){ msg.innerHTML='✗ Could not reach /api/sync: <code>'+err.message+'</code>'; }
 }
 
