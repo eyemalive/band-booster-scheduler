@@ -3270,7 +3270,7 @@ function printLogisticsSchedule(sc){
     const htBlocks=htJobsWithPeople.map(h=>{
       const names=htGroups[h.id].sort();
       const blockHtml=`<div style="break-inside:avoid;margin-bottom:9px">
-        <div style="font-weight:600;font-size:12px;background:#f1efe8;padding:3px 6px;border-radius:3px;margin-bottom:2px">${esc(h.name)}${h.fieldPosition?` <span style="font-weight:400;color:#666">— ${esc(h.fieldPosition)}</span>`:''}</div>
+        <div style="font-weight:600;font-size:10px;background:#f1efe8;padding:3px 6px;border-radius:3px;margin-bottom:2px">${esc(h.name)}${h.fieldPosition?` <span style="font-weight:400;color:#666">— ${esc(h.fieldPosition)}</span>`:''}</div>
         ${names.map(n=>`<div style="font-size:11px;line-height:1.4;padding-left:2px">${esc(n)}</div>`).join('')}
       </div>`;
       return {weight:1+names.length,html:blockHtml};
