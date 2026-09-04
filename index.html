@@ -3244,16 +3244,19 @@ function printLogisticsSchedule(sc){
   // Top half: job assignments, Lead labeled, no halftime shown here
   const htGroups={};
   const jobBlocks=[];
+  const allAssigned=[]; // flat list for the alphabetical section below: {v, jobName, isLead, htName}
   eventJobs(sc).forEach(j=>{
     const asgn=(sc.assignments[j.id]||[]);if(!asgn.length)return;
-    let blockHtml=`<div style="break-inside:avoid;margin-bottom:7px">
-      <div style="font-weight:600;font-size:10px;background:#f1efe8;padding:2px 5px;border-radius:3px;margin-bottom:1px">${esc(j.name)}</div>`;
+    let blockHtml=`<div style="break-inside:avoid;margin-bottom:9px">
+      <div style="font-weight:600;font-size:13px;background:#f1efe8;padding:3px 6px;border-radius:3px;margin-bottom:2px">${esc(j.name)}</div>`;
     asgn.forEach((vid,idx)=>{
       const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
       const isLead=idx===0;
-      blockHtml+=`<div style="font-size:9.5px;line-height:1.4;padding-left:2px">${esc(fullName(v))}${isLead?' <span style="color:#8C0A21;font-weight:600">— Lead</span>':''}</div>`;
+      blockHtml+=`<div style="font-size:12px;line-height:1.5;padding-left:2px">${esc(fullName(v))}${isLead?' <span style="color:#8C0A21;font-weight:600">— Lead</span>':''}</div>`;
       const htId=(sc.halftimeAssignments&&sc.halftimeAssignments[j.id+'_'+vid])||'';
+      const htName=htId?(AS().halftimeJobs.find(h=>h.id===htId)||{}).name||'':'';
       if(htId)(htGroups[htId]=htGroups[htId]||[]).push(fullName(v));
+      allAssigned.push({v,jobName:j.name,isLead,htName});
     });
     blockHtml+=`</div>`;
     jobBlocks.push({weight:1+asgn.length,html:blockHtml});
@@ -3262,20 +3265,41 @@ function printLogisticsSchedule(sc){
   // Bottom half: halftime jobs as headings, with whoever's assigned to each listed underneath
   const htJobsWithPeople=(AS().halftimeJobs||[]).filter(h=>htGroups[h.id]&&htGroups[h.id].length);
   if(htJobsWithPeople.length){
-    html+=`<div style="margin-top:8px;padding-top:5px;border-top:1px solid #ccc">
-      <div style="font-weight:600;font-size:10px;letter-spacing:.5px;color:#555;margin-bottom:4px">HALFTIME ASSIGNMENTS</div>`;
+    html+=`<div style="margin-top:10px;padding-top:6px;border-top:1px solid #ccc">
+      <div style="font-weight:600;font-size:13px;letter-spacing:.5px;color:#555;margin-bottom:5px">HALFTIME ASSIGNMENTS</div>`;
     const htBlocks=htJobsWithPeople.map(h=>{
       const names=htGroups[h.id].sort();
-      const blockHtml=`<div style="break-inside:avoid;margin-bottom:7px">
-        <div style="font-weight:600;font-size:10px;background:#f1efe8;padding:2px 5px;border-radius:3px;margin-bottom:1px">${esc(h.name)}${h.fieldPosition?` <span style="font-weight:400;color:#666">— ${esc(h.fieldPosition)}</span>`:''}</div>
-        ${names.map(n=>`<div style="font-size:9.5px;line-height:1.4;padding-left:2px">${esc(n)}</div>`).join('')}
+      const blockHtml=`<div style="break-inside:avoid;margin-bottom:9px">
+        <div style="font-weight:600;font-size:13px;background:#f1efe8;padding:3px 6px;border-radius:3px;margin-bottom:2px">${esc(h.name)}${h.fieldPosition?` <span style="font-weight:400;color:#666">— ${esc(h.fieldPosition)}</span>`:''}</div>
+        ${names.map(n=>`<div style="font-size:12px;line-height:1.5;padding-left:2px">${esc(n)}</div>`).join('')}
       </div>`;
       return {weight:1+names.length,html:blockHtml};
     });
     html+=twoColumnGrid(htBlocks);
     html+=`</div>`;
   }
-  html+=`<p style="margin-top:6px;font-size:7px;color:#aaa">Printed ${new Date().toLocaleString()}</p></div>`;
+  // New section: everyone alphabetically by last name, with their main job and halftime job as columns
+  if(allAssigned.length){
+    allAssigned.sort((a,b)=>a.v.lname.localeCompare(b.v.lname)||a.v.fname.localeCompare(b.v.fname));
+    html+=`<div style="margin-top:14px;padding-top:8px;border-top:1px solid #ccc;break-inside:avoid">
+      <div style="font-weight:600;font-size:13px;letter-spacing:.5px;color:#555;margin-bottom:5px">ALL VOLUNTEERS — A TO Z BY LAST NAME</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="border-bottom:1px solid #999">
+          <th style="text-align:left;padding:3px 6px;font-weight:600">Volunteer</th>
+          <th style="text-align:left;padding:3px 6px;font-weight:600">Job</th>
+          <th style="text-align:left;padding:3px 6px;font-weight:600">Halftime Job</th>
+        </tr></thead>
+        <tbody>
+          ${allAssigned.map(({v,jobName,isLead,htName})=>`<tr style="border-bottom:.5px solid #ddd">
+            <td style="padding:3px 6px">${esc(fullName(v))}</td>
+            <td style="padding:3px 6px">${esc(jobName)}${isLead?' <span style="color:#8C0A21;font-weight:600">(Lead)</span>':''}</td>
+            <td style="padding:3px 6px">${htName?esc(htName):'<span style="color:#999">—</span>'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+  html+=`<p style="margin-top:8px;font-size:8px;color:#aaa">Printed ${new Date().toLocaleString()}</p></div>`;
   showPrint(pv,html);
 }
 
