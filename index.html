@@ -232,7 +232,7 @@
   <div class="tabs" id="main-tabs">
     <div class="tab active" onclick="showTab('schedules')"><i class="ti ti-calendar-event"></i> Schedules</div>
     <div class="tab" onclick="showTab('assign')"><i class="ti ti-layout-board"></i> Assign</div>
-    <div class="tab config-tab" onclick="showTab('config')"><i class="ti ti-settings"></i> Configuration</div>
+    <div class="tab" onclick="showTab('config')"><i class="ti ti-settings"></i> Configuration</div>
     <div class="tab" onclick="showTab('history')"><i class="ti ti-clock-hour-4"></i> History</div>
   </div>
 
@@ -316,7 +316,7 @@
   <!-- CONFIGURATION (Master Roster + event-specific settings visible to all; global settings admin-only) -->
   <div class="panel" id="panel-config">
     <div style="font-size:16px;font-weight:600;margin-bottom:.25rem">This event's roster &amp; jobs</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:1rem">Available to everyone. Manage who's signed up, the master roster, and this specific event's jobs and slot count here.</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:1rem">Available to everyone. Manage who's signed up, the master roster, and this specific event's jobs, halftime jobs, and slot count here.</div>
 
     <div class="card" id="weekly-roster-card">
       <div id="weekly-roster-header"></div>
@@ -382,6 +382,22 @@
         </table>
         <button class="btn sm" style="margin-top:.5rem" onclick="resetEventJobs()"><i class="ti ti-refresh"></i> Reset to global template</button>
       </div>
+      <div id="event-ht-section" style="margin-top:1.25rem;padding-top:1rem;border-top:.5px solid var(--border)">
+        <div style="font-size:15px;font-weight:600;margin-bottom:.25rem"><i class="ti ti-clock-hour-4" style="font-size:14px"></i> Halftime jobs for this event <span id="event-ht-badge" class="badge blue" style="font-size:10px;vertical-align:middle">SEASON TEMPLATE</span></div>
+        <div id="event-ht-note" style="font-size:12px;color:var(--text2);margin-bottom:.65rem"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px;align-items:end;margin-bottom:.5rem">
+          <div><label class="lbl">Name</label><input type="text" id="eht-name" placeholder="e.g. Water station"></div>
+          <div><label class="lbl">Field Position</label><input type="text" id="eht-fieldpos" placeholder="Optional"></div>
+          <div><label class="lbl">Target slots</label><input type="number" id="eht-target" min="0" placeholder="Optional" style="width:90px"></div>
+          <button class="btn sm primary" onclick="addEventHalftimeJob()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
+        </div>
+        <table class="jtable" id="event-ht-table" style="background:var(--surface)">
+          <colgroup><col style="width:38%"><col style="width:22%"><col style="width:16%"><col style="width:12%"><col style="width:12%"></colgroup>
+          <thead><tr><th>Name</th><th>Field Position</th><th>Target slots</th><th>Assigned</th><th></th></tr></thead>
+          <tbody id="event-ht-body"></tbody>
+        </table>
+        <button class="btn sm" id="event-ht-reset" style="margin-top:.5rem;display:none" onclick="resetEventHalftimeJobs()"><i class="ti ti-refresh"></i> Reset to season template</button>
+      </div>
       <div id="bus-slot-section" style="margin-top:1.25rem;padding-top:1rem;border-top:.5px solid var(--border)">
         <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">
           <label class="lbl" id="bus-slot-label" style="margin-bottom:0">Seats per bus for this event:</label>
@@ -417,7 +433,7 @@
       </table>
     </div>
     <div class="card pw-admin-only" style="margin-top:1.5rem">
-      <div style="font-size:15px;font-weight:500;margin-bottom:.75rem">Add halftime job</div>
+      <div style="font-size:15px;font-weight:500;margin-bottom:.75rem">Add to season halftime template <span class="badge purple" style="font-size:10px;vertical-align:middle">TEMPLATE</span></div>
       <div class="grid4">
         <div><label class="lbl">Name</label><input type="text" id="ht-name" placeholder="e.g. Water station, Props crew"></div>
         <div><label class="lbl">Field Position</label><input type="text" id="ht-fieldpos" placeholder="e.g. 30 yard line, End zone"></div>
@@ -426,8 +442,8 @@
       </div>
     </div>
     <div class="card pw-admin-only">
-      <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Halftime jobs</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">These appear as options in the halftime dropdown on each position. Set a target to track how many you still need to assign, and a Field Position for where that job will be positioned — both optional. Click to edit inline.</div>
+      <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Season halftime template</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem"><strong>Used by every game that hasn't been customized</strong> — one-off changes for a single game belong in the blue "Halftime jobs for this event" box further up. Set a target to track how many you still need to assign, and a Field Position for where that job will be positioned — both optional. Click to edit inline.</div>
       <table class="jtable">
         <colgroup><col style="width:38%"><col style="width:20%"><col style="width:18%"><col style="width:12%"><col style="width:12%"></colgroup>
         <thead><tr><th>Name</th><th>Field Position</th><th>Target slots</th><th>Assigned</th><th></th></tr></thead>
@@ -722,11 +738,8 @@ function applyMode(mode){
     indicator.innerHTML = `<span class="mode-pill ${cls}"><i class="ti ti-${mode==='logistics'?'truck':'users'}"></i> ${label}</span>`;
   }
 
-  // Password card — only admin
+  // Password card and other global settings — only admin
   document.querySelectorAll('.pw-admin-only').forEach(el => el.style.display = _role==='admin' ? '' : 'none');
-
-  // Config tab — admin only
-  document.querySelectorAll('.config-tab').forEach(t => t.style.display = _role==='admin' ? '' : 'none');
 
   // Subtitle
   document.getElementById('app-subtitle').textContent =
@@ -1190,18 +1203,18 @@ async function initData(){
 }
 
 // Ensures a "Security/Ropes" halftime job exists in the given General mode data, returning its id
-function getOrCreateSecurityRopesJobId(data){
-  data.halftimeJobs=data.halftimeJobs||[];
-  let j=data.halftimeJobs.find(h=>h.name.toLowerCase()==='security/ropes');
-  if(!j){ j={id:uid(),name:'Security/Ropes'}; data.halftimeJobs.unshift(j); }
+function getOrCreateSecurityRopesJobId(data,sc){
+  const list = (sc && Array.isArray(sc.halftimeJobs))
+    ? sc.halftimeJobs
+    : (data.halftimeJobs = data.halftimeJobs||[]);
+  let j=list.find(h=>h.name.toLowerCase()==='security/ropes');
+  if(!j){ j={id:uid(),name:'Security/Ropes'}; list.unshift(j); }
   return j.id;
 }
-// Sets a volunteer's halftime assignment to Security/Ropes by default (General mode only),
-// but only if they don't already have a halftime assignment for this event.
 function applyDefaultHalftime(data,sc,vid){
   sc.halftimeAssignments=sc.halftimeAssignments||{};
   if(sc.halftimeAssignments[vid])return;
-  sc.halftimeAssignments[vid]=getOrCreateSecurityRopesJobId(data);
+  sc.halftimeAssignments[vid]=getOrCreateSecurityRopesJobId(data,sc);
 }
 
 function migrateGeneralBusJobs(data,mode){
@@ -1266,7 +1279,7 @@ function buildEntries(sc){
     asgn.forEach((vid,idx)=>{
       const v=AS().volunteers.find(v=>v.id===vid);if(!v)return;
       const htId=(sc.halftimeAssignments&&sc.halftimeAssignments[j.id+'_'+vid])||'';
-      const htName=htId?(AS().halftimeJobs.find(h=>h.id===htId)||{name:''}).name:'';
+      const htName=htId?(findHalftimeJob(sc,htId)||{name:''}).name:'';
       entries.push({jobId:j.id,jobName:j.name,pos:idx+1,volId:vid,volName:fullName(v),htName});
     });
   });
@@ -1275,7 +1288,6 @@ function buildEntries(sc){
 
 /* ── TABS ── */
 function showTab(t){
-  if(t==='config' && _role!=='admin'){ showTab('schedules'); return; }
   const tabNames=['schedules','assign','config','history'];
   const panel=document.getElementById('panel-'+t);
   if(!panel){ console.warn('showTab: unknown tab "'+t+'", falling back to schedules'); if(t!=='schedules')showTab('schedules'); return; }
@@ -1635,6 +1647,27 @@ const DEFAULT_BUS_SLOTS = 2;
 function busSlotsFor(sc){ return (sc&&sc.busSlotCount)||DEFAULT_BUS_SLOTS; }
 // Returns the job list for a specific schedule — per-event if set, else global
 function eventJobs(sc){ return (sc&&sc.jobs&&sc.jobs.length)?sc.jobs:AS().jobs; }
+// Season template unless this event has been customized (copy-on-write). An explicit empty
+// array is a valid one-off: "no halftime jobs this game."
+function eventHalftimeJobs(sc){
+  if(sc && Array.isArray(sc.halftimeJobs)) return sc.halftimeJobs;
+  return (AS() && AS().halftimeJobs) || [];
+}
+function eventUsesCustomHalftimeJobs(sc){ return !!(sc && Array.isArray(sc.halftimeJobs)); }
+function ensureEventHalftimeJobs(sc){
+  if(!sc) return [];
+  if(!Array.isArray(sc.halftimeJobs)) sc.halftimeJobs = ((AS()&&AS().halftimeJobs)||[]).map(cloneHalftimeJob);
+  return sc.halftimeJobs;
+}
+function findHalftimeJob(sc,id){
+  if(!id) return null;
+  return eventHalftimeJobs(sc).find(h=>h.id===id)
+    || ((AS()&&AS().halftimeJobs)||[]).find(h=>h.id===id)
+    || null;
+}
+function cloneHalftimeJob(h){
+  return {id:h.id,name:h.name,targetSlots:h.targetSlots,fieldPosition:h.fieldPosition};
+}
 // Anyone placed into the "FST - Food Services" job (Logistics) automatically gets a halftime
 // job that starts with "Distribute Snacks", if one exists and they don't already have a
 // halftime assignment for that position. Doesn't override a halftime choice already made.
@@ -1645,7 +1678,7 @@ function applyFSTHalftimeRule(sc,jobId,vid){
   sc.halftimeAssignments=sc.halftimeAssignments||{};
   const key=jobId+'_'+vid;
   if(sc.halftimeAssignments[key])return;
-  const htJob=(AS().halftimeJobs||[]).find(h=>h.name.trim().toLowerCase().startsWith('distribute snacks'));
+  const htJob=eventHalftimeJobs(sc).find(h=>h.name.trim().toLowerCase().startsWith('distribute snacks'));
   if(!htJob)return;
   sc.halftimeAssignments[key]=htJob.id;
 }
@@ -1837,7 +1870,7 @@ function renderBoard(){renderPool();renderJobSlots();renderStats();renderEventJo
 function renderHalftimeStatusPanel(){
   const wrap=document.getElementById('halftime-status-wrap');if(!wrap)return;
   const sc=activeSched();if(!sc){wrap.innerHTML='';return;}
-  const jobsToShow=(AS().halftimeJobs||[]).filter(h=>(h.targetSlots!==undefined&&h.targetSlots!==null)||h.fieldPosition);
+  const jobsToShow=eventHalftimeJobs(sc).filter(h=>(h.targetSlots!==undefined&&h.targetSlots!==null)||h.fieldPosition);
   if(!jobsToShow.length){wrap.innerHTML='';return;}
   wrap.innerHTML=`
     <div style="font-size:14px;font-weight:500;margin-bottom:.5rem"><i class="ti ti-clipboard-list" style="font-size:13px"></i> Halftime status</div>
@@ -1955,18 +1988,25 @@ function setBusSlotCount(val){
 function renderEventConfigSection(){
   const header=document.getElementById('event-config-header');
   const jobsSection=document.getElementById('event-jobs-section');
+  const htSection=document.getElementById('event-ht-section');
   const busSection=document.getElementById('bus-slot-section');
   if(!header)return;
   const sc=activeSched();
   if(!sc){
     header.innerHTML='<div style="font-size:13px;color:var(--text2)">No event open. Select one from <strong>Schedules</strong> to configure its jobs and slot count here.</div>';
     if(jobsSection)jobsSection.style.display='none';
+    if(htSection)htSection.style.display='none';
     if(busSection)busSection.style.display='none';
     return;
   }
   header.innerHTML=`<div style="font-size:15px;font-weight:500">${esc(sc.name)}</div><div style="font-size:12px;color:var(--text2)">${fmtDate(sc.date)}</div>`;
   if(jobsSection)jobsSection.style.display='';
   renderEventJobsTable();
+  if(htSection){
+    const hideHt=_mode==='general'&&sc.eventType==='event';
+    htSection.style.display=hideHt?'none':'';
+    if(!hideHt) renderEventHalftimeTable();
+  }
   if(busSection){
     if(_mode==='general'&&sc.eventType!=='event'){
       busSection.style.display='';
@@ -2007,7 +2047,7 @@ function renderPool(){
 function renderJobSlots(){
   const board=document.getElementById('jobs-board');if(!board)return;board.innerHTML='';
   const sc=activeSched();if(!sc)return;
-  const htOpts='<option value="">— none —</option>'+AS().halftimeJobs.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
+  const htOpts='<option value="">— none —</option>'+eventHalftimeJobs(sc).map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
   const isGen=_mode==='general';
 
   const isNonGameEvent=isGen&&sc.eventType==='event';
@@ -2150,7 +2190,7 @@ function setSpecialBusAssign(vid,busId){
 // checked against the count BEFORE this new assignment, so it only fires the moment you go over.
 function warnIfHalftimeOverTarget(sc,htId){
   if(!htId)return;
-  const h=(AS().halftimeJobs||[]).find(h=>h.id===htId);
+  const h=findHalftimeJob(sc,htId);
   if(!h||h.targetSlots===undefined||h.targetSlots===null)return;
   const count=halftimeJobCount(sc,htId);
   if(count>=h.targetSlots){
@@ -2216,7 +2256,7 @@ function copyFromPreviousEventLogistics(sc,prev){
       if(arr.length>=job.slots)return;
       arr.push(vid);alreadyAssigned.add(vid);copied++;
       const prevHtVal=prev.halftimeAssignments&&prev.halftimeAssignments[jobId+'_'+vid];
-      if(prevHtVal){ sc.halftimeAssignments=sc.halftimeAssignments||{}; sc.halftimeAssignments[jobId+'_'+vid]=prevHtVal; }
+      if(prevHtVal && findHalftimeJob(sc,prevHtVal)){ sc.halftimeAssignments=sc.halftimeAssignments||{}; sc.halftimeAssignments[jobId+'_'+vid]=prevHtVal; }
       else applyFSTHalftimeRule(sc,jobId,vid);
     });
   });
@@ -2312,6 +2352,7 @@ function copyFromPreviousEventGeneral(sc,prev){
     if(!prev[field])return;
     Object.entries(prev[field]).forEach(([vid,val])=>{
       if(!currentRoster.has(vid))return;
+      if(field==='halftimeAssignments' && !findHalftimeJob(sc,val))return;
       sc[field]=sc[field]||{};
       if(sc[field][vid])return;
       sc[field][vid]=val;
@@ -2874,59 +2915,169 @@ function renderImportCategoriesTable(){
   });
 }
 
-/* ── HALFTIME JOBS ── */
+function parseHalftimeTarget(raw){
+  return raw!==''?Math.max(0,parseInt(raw)||0):undefined;
+}
+function parseHalftimeFieldPosition(raw){
+  return (raw||'').trim()||undefined;
+}
+
+/* ── HALFTIME JOBS (season template) ── */
 function addHalftimeJob(){
   const name=document.getElementById('ht-name').value.trim();if(!name){alert('Name required.');return;}
+  AS().halftimeJobs=AS().halftimeJobs||[];
   if(AS().halftimeJobs.some(h=>h.name.toLowerCase()===name.toLowerCase())){alert('Already exists.');return;}
-  const targetRaw=document.getElementById('ht-target').value;
-  const targetSlots=targetRaw!==''?Math.max(0,parseInt(targetRaw)||0):undefined;
-  const fieldPosition=document.getElementById('ht-fieldpos').value.trim()||undefined;
+  const targetSlots=parseHalftimeTarget(document.getElementById('ht-target').value);
+  const fieldPosition=parseHalftimeFieldPosition(document.getElementById('ht-fieldpos').value);
   AS().halftimeJobs.push({id:uid(),name,targetSlots,fieldPosition});
   document.getElementById('ht-name').value='';document.getElementById('ht-target').value='';document.getElementById('ht-fieldpos').value='';
-  save();renderHalftimeTable();
+  save();renderHalftimeTable();renderEventHalftimeTable();renderHalftimeStatusPanel();
 }
 function removeHalftimeJob(id){
-  if(!confirm('Remove this halftime job?'))return;
-  AS().halftimeJobs=AS().halftimeJobs.filter(h=>h.id!==id);
-  AS().schedules.forEach(sc=>{Object.keys(sc.halftimeAssignments||{}).forEach(k=>{if(sc.halftimeAssignments[k]===id)delete sc.halftimeAssignments[k];});});
-  save();renderHalftimeTable();
+  if(!confirm('Remove this job from the season template? Games that still use the template will lose it. Games with a one-off list keep their own copy.'))return;
+  AS().halftimeJobs=(AS().halftimeJobs||[]).filter(h=>h.id!==id);
+  AS().schedules.forEach(sc=>{
+    if(eventUsesCustomHalftimeJobs(sc))return;
+    Object.keys(sc.halftimeAssignments||{}).forEach(k=>{if(sc.halftimeAssignments[k]===id)delete sc.halftimeAssignments[k];});
+  });
+  save();renderHalftimeTable();renderEventHalftimeTable();renderBoard();
 }
-function editHalftimeField(id,val){const h=AS().halftimeJobs.find(h=>h.id===id);if(h&&val.trim())h.name=val.trim();save();}
+function editHalftimeField(id,val){
+  const h=(AS().halftimeJobs||[]).find(h=>h.id===id);if(h&&val.trim())h.name=val.trim();
+  save();renderEventHalftimeTable();renderHalftimeStatusPanel();
+}
 function editHalftimeTarget(id,val){
-  const h=AS().halftimeJobs.find(h=>h.id===id);if(!h)return;
-  h.targetSlots=val!==''?Math.max(0,parseInt(val)||0):undefined;
-  save();renderHalftimeTable();
+  const h=(AS().halftimeJobs||[]).find(h=>h.id===id);if(!h)return;
+  h.targetSlots=parseHalftimeTarget(val);
+  save();renderHalftimeTable();renderEventHalftimeTable();renderHalftimeStatusPanel();
 }
 function editHalftimeFieldPosition(id,val){
-  const h=AS().halftimeJobs.find(h=>h.id===id);if(!h)return;
-  h.fieldPosition=val.trim()||undefined;
-  save();renderHalftimeTable();
+  const h=(AS().halftimeJobs||[]).find(h=>h.id===id);if(!h)return;
+  h.fieldPosition=parseHalftimeFieldPosition(val);
+  save();renderHalftimeTable();renderEventHalftimeTable();renderHalftimeStatusPanel();
 }
-// Counts how many people currently hold a given halftime job for an event — works regardless
-// of which key format the assignment is stored under (Logistics keys by job+volunteer,
-// General keys by volunteer alone), since we're only ever counting the stored VALUES.
 function halftimeJobCount(sc,htJobId){
   if(!sc||!sc.halftimeAssignments)return 0;
   return Object.values(sc.halftimeAssignments).filter(v=>v===htJobId).length;
 }
 function renderHalftimeTable(){
   const tb=document.getElementById('ht-body');if(!tb||!AS())return;tb.innerHTML='';
-  if(!AS().halftimeJobs.length){tb.innerHTML='<tr><td colspan="5" style="padding:1rem;font-size:13px;color:var(--text2)">No halftime jobs yet.</td></tr>';return;}
+  const list=AS().halftimeJobs||[];
+  if(!list.length){tb.innerHTML='<tr><td colspan="5" style="padding:1rem;font-size:13px;color:var(--text2)">No halftime jobs in the season template yet.</td></tr>';return;}
   const sc=activeSched();
-  AS().halftimeJobs.forEach(h=>{
+  const customized=eventUsesCustomHalftimeJobs(sc);
+  list.forEach(h=>{
     const tr=document.createElement('tr');
-    const count=sc?halftimeJobCount(sc,h.id):null;
+    const count=sc&&!customized?halftimeJobCount(sc,h.id):null;
     const hasTarget=h.targetSlots!==undefined&&h.targetSlots!==null;
     const under=hasTarget&&count!==null&&count<h.targetSlots;
-    const assignedCell=sc
-      ?(hasTarget?`<span style="${under?'color:var(--warning)':''}">${count}/${h.targetSlots}</span>`:(count!==null?count:'—'))
-      :'<span style="color:var(--text3)">No event open</span>';
+    let assignedCell;
+    if(!sc) assignedCell='<span style="color:var(--text3)">No event open</span>';
+    else if(customized) assignedCell='<span style="color:var(--text3)">Customized</span>';
+    else assignedCell=hasTarget?`<span style="${under?'color:var(--warning)':''}">${count}/${h.targetSlots}</span>`:count;
     tr.innerHTML=`
       <td><input class="inline-edit" value="${esc(h.name)}" onblur="editHalftimeField('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
       <td><input class="inline-edit" value="${esc(h.fieldPosition||'')}" placeholder="—" onblur="editHalftimeFieldPosition('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
       <td><input class="inline-edit" type="number" min="0" value="${hasTarget?h.targetSlots:''}" placeholder="—" onblur="editHalftimeTarget('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
       <td style="font-size:12px">${assignedCell}</td>
       <td><button class="btn xs danger" onclick="removeHalftimeJob('${h.id}')"><i class="ti ti-trash"></i></button></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+/* ── HALFTIME JOBS (this event only) ── */
+function addEventHalftimeJob(){
+  const sc=activeSched();if(!sc){alert('Open an event first.');return;}
+  const name=document.getElementById('eht-name').value.trim();if(!name){alert('Name required.');return;}
+  const list=ensureEventHalftimeJobs(sc);
+  if(list.some(h=>h.name.toLowerCase()===name.toLowerCase())){alert('Already exists on this event.');return;}
+  const targetSlots=parseHalftimeTarget(document.getElementById('eht-target').value);
+  const fieldPosition=parseHalftimeFieldPosition(document.getElementById('eht-fieldpos').value);
+  list.push({id:uid(),name,targetSlots,fieldPosition});
+  document.getElementById('eht-name').value='';document.getElementById('eht-target').value='';document.getElementById('eht-fieldpos').value='';
+  save();renderEventHalftimeTable();renderHalftimeTable();renderBoard();
+}
+function removeEventHalftimeJob(id){
+  const sc=activeSched();if(!sc)return;
+  if(!confirm('Remove this halftime job from this event only?'))return;
+  const list=ensureEventHalftimeJobs(sc);
+  sc.halftimeJobs=list.filter(h=>h.id!==id);
+  Object.keys(sc.halftimeAssignments||{}).forEach(k=>{if(sc.halftimeAssignments[k]===id)delete sc.halftimeAssignments[k];});
+  save();renderEventHalftimeTable();renderHalftimeTable();renderBoard();
+}
+function editEventHalftimeField(id,val){
+  const sc=activeSched();if(!sc)return;
+  const next=val.trim();if(!next)return;
+  const current=eventHalftimeJobs(sc).find(h=>h.id===id);if(!current||current.name===next)return;
+  const h=ensureEventHalftimeJobs(sc).find(h=>h.id===id);if(h)h.name=next;
+  save();renderEventHalftimeTable();renderHalftimeTable();renderHalftimeStatusPanel();
+}
+function editEventHalftimeTarget(id,val){
+  const sc=activeSched();if(!sc)return;
+  const current=eventHalftimeJobs(sc).find(h=>h.id===id);if(!current)return;
+  const next=parseHalftimeTarget(val);
+  if(current.targetSlots===next)return;
+  const h=ensureEventHalftimeJobs(sc).find(h=>h.id===id);if(!h)return;
+  h.targetSlots=next;
+  save();renderEventHalftimeTable();renderHalftimeTable();renderHalftimeStatusPanel();
+}
+function editEventHalftimeFieldPosition(id,val){
+  const sc=activeSched();if(!sc)return;
+  const current=eventHalftimeJobs(sc).find(h=>h.id===id);if(!current)return;
+  const next=parseHalftimeFieldPosition(val);
+  if((current.fieldPosition||undefined)===next)return;
+  const h=ensureEventHalftimeJobs(sc).find(h=>h.id===id);if(!h)return;
+  h.fieldPosition=next;
+  save();renderEventHalftimeTable();renderHalftimeTable();renderHalftimeStatusPanel();
+}
+function resetEventHalftimeJobs(){
+  const sc=activeSched();if(!sc)return;
+  if(!confirm('Reset this event to the season halftime template? One-off jobs added only on this event will be removed. Assignments that still match a template job are kept.'))return;
+  const templateIds=new Set(((AS()&&AS().halftimeJobs)||[]).map(h=>h.id));
+  Object.keys(sc.halftimeAssignments||{}).forEach(k=>{
+    if(!templateIds.has(sc.halftimeAssignments[k])) delete sc.halftimeAssignments[k];
+  });
+  delete sc.halftimeJobs;
+  save();renderEventHalftimeTable();renderHalftimeTable();renderBoard();
+}
+function renderEventHalftimeTable(){
+  const tb=document.getElementById('event-ht-body');if(!tb)return;
+  const sc=activeSched();
+  const badge=document.getElementById('event-ht-badge');
+  const note=document.getElementById('event-ht-note');
+  const resetBtn=document.getElementById('event-ht-reset');
+  if(!sc){tb.innerHTML='';return;}
+  const customized=eventUsesCustomHalftimeJobs(sc);
+  if(badge){
+    badge.textContent=customized?'THIS EVENT ONLY':'SEASON TEMPLATE';
+    badge.className='badge '+(customized?'teal':'blue');
+    badge.style.fontSize='10px';
+    badge.style.verticalAlign='middle';
+  }
+  if(note){
+    note.innerHTML=customized
+      ? '<strong>This game has a one-off list</strong> — edits here do not change the season template or other games. Reset below to follow the template again.'
+      : '<strong>This game is using the season template.</strong> Add, rename, or remove a job here to make a one-off list for this event only. Other games keep the template.';
+  }
+  if(resetBtn) resetBtn.style.display=customized?'':'none';
+  const list=eventHalftimeJobs(sc);
+  tb.innerHTML='';
+  if(!list.length){
+    tb.innerHTML='<tr><td colspan="5" style="padding:1rem;font-size:13px;color:var(--text2)">No halftime jobs for this event.</td></tr>';
+    return;
+  }
+  list.forEach(h=>{
+    const tr=document.createElement('tr');
+    const count=halftimeJobCount(sc,h.id);
+    const hasTarget=h.targetSlots!==undefined&&h.targetSlots!==null;
+    const under=hasTarget&&count<h.targetSlots;
+    const assignedCell=hasTarget?`<span style="${under?'color:var(--warning)':''}">${count}/${h.targetSlots}</span>`:count;
+    tr.innerHTML=`
+      <td><input class="inline-edit" value="${esc(h.name)}" onblur="editEventHalftimeField('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><input class="inline-edit" value="${esc(h.fieldPosition||'')}" placeholder="—" onblur="editEventHalftimeFieldPosition('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><input class="inline-edit" type="number" min="0" value="${hasTarget?h.targetSlots:''}" placeholder="—" onblur="editEventHalftimeTarget('${h.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td style="font-size:12px">${assignedCell}</td>
+      <td><button class="btn xs danger" onclick="removeEventHalftimeJob('${h.id}')"><i class="ti ti-trash"></i></button></td>`;
     tb.appendChild(tr);
   });
 }
@@ -3090,7 +3241,7 @@ function renderGeneralVolTable(){
   const vols=scheduleVolunteers(sc).filter(hasAnyAssignment);
   if(!vols.length){wrap.innerHTML='';return;}
   const halfJobs=AS().halfJobs||[];
-  const htJobs=AS().halftimeJobs||[];
+  const htJobs=eventHalftimeJobs(sc);
   const halfOpts='<option value="">— none —</option>'+halfJobs.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
   const htOpts='<option value="">— none —</option>'+htJobs.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
 
@@ -3252,7 +3403,7 @@ function printLogisticsSchedule(sc){
       const isLead=idx===0;
       blockHtml+=`<div style="font-size:11px;line-height:1.4;padding-left:2px">${esc(fullName(v))}${isLead?' <span style="color:#8C0A21;font-weight:600">— Lead</span>':''}</div>`;
       const htId=(sc.halftimeAssignments&&sc.halftimeAssignments[j.id+'_'+vid])||'';
-      const htName=htId?(AS().halftimeJobs.find(h=>h.id===htId)||{}).name||'':'';
+      const htName=htId?(findHalftimeJob(sc,htId)||{}).name||'':'';
       if(htId)(htGroups[htId]=htGroups[htId]||[]).push(fullName(v));
       allAssigned.push({v,jobName:j.name,isLead,htName});
     });
@@ -3261,7 +3412,7 @@ function printLogisticsSchedule(sc){
   });
   html+=twoColumnGrid(jobBlocks);
   // Bottom half: halftime jobs as headings, with whoever's assigned to each listed underneath
-  const htJobsWithPeople=(AS().halftimeJobs||[]).filter(h=>htGroups[h.id]&&htGroups[h.id].length);
+  const htJobsWithPeople=eventHalftimeJobs(sc).filter(h=>htGroups[h.id]&&htGroups[h.id].length);
   if(htJobsWithPeople.length){
     html+=`<div style="margin-top:10px;padding-top:6px;border-top:1px solid #ccc">
       <div style="font-weight:600;font-size:12px;letter-spacing:.5px;color:#555;margin-bottom:5px">HALFTIME ASSIGNMENTS</div>`;
@@ -3339,7 +3490,7 @@ function printGeneralSchedule(sc,useClassic){
     return [...jobsList.filter(j=>!isFloat(j)), ...jobsList.filter(isFloat)];
   }
   const halfJobs=withFloatLast(AS().halfJobs||[]);
-  const htJobs=AS().halftimeJobs||[];
+  const htJobs=eventHalftimeJobs(sc);
   const floatJob=halfJobs.find(j=>(j.name||'').trim().toLowerCase()==='float');
 
   // Same exemption used on the assignment screen: volunteers on a specialty job (Colorguard,
