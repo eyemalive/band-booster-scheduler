@@ -232,7 +232,7 @@
   <div class="tabs" id="main-tabs">
     <div class="tab active" onclick="showTab('schedules')"><i class="ti ti-calendar-event"></i> Schedules</div>
     <div class="tab" onclick="showTab('assign')"><i class="ti ti-layout-board"></i> Assign</div>
-    <div class="tab" onclick="showTab('config')"><i class="ti ti-settings"></i> Configuration</div>
+    <div class="tab config-tab" onclick="showTab('config')"><i class="ti ti-settings"></i> Configuration</div>
     <div class="tab" onclick="showTab('history')"><i class="ti ti-clock-hour-4"></i> History</div>
   </div>
 
@@ -507,7 +507,7 @@
 
     <div class="card pw-admin-only" style="margin-top:1.5rem;border-color:var(--border-med)">
       <div style="font-size:15px;font-weight:500;margin-bottom:.25rem"><i class="ti ti-lock" style="font-size:14px"></i> Password management</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Passwords are stored in the <strong>AppPasswords</strong> tab of your Google Sheet. Load current passwords to edit, then save back to the sheet. Leave a field blank to keep the existing password unchanged.</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Passwords are stored hashed in the <strong>AppPasswords</strong> tab of your Google Sheet. Existing passwords cannot be viewed. Leave a field blank to keep the current password unchanged.</div>
       <div id="pw-load-area">
         <button class="btn sm" onclick="loadPasswords()"><i class="ti ti-download"></i> Load current passwords</button>
         <div id="pw-load-msg" style="font-size:12px;color:var(--text2);margin-top:.4rem"></div>
@@ -624,33 +624,31 @@ async function doLogin(){
   try{
     const r = await fetch('/api/sync', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({action:'getPasswords'})
+      body: JSON.stringify({action:'login', password: pw})
     });
     const data = await r.json();
-    if(!data.ok) throw new Error(data.error||'Failed to fetch passwords');
-    const passwords = data.passwords || {};
-    let matchedRole = null;
-    for(const [role, p] of Object.entries(passwords)){
-      if(p && p === pw){ matchedRole = role; break; }
-    }
-    if(!matchedRole){
-      document.getElementById('login-error').textContent = 'Incorrect password.';
+    if(!data.ok || !data.role){
+      document.getElementById('login-error').textContent = data.error || 'Incorrect password.';
       document.getElementById('login-spinner').style.display = 'none';
       return;
     }
-    _role = matchedRole;
+    _role = data.role;
     const defaultMode = (_role === 'general') ? 'general' : 'logistics';
     setSession({ role: _role, mode: defaultMode });
+    document.getElementById('login-pw').value = '';
     document.getElementById('login-spinner').style.display = 'none';
     launchApp(defaultMode);
   } catch(err){
     document.getElementById('login-spinner').style.display = 'none';
-    // If backend not configured yet, allow local use with hardcoded fallback check
     document.getElementById('login-error').textContent = 'Could not verify password — check connection. (' + err.message + ')';
   }
 }
 
 function doLogout(){
+  fetch('/api/sync', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action:'logout'})
+  }).catch(()=>{});
   clearSession();
   _role = null; _mode = null;
   S = null; SG = null;
@@ -829,8 +827,15 @@ async function apiCall(action, payload, tabOverride){
   const body = { action, tab: tabOverride || sheetTab() };
   if(payload !== undefined) body.payload = payload;
   const res = await fetch('/api/sync', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-  if(!res.ok) throw new Error('HTTP ' + res.status);
-  const json = await res.json();
+  const json = await res.json().catch(()=>({}));
+  if(res.status === 401){
+    clearSession();
+    _role = null; _mode = null;
+    document.getElementById('app-main').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+    throw new Error(json.error || 'Not signed in.');
+  }
+  if(!res.ok) throw new Error(json.error || ('HTTP ' + res.status));
   if(json.ok === false) throw new Error(json.error || 'Unknown error');
   return json;
 }
@@ -1043,16 +1048,13 @@ async function runDiagnostic(){
   const msg = document.getElementById('settings-msg');
   msg.innerHTML = '⏳ Running diagnostics…';
   try{
-    const diagRes = await fetch('/api/sync?diag=1');
-    const diag = await diagRes.json();
+    const diag = await apiCall('diag');
     if(!diag.configured){
       msg.innerHTML = '✗ <strong>Vercel env vars not set.</strong><br>APPS_SCRIPT_URL: '+(diag.hasUrl?'✓ set':'✗ missing')+'<br>API_KEY: '+(diag.hasKey?'✓ set':'✗ missing');
       return;
     }
     msg.innerHTML = '✓ Proxy reachable.<br>⏳ Testing Apps Script…';
-    const r = await fetch('/api/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'load',tab:sheetTab()})});
-    const data = await r.json();
-    if(data.ok===false){ msg.innerHTML='✗ Apps Script error: <code>'+data.error+'</code>'; return; }
+    const data = await apiCall('load');
     markConnected(); setSyncStatus('ok','Connected');
     if(data.data){ setAS(data.data); localStorage.setItem(cacheKey(),JSON.stringify(AS())); refreshAllPanels(); }
 
@@ -1066,10 +1068,9 @@ async function runDiagnostic(){
     const results = [];
     for(const {tab,label} of sharedTabs){
       try{
-        const rr = await fetch('/api/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'load',tab})});
-        const dd = await rr.json();
-        results.push(dd.ok===false ? `✗ ${label} (<code>${tab}</code>): <code>${dd.error}</code>` : `✓ ${label} OK`);
-      }catch(err){ results.push(`✗ ${label} (<code>${tab}</code>): ${err.message}`); }
+        await apiCall('load', undefined, tab);
+        results.push(`✓ ${label} OK`);
+      }catch(err){ results.push(`✗ ${label} (<code>${tab}</code>): <code>${esc(err.message)}</code>`); }
     }
     const anyFailed = results.some(r=>r.startsWith('✗'));
     msg.innerHTML = '✓ Proxy reachable.<br>✓ Main data tab OK.<br>' + results.join('<br>')
@@ -1274,6 +1275,7 @@ function buildEntries(sc){
 
 /* ── TABS ── */
 function showTab(t){
+  if(t==='config' && _role!=='admin'){ showTab('schedules'); return; }
   const tabNames=['schedules','assign','config','history'];
   const panel=document.getElementById('panel-'+t);
   if(!panel){ console.warn('showTab: unknown tab "'+t+'", falling back to schedules'); if(t!=='schedules')showTab('schedules'); return; }
@@ -2936,12 +2938,9 @@ async function loadPasswords(){
   const msg = document.getElementById('pw-load-msg');
   msg.textContent = '⏳ Loading from sheet…';
   try{
-    const r = await fetch('/api/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getPasswords'})});
-    const data = await r.json();
-    if(!data.ok) throw new Error(data.error||'Failed');
-    _currentPasswords = data.passwords || {};
+    const data = await apiCall('passwordStatus');
+    _currentPasswords = data.roles || {};
     msg.textContent = '';
-    // Clear fields
     ['logistics','general','admin'].forEach(role=>{
       document.getElementById('pw-'+role).value='';
       document.getElementById('pw-'+role+'-c').value='';
@@ -2971,19 +2970,18 @@ async function savePasswords(){
     if(pw && pw !== con){ msg.textContent = '✗ '+role.charAt(0).toUpperCase()+role.slice(1)+' passwords do not match.'; return; }
     if(pw && pw.length < 6){ msg.textContent = '✗ Passwords must be at least 6 characters.'; return; }
   }
-  // Build updated passwords — blank fields keep existing value
-  const updated = {...(_currentPasswords||{})};
+  // Send only changed passwords — blank fields keep the existing (hashed) value on the server
+  const updated = {};
   roles.forEach(role=>{
     const pw = document.getElementById('pw-'+role).value;
     if(pw) updated[role] = pw;
   });
+  if(!Object.keys(updated).length){ msg.textContent = '✗ Enter at least one new password.'; return; }
   msg.textContent = '⏳ Saving…';
   try{
-    const r = await fetch('/api/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'savePasswords',payload:updated})});
-    const data = await r.json();
-    if(!data.ok) throw new Error(data.error||'Failed');
+    await apiCall('savePasswords', updated);
     msg.innerHTML = '<span style="color:var(--green-dk)">✓ Passwords saved successfully.</span>';
-    _currentPasswords = updated;
+    Object.keys(updated).forEach(role=>{ _currentPasswords = _currentPasswords||{}; _currentPasswords[role]=true; });
     // Clear fields after save
     roles.forEach(role=>{ document.getElementById('pw-'+role).value=''; document.getElementById('pw-'+role+'-c').value=''; });
   } catch(err){
@@ -3575,21 +3573,35 @@ function removeVolunteerFromRoster(vid){
   save();renderVolunteers();renderBoard();
 }
 
+function showLoginScreen(hint){
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app-main').style.display = 'none';
+  if(hint) document.getElementById('login-error').textContent = hint;
+}
+
 /* ── INIT ── */
-(function init(){
-  // Check for existing session
-  const session = getSession();
-  if(session && session.role){
-    _role = session.role;
-    launchApp(session.mode || (_role==='general'?'general':'logistics'));
-  } else {
-    // Show login
-    document.getElementById('login-screen').style.display = 'flex';
-    document.getElementById('app-main').style.display = 'none';
-    // If not on https (local dev), offer a bypass hint
-    if(!onHttpsHost()){
-      document.getElementById('login-error').textContent = 'Tip: running locally — backend may not be available.';
+(async function init(){
+  // Server cookie is the source of truth — sessionStorage alone is not enough to enter the app
+  try{
+    const r = await fetch('/api/sync', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'session'})
+    });
+    const data = await r.json();
+    if(data && data.ok && data.role){
+      _role = data.role;
+      const local = getSession();
+      const requested = (local && local.mode) || (_role==='general'?'general':'logistics');
+      const mode = _role==='admin' ? requested : (_role==='general'?'general':'logistics');
+      setSession({ role: _role, mode });
+      launchApp(mode);
+    } else {
+      clearSession();
+      showLoginScreen(!onHttpsHost() ? 'Tip: running locally — backend may not be available.' : '');
     }
+  } catch(err){
+    clearSession();
+    showLoginScreen(!onHttpsHost() ? 'Tip: running locally — backend may not be available.' : '');
   }
 
   // Background interval refresh (only when app is active)
