@@ -3384,6 +3384,14 @@ function twoColumnGrid(blocks){
   });
   return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start"><div>${leftHtml}</div><div>${rightHtml}</div></div>`;
 }
+// First half of the (already sorted) blocks go down the left column, the rest down the right,
+// so an A–Z list still reads alphabetically: left column then right column.
+function twoColumnFillLeft(blocks){
+  const mid=Math.ceil(blocks.length/2);
+  const leftHtml=blocks.slice(0,mid).map(b=>b.html).join('');
+  const rightHtml=blocks.slice(mid).map(b=>b.html).join('');
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start"><div>${leftHtml}</div><div>${rightHtml}</div></div>`;
+}
 function printLogisticsSchedule(sc){
   const pv=document.getElementById('print-view');
   let html=`<div style="font-family:Georgia,serif">
@@ -3427,7 +3435,7 @@ function printLogisticsSchedule(sc){
       </div>`;
       return {weight:1+names.length,html:blockHtml};
     });
-    html+=twoColumnGrid(htBlocks);
+    html+=twoColumnFillLeft(htBlocks);
     html+=`</div>`;
   }
   // New section: everyone alphabetically by last name, with their main job and halftime job as columns
