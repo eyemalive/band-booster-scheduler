@@ -3384,6 +3384,14 @@ function twoColumnGrid(blocks){
   });
   return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start"><div>${leftHtml}</div><div>${rightHtml}</div></div>`;
 }
+// First half of the (already sorted) blocks go down the left column, the rest down the right,
+// so an A–Z list still reads alphabetically: left column then right column.
+function twoColumnFillLeft(blocks){
+  const mid=Math.ceil(blocks.length/2);
+  const leftHtml=blocks.slice(0,mid).map(b=>b.html).join('');
+  const rightHtml=blocks.slice(mid).map(b=>b.html).join('');
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start"><div>${leftHtml}</div><div>${rightHtml}</div></div>`;
+}
 function printLogisticsSchedule(sc){
   const pv=document.getElementById('print-view');
   let html=`<div style="font-family:Georgia,serif">
@@ -3412,19 +3420,22 @@ function printLogisticsSchedule(sc){
   });
   html+=twoColumnGrid(jobBlocks);
   // Bottom half: halftime jobs as headings, with whoever's assigned to each listed underneath
-  const htJobsWithPeople=eventHalftimeJobs(sc).filter(h=>htGroups[h.id]&&htGroups[h.id].length);
+  const htJobsWithPeople=eventHalftimeJobs(sc)
+    .filter(h=>htGroups[h.id]&&htGroups[h.id].length)
+    .slice()
+    .sort((a,b)=>(a.name||'').localeCompare(b.name||'',undefined,{sensitivity:'base'}));
   if(htJobsWithPeople.length){
     html+=`<div style="margin-top:10px;padding-top:6px;border-top:1px solid #ccc">
       <div style="font-weight:600;font-size:12px;letter-spacing:.5px;color:#555;margin-bottom:5px">HALFTIME ASSIGNMENTS</div>`;
     const htBlocks=htJobsWithPeople.map(h=>{
-      const names=htGroups[h.id].sort();
+      const names=htGroups[h.id].slice().sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
       const blockHtml=`<div style="break-inside:avoid;margin-bottom:9px">
         <div style="font-weight:600;font-size:10px;background:#f1efe8;padding:3px 6px;border-radius:3px;margin-bottom:2px">${esc(h.name)}${h.fieldPosition?` <span style="font-weight:400;color:#666">— ${esc(h.fieldPosition)}</span>`:''}</div>
         ${names.map(n=>`<div style="font-size:11px;line-height:1.4;padding-left:2px">${esc(n)}</div>`).join('')}
       </div>`;
       return {weight:1+names.length,html:blockHtml};
     });
-    html+=twoColumnGrid(htBlocks);
+    html+=twoColumnFillLeft(htBlocks);
     html+=`</div>`;
   }
   // New section: everyone alphabetically by last name, with their main job and halftime job as columns
@@ -3490,7 +3501,7 @@ function printGeneralSchedule(sc,useClassic){
     return [...jobsList.filter(j=>!isFloat(j)), ...jobsList.filter(isFloat)];
   }
   const halfJobs=withFloatLast(AS().halfJobs||[]);
-  const htJobs=eventHalftimeJobs(sc);
+  const htJobs=eventHalftimeJobs(sc).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'',undefined,{sensitivity:'base'}));
   const floatJob=halfJobs.find(j=>(j.name||'').trim().toLowerCase()==='float');
 
   // Same exemption used on the assignment screen: volunteers on a specialty job (Colorguard,
