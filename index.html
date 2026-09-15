@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Band Booster Scheduler</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<script type="module" src="truck-pack.js"></script>
 <style>
   :root {
     --bg:#f7f7f8;--surface:#fff;--surface2:#f0f1f3;--border:rgba(0,0,0,.12);--border-med:rgba(0,0,0,.2);
@@ -28,6 +29,7 @@
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Georgia',serif;font-size:14px;color:var(--text);background:var(--bg);min-height:100vh}
   .app-wrap{max-width:1140px;margin:0 auto;padding:1.5rem 1rem 3rem}
+  .app-wrap.trucks-wide{max-width:1360px}
   .app-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:10px;border-bottom:.5px solid var(--border);padding-bottom:1rem}
   .app-title{font-size:22px;font-weight:500;letter-spacing:-.3px}
   .app-title span{color:var(--blue)}
@@ -44,7 +46,7 @@
   .btn.danger{background:var(--danger);border-color:var(--danger-border);color:var(--danger-text)}
   .btn.sm{padding:4px 10px;font-size:12px}.btn.xs{padding:3px 7px;font-size:11px}
   .card{background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.25rem;margin-bottom:1rem}
-  input[type=text],input[type=email],input[type=tel],input[type=date],input[type=password],select{padding:7px 10px;border:.5px solid var(--border-med);border-radius:var(--radius);background:var(--surface);font-size:13px;color:var(--text);width:100%;font-family:inherit}
+  input[type=text],input[type=email],input[type=tel],input[type=date],input[type=password],input[type=number],select{padding:7px 10px;border:.5px solid var(--border-med);border-radius:var(--radius);background:var(--surface);font-size:13px;color:var(--text);width:100%;font-family:inherit}
   input:focus,select:focus{outline:none;box-shadow:0 0 0 2px rgba(24,95,165,.3)}
   input[type=checkbox]{width:auto}
   .badge{padding:2px 8px;border-radius:999px;font-size:11px;font-weight:500}
@@ -131,6 +133,48 @@
   .login-title{font-size:22px;font-weight:500;margin-bottom:.25rem}
   .login-subtitle{font-size:13px;color:var(--text2);margin-bottom:1.75rem}
   .login-error{font-size:12px;color:var(--danger-text);margin-top:.5rem;min-height:18px}
+  /* TRUCK LOAD PLANNER */
+  .truck-subnav{display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap}
+  .truck-toolbar .truck-stats{display:flex;gap:6px;flex-wrap:wrap;margin-top:.75rem}
+  .truck-plan-grid{display:grid;grid-template-columns:minmax(240px,320px) 1fr;gap:16px;align-items:start}
+  @media(max-width:860px){.truck-plan-grid{grid-template-columns:1fr}}
+  .truck-switch{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .trailer-stage{margin-top:10px;background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius-lg);padding:12px}
+  .trailer-end{text-align:center;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--text2);padding:6px 0;background:var(--surface2);border:.5px solid var(--border);border-radius:var(--radius)}
+  .trailer-grid{display:grid;gap:3px;margin:8px 0;background:var(--blue-dk);padding:6px;border-radius:6px}
+  .trailer-cell{background:var(--surface);border:.5px dashed var(--border-med);min-height:36px;cursor:pointer}
+  .trailer-cell.ghost-ok{background:var(--green-lt);border-color:var(--green-dk)}
+  .trailer-cell.ghost-bad{background:var(--danger);border-color:var(--danger-text)}
+  .trailer-grid.is-dragging .trailer-item{pointer-events:none}
+  .trailer-item,.shelf-slot.filled{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:4px 6px;border-radius:5px;font-size:11px;font-weight:500;cursor:grab;z-index:2;border:.5px solid var(--border-med);overflow:hidden}
+  .trailer-item span,.shelf-slot.filled span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .trailer-item.cat-battery,.shelf-slot.filled.cat-battery,.truck-chip.cat-battery{background:var(--teal-lt);color:var(--teal);border-color:rgba(140,10,33,.25)}
+  .trailer-item.cat-pit,.shelf-slot.filled.cat-pit,.truck-chip.cat-pit{background:var(--amber-lt);color:var(--amber-dk);border-color:rgba(99,56,6,.25)}
+  .trailer-item.cat-wind,.shelf-slot.filled.cat-wind,.truck-chip.cat-wind{background:var(--blue-lt);color:var(--blue-dk);border-color:rgba(11,37,69,.25)}
+  .selected-piece{outline:2px solid var(--blue);outline-offset:1px}
+  .item-x{border:none;background:transparent;cursor:pointer;font-size:14px;line-height:1;color:inherit;opacity:.7;padding:0 2px}
+  .item-x:hover{opacity:1}
+  .trailer-hint{font-size:11px;color:var(--text2);margin-top:8px;line-height:1.4}
+  .shelf-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+  @media(max-width:700px){.shelf-columns{grid-template-columns:1fr}}
+  .shelf-col-title,.shelf-name{font-size:12px;font-weight:600;margin-bottom:6px}
+  .shelf-block{margin-bottom:10px;padding:.6rem;background:var(--surface2);border-radius:var(--radius);border:.5px solid var(--border)}
+  .shelf-slots{display:flex;flex-wrap:wrap;gap:6px}
+  .shelf-slot{min-width:92px;flex:1 1 92px;min-height:44px;border:.5px dashed var(--border-med);border-radius:var(--radius);background:var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:4px}
+  .shelf-slot.drag-over{border-color:var(--blue);background:var(--blue-lt)}
+  .slot-num{font-size:10px;color:var(--text3)}
+  .drawer-grid{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+  .drawer-row{display:grid;grid-template-columns:90px 1fr;gap:8px;align-items:center}
+  .drawer-label{font-size:12px;color:var(--text2)}
+  .truck-chip{flex-direction:column;align-items:flex-start;border-radius:var(--radius);white-space:normal;max-width:100%}
+  .truck-chip .chip-loc{font-size:10px;font-weight:400;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+  .truck-chip.is-placed{opacity:.7}
+  .truck-inv-add{display:grid;grid-template-columns:1.4fr .9fr 70px 140px 1.1fr auto;gap:8px;align-items:end}
+  @media(max-width:900px){.truck-inv-add{grid-template-columns:1fr 1fr}}
+  .layout-trucks{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:900px){.layout-trucks{grid-template-columns:1fr}}
+  .layout-floor{margin-top:12px;padding-top:12px;border-top:.5px solid var(--border)}
+  .layout-floor-title{font-size:13px;font-weight:600;margin-bottom:8px;display:flex;gap:8px;align-items:center}
 </style>
 </head>
 <body>
@@ -230,10 +274,11 @@
 
   <!-- TABS -->
   <div class="tabs" id="main-tabs">
-    <div class="tab active" onclick="showTab('schedules')"><i class="ti ti-calendar-event"></i> Schedules</div>
-    <div class="tab" onclick="showTab('assign')"><i class="ti ti-layout-board"></i> Assign</div>
-    <div class="tab" onclick="showTab('config')"><i class="ti ti-settings"></i> Configuration</div>
-    <div class="tab" onclick="showTab('history')"><i class="ti ti-clock-hour-4"></i> History</div>
+    <div class="tab active" data-tab="schedules" onclick="showTab('schedules')"><i class="ti ti-calendar-event"></i> Schedules</div>
+    <div class="tab" data-tab="assign" onclick="showTab('assign')"><i class="ti ti-layout-board"></i> Assign</div>
+    <div class="tab" data-tab="trucks" onclick="showTab('trucks')" id="tab-trucks" style="display:none"><i class="ti ti-truck"></i> Trucks</div>
+    <div class="tab" data-tab="config" onclick="showTab('config')"><i class="ti ti-settings"></i> Configuration</div>
+    <div class="tab" data-tab="history" onclick="showTab('history')"><i class="ti ti-clock-hour-4"></i> History</div>
   </div>
 
   <!-- SCHEDULES -->
@@ -610,6 +655,22 @@
     </div>
   </div>
 
+  <!-- TRUCK LOAD PLANNER -->
+  <div class="panel" id="panel-trucks">
+    <div class="card" style="padding:.9rem 1.1rem">
+      <div style="font-size:16px;font-weight:500">Eagle 1 &amp; Eagle 2 load planner</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:3px">Floor 1 is the open deck for the front ensemble. Floor 2 is shelves for battery and cased winds. Trombones go in pull-out drawers on one truck. Set the layouts to match the trailers, then drag instruments onto a load plan.</div>
+    </div>
+    <div class="truck-subnav" id="truck-subnav">
+      <button type="button" class="btn sm primary" data-view="plan" onclick="showTruckView('plan')"><i class="ti ti-packages"></i> Load plan</button>
+      <button type="button" class="btn sm" data-view="inventory" onclick="showTruckView('inventory')"><i class="ti ti-list"></i> Instrument inventory</button>
+      <button type="button" class="btn sm" data-view="layout" onclick="showTruckView('layout')"><i class="ti ti-layout-grid"></i> Truck layouts</button>
+    </div>
+    <div id="trucks-view-plan"></div>
+    <div id="trucks-view-inventory" style="display:none"></div>
+    <div id="trucks-view-layout" style="display:none"></div>
+  </div>
+
   <!-- HISTORY -->
   <div class="panel" id="panel-history">
     <div style="font-size:12px;color:var(--text2);margin-bottom:1rem">Events are automatically saved to history the day after they occur. Click any field to edit inline.</div>
@@ -743,7 +804,9 @@ function applyMode(mode){
 
   // Subtitle
   document.getElementById('app-subtitle').textContent =
-    mode === 'general' ? 'General Volunteer assignments' : 'Logistics volunteer assignments';
+    mode === 'general' ? 'General Volunteer assignments' : 'Logistics volunteer assignments and truck loading';
+  const trucksTab = document.getElementById('tab-trucks');
+  if (trucksTab) trucksTab.style.display = mode === 'logistics' ? '' : 'none';
 
   // CSV description — import now checks all categories regardless of which module you're in,
   // and routes each row to the right one automatically. The exact text-to-role mapping is
@@ -1156,7 +1219,8 @@ function defaultState(mode){
     // Jobs available for non-game (General) events — bus + specialty assignments still apply,
     // but 1st/Halftime/2nd Half and the regular game job list do not.
     nonGameJobs: isGeneral ? [] : undefined,
-    history: []
+    history: [],
+    truckPack: isGeneral ? undefined : (typeof TruckPack !== 'undefined' ? TruckPack.defaultTruckPack() : undefined)
   };
 }
 
@@ -1167,14 +1231,9 @@ function today(){ return new Date().toISOString().slice(0,10); }
 function activeSched(){ return AS()&&AS().schedules?AS().schedules.find(sc=>sc.id===AS().activeSchedId)||null:null; }
 
 function refreshAllPanels(){
-  const active = document.querySelector('.tab.active');
-  if(active){
-    const tabNames = ['schedules','assign','config','history'];
-    const allTabs = [...document.querySelectorAll('.tab')];
-    const idx = allTabs.indexOf(active);
-    if(idx>=0 && tabNames[idx]) showTab(tabNames[idx]);
-    else showTab('schedules');
-  } else { showTab('schedules'); }
+  const active = document.querySelector('#main-tabs .tab.active');
+  if(active && active.dataset.tab) showTab(active.dataset.tab);
+  else showTab('schedules');
 }
 
 /* ── INIT DATA (called after login or mode switch) ── */
@@ -1186,6 +1245,7 @@ async function initData(){
   } catch(e){}
   if(!AS()) setAS(defaultState(_mode));
   if(_mode==='general') migrateGeneralBusJobs();
+  if(_mode==='logistics' && typeof ensureLogisticsTruckPack==='function') ensureLogisticsTruckPack();
 
   autoSavePastEvents();
   showTab('schedules');
@@ -1195,7 +1255,12 @@ async function initData(){
     setSyncStatus('busy','Syncing…');
     apiCall('load')
       .then(r=>{
-        if(r.data){ setAS(r.data); localStorage.setItem(cacheKey(),JSON.stringify(AS())); refreshAllPanels(); }
+        if(r.data){
+          setAS(r.data);
+          if(_mode==='logistics' && typeof ensureLogisticsTruckPack==='function') ensureLogisticsTruckPack();
+          localStorage.setItem(cacheKey(),JSON.stringify(AS()));
+          refreshAllPanels();
+        }
         markConnected(); setSyncStatus('ok','Synced');
       })
       .catch(err=>{ setSyncStatus('err','Sync failed — using local data'); console.warn(err); });
@@ -1288,16 +1353,18 @@ function buildEntries(sc){
 
 /* ── TABS ── */
 function showTab(t){
-  const tabNames=['schedules','assign','config','history'];
   const panel=document.getElementById('panel-'+t);
   if(!panel){ console.warn('showTab: unknown tab "'+t+'", falling back to schedules'); if(t!=='schedules')showTab('schedules'); return; }
-  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',tabNames[i]===t));
+  document.querySelectorAll('#main-tabs .tab').forEach(el=>el.classList.toggle('active', el.dataset.tab===t));
   document.querySelectorAll('.panel').forEach(el=>el.classList.remove('active'));
   panel.classList.add('active');
+  const wrap=document.querySelector('.app-wrap');
+  if(wrap) wrap.classList.toggle('trucks-wide', t==='trucks');
   if(t==='schedules'){autoSavePastEvents();renderSchedules();}
   if(t==='assign')renderAssign();
   if(t==='config'){renderVolunteers();renderEventConfigSection();renderJobsTable();renderHalftimeTable();renderGeneralOnlyConfig();renderImportCategoriesTable();}
   if(t==='history')renderHistory();
+  if(t==='trucks'){ if(typeof ensureLogisticsTruckPack==='function') ensureLogisticsTruckPack(); renderTrucks(); }
 }
 
 /* ── SCHEDULES ── */
@@ -3771,10 +3838,17 @@ function showLoginScreen(hint){
     if(!_mode||!onHttpsHost()||_dirty||_syncing) return;
     try{
       const r = await apiCall('load');
-      if(r.data){ setAS(r.data); localStorage.setItem(cacheKey(),JSON.stringify(AS())); refreshAllPanels(); setSyncStatus('ok','Refreshed '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})); }
+      if(r.data){
+        setAS(r.data);
+        if(_mode==='logistics' && typeof ensureLogisticsTruckPack==='function') ensureLogisticsTruckPack();
+        localStorage.setItem(cacheKey(),JSON.stringify(AS()));
+        refreshAllPanels();
+        setSyncStatus('ok','Refreshed '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+      }
     } catch(e){ console.warn('Background refresh failed:',e); }
   }, 120000);
 })();
 </script>
+<script src="trucks-ui.js"></script>
 </body>
 </html>
