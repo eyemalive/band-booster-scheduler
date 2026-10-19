@@ -3493,7 +3493,7 @@ function printLogisticsSchedule(sc){
     .sort((a,b)=>(a.name||'').localeCompare(b.name||'',undefined,{sensitivity:'base'}));
   if(htJobsWithPeople.length){
     html+=`<div style="margin-top:10px;padding-top:6px;border-top:1px solid #ccc">
-      <div style="font-weight:600;font-size:12px;letter-spacing:.5px;color:#555;margin-bottom:5px">HALFTIME ASSIGNMENTS</div>`;
+      <div style="font-weight:600;font-size:12px;letter-spacing:.5px;color:#555;margin-bottom:5px">${sc.eventType==='event'?'PERFORMANCE ASSIGNMENTS':'HALFTIME ASSIGNMENTS'}</div>`;
     const htBlocks=htJobsWithPeople.map(h=>{
       const names=htGroups[h.id].slice().sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
       const blockHtml=`<div style="break-inside:avoid;margin-bottom:9px">
@@ -3514,7 +3514,7 @@ function printLogisticsSchedule(sc){
         <thead><tr style="border-bottom:1px solid #999">
           <th style="text-align:left;padding:3px 6px;font-weight:600">Volunteer</th>
           <th style="text-align:left;padding:3px 6px;font-weight:600">Job</th>
-          <th style="text-align:left;padding:3px 6px;font-weight:600">Halftime Job</th>
+          <th style="text-align:left;padding:3px 6px;font-weight:600">${sc.eventType==='event'?'Performance Job':'Halftime Job'}</th>
         </tr></thead>
         <tbody>
           ${allAssigned.map(({v,jobName,isLead,htName})=>`<tr style="border-bottom:.5px solid #ddd">
