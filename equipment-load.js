@@ -129,6 +129,109 @@ function listHas(list, id) {
   return list.some(function (x) { return x.id === id; });
 }
 
+function isLegacyCategory(val) {
+  const cat = String(val || '');
+  return cat === 'battery' || cat === 'pit' || cat === 'wind' || cat === 'other';
+}
+
+function defaultStorageLocations() {
+  return clone(STORAGE_LOCATIONS);
+}
+
+function storageLocations(state) {
+  if (state && Array.isArray(state.storageLocations) && state.storageLocations.length) {
+    return state.storageLocations;
+  }
+  return STORAGE_LOCATIONS;
+}
+
+function normalizeStorageLocation(loc, fallbackId) {
+  const src = loc || {};
+  return {
+    id: src.id || fallbackId,
+    label: String(src.label || src.name || '').trim(),
+  };
+}
+
+function slugLocationId(label, existing) {
+  const base = String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'location';
+  const used = {};
+  (existing || []).forEach(function (loc) {
+    if (loc && loc.id) used[loc.id] = true;
+  });
+  let id = base;
+  let n = 2;
+  while (used[id]) {
+    id = base + '-' + n;
+    n++;
+  }
+  return id;
+}
+
+function ensureStorageLocations(state) {
+  if (!state || typeof state !== 'object') return false;
+  if (!Array.isArray(state.storageLocations) || !state.storageLocations.length) {
+    state.storageLocations = defaultStorageLocations();
+    return true;
+  }
+  const next = state.storageLocations
+    .map(function (loc, i) { return normalizeStorageLocation(loc, loc && loc.id || ('stor-' + i)); })
+    .filter(function (loc) { return loc.id && loc.label; });
+  if (!next.length) {
+    state.storageLocations = defaultStorageLocations();
+    return true;
+  }
+  if (JSON.stringify(state.storageLocations) !== JSON.stringify(next)) {
+    state.storageLocations = next;
+    return true;
+  }
+  return false;
+}
+
+function addStorageLocation(state, label, id) {
+  if (!state) return null;
+  ensureStorageLocations(state);
+  const name = String(label || '').trim();
+  if (!name) return null;
+  if (state.storageLocations.some(function (loc) { return loc.label.toLowerCase() === name.toLowerCase(); })) return null;
+  const next = normalizeStorageLocation({
+    id: id || slugLocationId(name, state.storageLocations),
+    label: name,
+  });
+  if (!next.id || listHas(state.storageLocations, next.id)) return null;
+  state.storageLocations.push(next);
+  return next;
+}
+
+function editStorageLocation(state, id, label) {
+  if (!state || !Array.isArray(state.storageLocations)) return null;
+  const loc = state.storageLocations.find(function (s) { return s.id === id; });
+  if (!loc) return null;
+  const name = String(label || '').trim();
+  if (!name) return loc;
+  if (state.storageLocations.some(function (s) { return s.id !== id && s.label.toLowerCase() === name.toLowerCase(); })) return loc;
+  loc.label = name;
+  return loc;
+}
+
+function storageLocationInUse(state, id) {
+  if (!state || !id) return false;
+  if ((state.equipment || []).some(function (i) { return i && i.storageLocation === id; })) return true;
+  return (state.schedules || []).some(function (sc) {
+    return ((sc && sc.equipmentExtra) || []).some(function (i) { return i && i.storageLocation === id; });
+  });
+}
+
+function removeStorageLocation(state, id) {
+  if (!state || !Array.isArray(state.storageLocations)) return false;
+  if (state.storageLocations.length <= 1) return false;
+  if (storageLocationInUse(state, id)) return false;
+  const next = state.storageLocations.filter(function (s) { return s.id !== id; });
+  if (next.length === state.storageLocations.length) return false;
+  state.storageLocations = next;
+  return true;
+}
+
 function migrateFromCategory(category) {
   const cat = String(category || '');
   if (cat === 'battery') return { storageLocation: 'percussion', loadLocation: 'eagle-2' };
@@ -137,9 +240,12 @@ function migrateFromCategory(category) {
   return { storageLocation: 'band-hall', loadLocation: 'eagle-1' };
 }
 
-function resolveStorage(src) {
-  if (listHas(STORAGE_LOCATIONS, src.storageLocation)) return src.storageLocation;
-  return migrateFromCategory(src.category || src.storageLocation).storageLocation;
+function resolveStorage(src, list) {
+  const locations = (list && list.length) ? list : STORAGE_LOCATIONS;
+  const id = src && src.storageLocation;
+  if (id && (listHas(locations, id) || listHas(STORAGE_LOCATIONS, id))) return id;
+  if (id && !isLegacyCategory(id)) return id;
+  return migrateFromCategory((src && src.category) || id).storageLocation;
 }
 
 function resolveLoad(src) {
@@ -147,9 +253,11 @@ function resolveLoad(src) {
   return migrateFromCategory(src.category || src.storageLocation).loadLocation;
 }
 
-function storageLabel(id) {
-  const found = STORAGE_LOCATIONS.find(function (s) { return s.id === id; });
-  return found ? found.label : 'Band Hall';
+function storageLabel(id, list) {
+  const locations = (list && list.length) ? list : STORAGE_LOCATIONS;
+  const found = locations.find(function (s) { return s.id === id; })
+    || STORAGE_LOCATIONS.find(function (s) { return s.id === id; });
+  return found ? found.label : (id || 'Band Hall');
 }
 
 function loadLabel(id) {
@@ -197,6 +305,7 @@ function ensureMaps(sc) {
 function ensureEquipment(state) {
   if (!state || typeof state !== 'object') return false;
   let changed = false;
+  if (ensureStorageLocations(state)) changed = true;
   const fromPack = state.truckPack && Array.isArray(state.truckPack.instruments)
     ? state.truckPack.instruments
     : null;
@@ -268,9 +377,10 @@ function stats(items) {
   return { total: (items || []).length, needed: needed.length, loaded: loaded.length };
 }
 
-function grouped(items, by) {
-  const list = by === 'storage' ? STORAGE_LOCATIONS : LOAD_LOCATIONS;
-  const key = by === 'storage' ? 'storageLocation' : 'loadLocation';
+function grouped(items, by, locationList) {
+  const list = (locationList && locationList.length)
+    ? locationList
+    : (by === 'storage' ? STORAGE_LOCATIONS : LOAD_LOCATIONS);
   const resolve = by === 'storage' ? resolveStorage : resolveLoad;
   const buckets = {};
   list.forEach(function (c) { buckets[c.id] = []; });
@@ -387,6 +497,13 @@ const api = {
   STORAGE_LOCATIONS: STORAGE_LOCATIONS,
   LOAD_LOCATIONS: LOAD_LOCATIONS,
   EQUIPMENT_CATALOG_V: EQUIPMENT_CATALOG_V,
+  defaultStorageLocations: defaultStorageLocations,
+  storageLocations: storageLocations,
+  ensureStorageLocations: ensureStorageLocations,
+  addStorageLocation: addStorageLocation,
+  editStorageLocation: editStorageLocation,
+  removeStorageLocation: removeStorageLocation,
+  storageLocationInUse: storageLocationInUse,
   defaultEquipment: defaultEquipment,
   ensureEquipment: ensureEquipment,
   catalog: catalog,
@@ -416,6 +533,13 @@ export {
   STORAGE_LOCATIONS,
   LOAD_LOCATIONS,
   EQUIPMENT_CATALOG_V,
+  defaultStorageLocations,
+  storageLocations,
+  ensureStorageLocations,
+  addStorageLocation,
+  editStorageLocation,
+  removeStorageLocation,
+  storageLocationInUse,
   defaultEquipment,
   ensureEquipment,
   catalog,

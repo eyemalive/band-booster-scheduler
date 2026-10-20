@@ -142,7 +142,8 @@
   .load-row.is-loaded .load-name{color:var(--text2);text-decoration:line-through}
   .load-row.is-skipped{opacity:.55;background:var(--surface2)}
   .load-name{font-size:14px;font-weight:500;flex:1;min-width:0}
-  .load-qty{font-size:12px;color:var(--text2);white-space:nowrap}
+  .load-qty{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;min-width:2.4em;flex-shrink:0}
+  .load-row.is-loaded .load-qty{color:var(--text2)}
   .load-notes{font-size:11px;color:var(--text3);margin-left:4px}
   .load-cat{font-size:12px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--text2);padding:8px 12px 4px;background:var(--surface2);border-bottom:.5px solid var(--border)}
   .load-section{font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:var(--text);padding:8px 12px 4px;background:var(--surface);border-bottom:.5px solid var(--border)}
@@ -468,6 +469,19 @@
         <colgroup><col style="width:38%"><col style="width:20%"><col style="width:18%"><col style="width:12%"><col style="width:12%"></colgroup>
         <thead><tr><th>Name</th><th>Field Position</th><th>Target slots</th><th>Assigned</th><th></th></tr></thead>
         <tbody id="ht-body"></tbody>
+      </table>
+    </div>
+    <div class="card logistics-only-config pw-admin-only" id="storage-locations-card" style="margin-top:1.5rem;display:none">
+      <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Storage locations</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">These names appear in the <strong>Storage Location</strong> dropdown on the catalog and Load Sheet. Rename freely — items keep the same location. You cannot delete a location that is still assigned to an item.</div>
+      <div class="grid2c" style="margin-bottom:.75rem">
+        <div><label class="lbl">Location name</label><input type="text" id="stor-name" placeholder="e.g. Band Library"></div>
+        <button class="btn primary" onclick="addStorageLocation()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
+      </div>
+      <table class="jtable">
+        <colgroup><col style="width:88%"><col style="width:12%"></colgroup>
+        <thead><tr><th>Name</th><th></th></tr></thead>
+        <tbody id="stor-body"></tbody>
       </table>
     </div>
     <div class="card logistics-only-config pw-admin-only" id="equipment-catalog-card" style="margin-top:1.5rem;display:none">
@@ -1210,7 +1224,8 @@ function defaultState(mode){
     // but 1st/Halftime/2nd Half and the regular game job list do not.
     nonGameJobs: isGeneral ? [] : undefined,
     history: [],
-    equipment: isGeneral ? undefined : (typeof EquipmentLoad !== 'undefined' ? EquipmentLoad.defaultEquipment() : undefined)
+    equipment: isGeneral ? undefined : (typeof EquipmentLoad !== 'undefined' ? EquipmentLoad.defaultEquipment() : undefined),
+    storageLocations: isGeneral ? undefined : (typeof EquipmentLoad !== 'undefined' ? EquipmentLoad.defaultStorageLocations() : undefined)
   };
 }
 
@@ -2895,17 +2910,79 @@ function renderLogisticsOnlyConfig(){
   if(typeof EquipmentLoad==='undefined'){ setTimeout(renderLogisticsOnlyConfig,50); return; }
   ensureLogisticsEquipment();
   fillEquipmentLocationSelects();
+  renderStorageLocationsTable();
   renderEquipmentCatalogTable();
 }
+function storageLocationList(){
+  if(typeof EquipmentLoad==='undefined')return [];
+  return EquipmentLoad.storageLocations(AS());
+}
 function equipmentLocationOptions(list,selected){
-  return (list||[]).map(c=>`<option value="${esc(c.id)}"${c.id===selected?' selected':''}>${esc(c.label)}</option>`).join('');
+  const opts=(list||[]).slice();
+  if(selected && !opts.some(c=>c.id===selected)) opts.push({id:selected,label:selected});
+  return opts.map(c=>`<option value="${esc(c.id)}"${c.id===selected?' selected':''}>${esc(c.label)}</option>`).join('');
 }
 function fillEquipmentLocationSelects(){
   if(typeof EquipmentLoad==='undefined')return;
   const storage=document.getElementById('eq-storage');
   const load=document.getElementById('eq-load');
-  if(storage&&!storage.options.length) storage.innerHTML=equipmentLocationOptions(EquipmentLoad.STORAGE_LOCATIONS,'band-hall');
-  if(load&&!load.options.length) load.innerHTML=equipmentLocationOptions(EquipmentLoad.LOAD_LOCATIONS,'eagle-1');
+  if(storage){
+    const sel=storage.value||'band-hall';
+    storage.innerHTML=equipmentLocationOptions(storageLocationList(),sel);
+  }
+  if(load){
+    const sel=load.value||'eagle-1';
+    load.innerHTML=equipmentLocationOptions(EquipmentLoad.LOAD_LOCATIONS,sel);
+  }
+}
+function addStorageLocation(){
+  if(typeof EquipmentLoad==='undefined'||!AS())return;
+  const name=(document.getElementById('stor-name').value||'').trim();
+  if(!name){alert('Location name required.');return;}
+  const added=EquipmentLoad.addStorageLocation(AS(),name,uid());
+  if(!added){alert('That storage location already exists.');return;}
+  document.getElementById('stor-name').value='';
+  save();
+  fillEquipmentLocationSelects();
+  renderStorageLocationsTable();
+  renderEquipmentCatalogTable();
+}
+function editStorageLocation(id,val){
+  if(typeof EquipmentLoad==='undefined'||!AS())return;
+  EquipmentLoad.editStorageLocation(AS(),id,val);
+  save();
+  fillEquipmentLocationSelects();
+  renderStorageLocationsTable();
+  renderEquipmentCatalogTable();
+  if(document.getElementById('loadsheet-body')) renderLoadSheet();
+}
+function removeStorageLocation(id){
+  if(typeof EquipmentLoad==='undefined'||!AS())return;
+  if(EquipmentLoad.storageLocationInUse(AS(),id)){
+    alert('This location is still assigned to an item. Reassign those items first.');
+    return;
+  }
+  if(!confirm('Remove this storage location from the dropdown?'))return;
+  if(!EquipmentLoad.removeStorageLocation(AS(),id)){
+    alert('Keep at least one storage location.');
+    return;
+  }
+  save();
+  fillEquipmentLocationSelects();
+  renderStorageLocationsTable();
+  renderEquipmentCatalogTable();
+}
+function renderStorageLocationsTable(){
+  const tb=document.getElementById('stor-body');if(!tb||!AS()||typeof EquipmentLoad==='undefined')return;
+  const locs=storageLocationList();
+  tb.innerHTML='';
+  if(!locs.length){tb.innerHTML='<tr><td colspan="2" style="padding:1rem;font-size:13px;color:var(--text2)">No storage locations yet.</td></tr>';return;}
+  locs.forEach(loc=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><input class="inline-edit" value="${esc(loc.label)}" onblur="editStorageLocation('${loc.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><button class="btn xs danger" onclick="removeStorageLocation('${loc.id}')"><i class="ti ti-trash"></i></button></td>`;
+    tb.appendChild(tr);
+  });
 }
 function addEquipmentCatalogItem(){
   if(typeof EquipmentLoad==='undefined'||!AS())return;
@@ -2947,7 +3024,7 @@ function renderEquipmentCatalogTable(){
     tr.innerHTML=`
       <td><input class="inline-edit" value="${esc(item.name)}" onblur="editEquipmentCatalogField('${item.id}','name',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
       <td><input class="inline-edit" value="${esc(item.section||'')}" onblur="editEquipmentCatalogField('${item.id}','section',this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder="—"></td>
-      <td><select style="font-size:12px;padding:3px 6px;width:100%" onchange="editEquipmentCatalogField('${item.id}','storageLocation',this.value)">${equipmentLocationOptions(EquipmentLoad.STORAGE_LOCATIONS,item.storageLocation)}</select></td>
+      <td><select style="font-size:12px;padding:3px 6px;width:100%" onchange="editEquipmentCatalogField('${item.id}','storageLocation',this.value)">${equipmentLocationOptions(storageLocationList(),item.storageLocation)}</select></td>
       <td><select style="font-size:12px;padding:3px 6px;width:100%" onchange="editEquipmentCatalogField('${item.id}','loadLocation',this.value)">${equipmentLocationOptions(EquipmentLoad.LOAD_LOCATIONS,item.loadLocation)}</select></td>
       <td><input class="inline-edit" type="number" min="1" value="${item.qty}" onblur="editEquipmentCatalogField('${item.id}','qty',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
       <td><input class="inline-edit" value="${esc(item.notes||'')}" onblur="editEquipmentCatalogField('${item.id}','notes',this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder="—"></td>
@@ -3535,18 +3612,18 @@ function renderLoadSheet(){
         if(sec.label) html+=`<div class="load-section">${esc(sec.label)}</div>`;
         sec.items.forEach(item=>{
           const cls=item.skipped?' is-skipped':(item.loaded?' is-loaded':'');
-          const storage=EquipmentLoad.storageLabel(item.storageLocation);
+          const storage=EquipmentLoad.storageLabel(item.storageLocation,storageLocationList());
           html+=`<div class="load-row${cls}">`;
           if(!item.skipped){
             html+=`<input type="checkbox" ${item.loaded?'checked':''} onchange="toggleEquipmentLoaded('${item.id}',this.checked)" aria-label="Loaded ${esc(item.name)}${item.section?' — '+esc(item.section):''}">`;
           } else {
             html+=`<input type="checkbox" disabled aria-hidden="true">`;
           }
+          html+=`<span class="load-qty">×${item.qty}</span>`;
           html+=`<span class="load-name">${esc(item.name)}${item.extra?' <span class="badge blue" style="font-size:10px;vertical-align:middle">This event</span>':''}`;
           if(item.notes) html+=`<span class="load-notes">${esc(item.notes)}</span>`;
           html+='</span>';
           html+=`<span class="load-meta">${esc(storage)}</span>`;
-          html+=`<span class="load-qty">×${item.qty}</span>`;
           if(item.skipped){
             html+=`<button class="btn xs" onclick="toggleEquipmentSkipped('${item.id}',false)">Bring back</button>`;
           } else {
@@ -3564,7 +3641,7 @@ function renderLoadSheet(){
   html+=`<div style="font-size:14px;font-weight:500;margin-bottom:.35rem">Add item for this ${esc(typeLabel).toLowerCase()} only</div>`;
   html+=`<div class="eq-add">`;
   html+=`<div><label class="lbl">Item</label><input type="text" id="ls-extra-name" placeholder="e.g. Homecoming props"></div>`;
-  html+=`<div><label class="lbl">Storage Location</label><select id="ls-extra-storage">${equipmentLocationOptions(EquipmentLoad.STORAGE_LOCATIONS,'band-hall')}</select></div>`;
+  html+=`<div><label class="lbl">Storage Location</label><select id="ls-extra-storage">${equipmentLocationOptions(storageLocationList(),'band-hall')}</select></div>`;
   html+=`<div><label class="lbl">Load Location</label><select id="ls-extra-load">${equipmentLocationOptions(EquipmentLoad.LOAD_LOCATIONS,'eagle-1')}</select></div>`;
   html+=`<div><label class="lbl">Qty</label><input type="number" id="ls-extra-qty" min="1" value="1"></div>`;
   html+=`<div><label class="lbl">Notes</label><input type="text" id="ls-extra-notes" placeholder="Optional"></div>`;
@@ -3640,12 +3717,12 @@ function printLoadSheet(){
       if(sec.label) html+=`<div style="margin-top:8px;font-weight:600;font-size:10px;letter-spacing:.4px;color:#333">${esc(sec.label).toUpperCase()}</div>`;
       sec.items.forEach(item=>{
         const mark=item.loaded?'☑':'☐';
-        const storage=EquipmentLoad.storageLabel(item.storageLocation);
+        const storage=EquipmentLoad.storageLabel(item.storageLocation,storageLocationList());
         html+=`<div style="display:flex;gap:8px;align-items:baseline;font-size:12px;padding:4px 0;border-bottom:.5px solid #eee">
           <span style="width:16px">${mark}</span>
+          <span style="min-width:2.2em;font-weight:600;color:#333">×${item.qty}</span>
           <span style="flex:1">${esc(item.name)}${item.notes?` <span style="color:#888;font-size:10px">${esc(item.notes)}</span>`:''}</span>
           <span style="color:#888;font-size:10px">${esc(storage)}</span>
-          <span style="color:#666">×${item.qty}</span>
         </div>`;
       });
     });
