@@ -118,7 +118,11 @@ test('save of a 50k+ blob gzips the Apps Script payload', async () => {
   process.env.API_KEY = 'key';
   const sent = [];
   mock.method(globalThis, 'fetch', async (_url, opts) => {
-    sent.push(new URLSearchParams(opts.body));
+    const params = new URLSearchParams(opts.body);
+    sent.push(params);
+    if (params.get('action') === 'ping') {
+      return { ok: true, async text() { return JSON.stringify({ ok: true, version: 3, cellChunk: 49000 }); } };
+    }
     return { ok: true, async text() { return JSON.stringify({ ok: true, chunks: 2, version: 3 }); } };
   });
   const token = createSessionToken('logistics', 'key');
@@ -129,22 +133,28 @@ test('save of a 50k+ blob gzips the Apps Script payload', async () => {
     cookie: `${COOKIE_NAME}=${token}`,
   }), res);
   assert.equal(res.statusCode, 200);
-  assert.equal(sent.length, 1);
-  assert.equal(sent[0].get('action'), 'save');
-  assert.equal(sent[0].get('encoding'), 'gzip-b64');
-  assert.deepEqual(JSON.parse(gunzipBase64(sent[0].get('payload'))), payload);
+  const saveReq = sent.find((p) => p.get('action') === 'save');
+  assert.ok(saveReq);
+  assert.equal(saveReq.get('encoding'), 'gzip-b64');
+  assert.deepEqual(JSON.parse(gunzipBase64(saveReq.get('payload'))), payload);
   mock.restoreAll();
 });
 
 test('HTML Apps Script response becomes a 502 with a deploy hint', async () => {
   process.env.APPS_SCRIPT_URL = 'https://script.example/exec';
   process.env.API_KEY = 'key';
-  mock.method(globalThis, 'fetch', async () => ({
-    ok: true,
-    async text() {
-      return `<!DOCTYPE html><html><head><script nonce="abc">window['ppConfig'] = {productName: '26981ed0d57bbad37e728ff58134270c', sealIsEnforced: false}`;
-    },
-  }));
+  mock.method(globalThis, 'fetch', async (_url, opts) => {
+    const params = new URLSearchParams(opts.body);
+    if (params.get('action') === 'ping') {
+      return { ok: true, async text() { return JSON.stringify({ ok: true, version: 3 }); } };
+    }
+    return {
+      ok: true,
+      async text() {
+        return `<!DOCTYPE html><html><head><script nonce="abc">window['ppConfig'] = {productName: '26981ed0d57bbad37e728ff58134270c', sealIsEnforced: false}`;
+      },
+    };
+  });
   const token = createSessionToken('logistics', 'key');
   const res = mockRes();
   await handler(req({
@@ -155,6 +165,31 @@ test('HTML Apps Script response becomes a 502 with a deploy hint', async () => {
   assert.equal(res.body.ok, false);
   assert.match(res.body.error, /HTML error page/);
   assert.match(res.body.error, /BandBoosterBackend\.gs/);
+  mock.restoreAll();
+});
+
+test('large save is blocked when Apps Script does not support ping', async () => {
+  process.env.APPS_SCRIPT_URL = 'https://script.example/exec';
+  process.env.API_KEY = 'key';
+  mock.method(globalThis, 'fetch', async (_url, opts) => {
+    const params = new URLSearchParams(opts.body);
+    if (params.get('action') === 'ping') {
+      return { ok: true, async text() { return JSON.stringify({ ok: false, error: 'Unknown action: ping' }); } };
+    }
+    throw new Error('save should not be forwarded to an old Apps Script');
+  });
+  const token = createSessionToken('logistics', 'key');
+  const res = mockRes();
+  await handler(req({
+    body: { action: 'save', tab: 'AppData', payload: { notes: 'x'.repeat(50119) } },
+    cookie: `${COOKIE_NAME}=${token}`,
+  }), res);
+  assert.equal(res.statusCode, 502);
+  assert.equal(res.body.ok, false);
+  assert.match(res.body.error, /JSON is valid \(501\d+ characters\)/);
+  assert.match(res.body.error, /Unknown action: ping/);
+  assert.match(res.body.error, /New version/);
+  assert.doesNotMatch(res.body.error, /Payload is not valid JSON/);
   mock.restoreAll();
 });
 

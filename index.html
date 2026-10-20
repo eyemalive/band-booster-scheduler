@@ -226,6 +226,7 @@
     <pre id="save-error-log-body" style="white-space:pre-wrap;word-break:break-word;font-size:12px;font-family:ui-monospace,monospace;background:var(--surface);color:var(--text);padding:8px 10px;border-radius:var(--radius);margin:0 0 .6rem;max-height:160px;overflow:auto"></pre>
     <div class="row" style="gap:6px">
       <button class="btn xs" type="button" onclick="copySaveErrorLog()">Copy error</button>
+      <a class="btn xs" href="https://github.com/eyemalive/band-booster-scheduler/blob/main/BandBoosterBackend.gs" target="_blank" rel="noopener">Open BandBoosterBackend.gs</a>
       <button class="btn xs" type="button" onclick="hideSaveErrorLog()">Dismiss</button>
     </div>
   </div>
@@ -235,6 +236,14 @@
     <div style="background:var(--surface);border-radius:var(--radius-lg);padding:1.5rem;max-width:480px;width:92%;box-shadow:0 8px 32px rgba(0,0,0,.25);max-height:88vh;overflow-y:auto">
       <div style="font-size:16px;font-weight:500;margin-bottom:.5rem">Google Sheets sync</div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:1rem">The connection is configured via Vercel environment variables.</div>
+      <div style="font-size:12px;background:var(--surface2);border-radius:var(--radius);padding:8px 10px;margin-bottom:1rem;line-height:1.5">
+        If Diagnose says <strong>Unknown action: ping</strong> or data is over 50,000 characters, the Google script is still the old version. Saving cannot work until you update it:
+        <ol style="margin:.4rem 0 0;padding-left:1.2rem">
+          <li>Open <a href="https://github.com/eyemalive/band-booster-scheduler/blob/main/BandBoosterBackend.gs" target="_blank" rel="noopener">BandBoosterBackend.gs</a> and copy the file.</li>
+          <li>In the Apps Script project this app already uses, paste over the current script. Keep the existing <code>API_KEY</code>.</li>
+          <li>Deploy → Manage deployments → pencil on the <strong>existing</strong> web app → Version: <strong>New version</strong> → Deploy. Do not create a new URL.</li>
+        </ol>
+      </div>
       <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:1rem">
         <div>
           <button class="btn sm primary" onclick="saveSettings()"><i class="ti ti-refresh"></i> Test &amp; resync</button>
@@ -924,6 +933,9 @@ function formatSaveError(err, extra){
   if(/<!DOCTYPE html/i.test(msg) || /ppConfig/i.test(msg) || /HTML error page/i.test(msg) || /returned non-JSON/i.test(msg)){
     msg = 'Apps Script returned an HTML error page instead of JSON. Google never ran the sheet backend for this save (the POST is too large, or the web app is on an old version).';
   }
+  if(/Payload is not valid JSON/i.test(msg) || /Unknown action:\s*ping/i.test(msg)){
+    msg = 'Your AppData JSON is valid. The live Google Apps Script is still the old version (it does not know ping / gzip / cell chunking), so it cannot store more than 50,000 characters.';
+  }
   lines.push('Error: '+msg);
   if(err && err.body && typeof err.body==='object'){
     try{
@@ -934,7 +946,7 @@ function formatSaveError(err, extra){
       lines.push('Response: '+JSON.stringify(copy));
     }catch(e){}
   }
-  lines.push('Next step: In the Apps Script project this app already uses, replace the script with BandBoosterBackend.gs from the repo (keep your existing API_KEY), then Deploy → Manage deployments → edit → New version → Deploy.');
+  lines.push('Next step: Open https://github.com/eyemalive/band-booster-scheduler/blob/main/BandBoosterBackend.gs and paste it over the existing Apps Script (keep your API_KEY). Then Deploy → Manage deployments → pencil on the EXISTING web app → Version: New version → Deploy. Do not create a new deployment. Diagnose must then show “Sheet backend version 3”.');
   return lines.join('\n');
 }
 function showSaveErrorLog(text){
