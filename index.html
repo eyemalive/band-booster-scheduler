@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Band Booster Scheduler</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
-<script type="module" src="truck-pack.js"></script>
+<script type="module" src="equipment-load.js"></script>
 <style>
   :root {
     --bg:#f7f7f8;--surface:#fff;--surface2:#f0f1f3;--border:rgba(0,0,0,.12);--border-med:rgba(0,0,0,.2);
@@ -29,7 +29,6 @@
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Georgia',serif;font-size:14px;color:var(--text);background:var(--bg);min-height:100vh}
   .app-wrap{max-width:1140px;margin:0 auto;padding:1.5rem 1rem 3rem}
-  .app-wrap.trucks-wide{max-width:1360px}
   .app-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:10px;border-bottom:.5px solid var(--border);padding-bottom:1rem}
   .app-title{font-size:22px;font-weight:500;letter-spacing:-.3px}
   .app-title span{color:var(--blue)}
@@ -134,47 +133,20 @@
   .login-subtitle{font-size:13px;color:var(--text2);margin-bottom:1.75rem}
   .login-error{font-size:12px;color:var(--danger-text);margin-top:.5rem;min-height:18px}
   /* TRUCK LOAD PLANNER */
-  .truck-subnav{display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap}
-  .truck-toolbar .truck-stats{display:flex;gap:6px;flex-wrap:wrap;margin-top:.75rem}
-  .truck-plan-grid{display:grid;grid-template-columns:minmax(240px,320px) 1fr;gap:16px;align-items:start}
-  @media(max-width:860px){.truck-plan-grid{grid-template-columns:1fr}}
-  .truck-switch{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-  .trailer-stage{margin-top:10px;background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius-lg);padding:12px}
-  .trailer-end{text-align:center;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--text2);padding:6px 0;background:var(--surface2);border:.5px solid var(--border);border-radius:var(--radius)}
-  .trailer-grid{display:grid;gap:3px;margin:8px 0;background:var(--blue-dk);padding:6px;border-radius:6px}
-  .trailer-cell{background:var(--surface);border:.5px dashed var(--border-med);min-height:36px;cursor:pointer}
-  .trailer-cell.ghost-ok{background:var(--green-lt);border-color:var(--green-dk)}
-  .trailer-cell.ghost-bad{background:var(--danger);border-color:var(--danger-text)}
-  .trailer-grid.is-dragging .trailer-item{pointer-events:none}
-  .trailer-item,.shelf-slot.filled{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:4px 6px;border-radius:5px;font-size:11px;font-weight:500;cursor:grab;z-index:2;border:.5px solid var(--border-med);overflow:hidden}
-  .trailer-item span,.shelf-slot.filled span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .trailer-item.cat-battery,.shelf-slot.filled.cat-battery,.truck-chip.cat-battery{background:var(--teal-lt);color:var(--teal);border-color:rgba(140,10,33,.25)}
-  .trailer-item.cat-pit,.shelf-slot.filled.cat-pit,.truck-chip.cat-pit{background:var(--amber-lt);color:var(--amber-dk);border-color:rgba(99,56,6,.25)}
-  .trailer-item.cat-wind,.shelf-slot.filled.cat-wind,.truck-chip.cat-wind{background:var(--blue-lt);color:var(--blue-dk);border-color:rgba(11,37,69,.25)}
-  .selected-piece{outline:2px solid var(--blue);outline-offset:1px}
-  .item-x{border:none;background:transparent;cursor:pointer;font-size:14px;line-height:1;color:inherit;opacity:.7;padding:0 2px}
-  .item-x:hover{opacity:1}
-  .trailer-hint{font-size:11px;color:var(--text2);margin-top:8px;line-height:1.4}
-  .shelf-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
-  @media(max-width:700px){.shelf-columns{grid-template-columns:1fr}}
-  .shelf-col-title,.shelf-name{font-size:12px;font-weight:600;margin-bottom:6px}
-  .shelf-block{margin-bottom:10px;padding:.6rem;background:var(--surface2);border-radius:var(--radius);border:.5px solid var(--border)}
-  .shelf-slots{display:flex;flex-wrap:wrap;gap:6px}
-  .shelf-slot{min-width:92px;flex:1 1 92px;min-height:44px;border:.5px dashed var(--border-med);border-radius:var(--radius);background:var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:4px}
-  .shelf-slot.drag-over{border-color:var(--blue);background:var(--blue-lt)}
-  .slot-num{font-size:10px;color:var(--text3)}
-  .drawer-grid{display:flex;flex-direction:column;gap:6px;margin-top:8px}
-  .drawer-row{display:grid;grid-template-columns:90px 1fr;gap:8px;align-items:center}
-  .drawer-label{font-size:12px;color:var(--text2)}
-  .truck-chip{flex-direction:column;align-items:flex-start;border-radius:var(--radius);white-space:normal;max-width:100%}
-  .truck-chip .chip-loc{font-size:10px;font-weight:400;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
-  .truck-chip.is-placed{opacity:.7}
-  .truck-inv-add{display:grid;grid-template-columns:1.4fr .9fr 70px 140px 1.1fr auto;gap:8px;align-items:end}
-  @media(max-width:900px){.truck-inv-add{grid-template-columns:1fr 1fr}}
-  .layout-trucks{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  @media(max-width:900px){.layout-trucks{grid-template-columns:1fr}}
-  .layout-floor{margin-top:12px;padding-top:12px;border-top:.5px solid var(--border)}
-  .layout-floor-title{font-size:13px;font-weight:600;margin-bottom:8px;display:flex;gap:8px;align-items:center}
+  .load-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;justify-content:space-between}
+  .load-progress{height:8px;background:var(--surface2);border-radius:999px;overflow:hidden;margin-top:8px}
+  .load-progress > span{display:block;height:100%;background:var(--blue);border-radius:999px}
+  .load-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:.5px solid var(--border);cursor:pointer}
+  .load-row:last-child{border-bottom:none}
+  .load-row input[type=checkbox]{width:20px;height:20px;flex-shrink:0;accent-color:var(--blue)}
+  .load-row.is-loaded .load-name{color:var(--text2);text-decoration:line-through}
+  .load-row.is-skipped{opacity:.55;background:var(--surface2)}
+  .load-name{font-size:14px;font-weight:500;flex:1;min-width:0}
+  .load-qty{font-size:12px;color:var(--text2);white-space:nowrap}
+  .load-notes{font-size:11px;color:var(--text3);margin-left:4px}
+  .load-cat{font-size:12px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--text2);padding:8px 12px 4px;background:var(--surface2);border-bottom:.5px solid var(--border)}
+  .eq-add{display:grid;grid-template-columns:1.4fr .9fr 70px 1.1fr auto;gap:8px;align-items:end}
+  @media(max-width:800px){.eq-add{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
@@ -276,7 +248,7 @@
   <div class="tabs" id="main-tabs">
     <div class="tab active" data-tab="schedules" onclick="showTab('schedules')"><i class="ti ti-calendar-event"></i> Schedules</div>
     <div class="tab" data-tab="assign" onclick="showTab('assign')"><i class="ti ti-layout-board"></i> Assign</div>
-    <div class="tab" data-tab="trucks" onclick="showTab('trucks')" id="tab-trucks" style="display:none"><i class="ti ti-truck"></i> Trucks</div>
+    <div class="tab" data-tab="loadsheet" onclick="showTab('loadsheet')" id="tab-loadsheet" style="display:none"><i class="ti ti-clipboard-check"></i> Load Sheet</div>
     <div class="tab" data-tab="config" onclick="showTab('config')"><i class="ti ti-settings"></i> Configuration</div>
     <div class="tab" data-tab="history" onclick="showTab('history')"><i class="ti ti-clock-hour-4"></i> History</div>
   </div>
@@ -495,6 +467,29 @@
         <tbody id="ht-body"></tbody>
       </table>
     </div>
+    <div class="card logistics-only-config pw-admin-only" id="equipment-catalog-card" style="margin-top:1.5rem;display:none">
+      <div style="font-size:15px;font-weight:500;margin-bottom:.25rem">Equipment catalog <span class="badge purple" style="font-size:10px;vertical-align:middle">TEMPLATE</span></div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem"><strong>Master list for the Load Sheet tab</strong> — every game and performance starts with these items. Skip or add one-offs on that event's sheet without changing this catalog. Click any cell to edit.</div>
+      <div class="eq-add" style="margin-bottom:.75rem">
+        <div><label class="lbl">Item</label><input type="text" id="eq-name" placeholder="e.g. Snare drums"></div>
+        <div><label class="lbl">Category</label>
+          <select id="eq-cat">
+            <option value="battery">Battery</option>
+            <option value="pit">Front ensemble (pit)</option>
+            <option value="wind">Winds</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div><label class="lbl">Qty</label><input type="number" id="eq-qty" min="1" value="1"></div>
+        <div><label class="lbl">Notes</label><input type="text" id="eq-notes" placeholder="Optional"></div>
+        <button class="btn primary" onclick="addEquipmentCatalogItem()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>
+      </div>
+      <table class="jtable">
+        <colgroup><col style="width:32%"><col style="width:22%"><col style="width:10%"><col style="width:24%"><col style="width:12%"></colgroup>
+        <thead><tr><th>Item</th><th>Category</th><th>Qty</th><th>Notes</th><th></th></tr></thead>
+        <tbody id="eq-body"></tbody>
+      </table>
+    </div>
 
     <!-- GENERAL MODE + ADMIN ONLY: Bus count + half-time job list -->
     <div class="general-only-config">
@@ -655,20 +650,13 @@
     </div>
   </div>
 
-  <!-- TRUCK LOAD PLANNER -->
-  <div class="panel" id="panel-trucks">
+  <!-- EQUIPMENT LOAD SHEET -->
+  <div class="panel" id="panel-loadsheet">
     <div class="card" style="padding:.9rem 1.1rem">
-      <div style="font-size:16px;font-weight:500">Eagle 1 &amp; Eagle 2 load planner</div>
-      <div style="font-size:12px;color:var(--text2);margin-top:3px">Floor 1 is the open deck for the front ensemble. Floor 2 is shelves for battery and cased winds. Trombones go in pull-out drawers on one truck. Set the layouts to match the trailers, then drag instruments onto a load plan.</div>
+      <div style="font-size:16px;font-weight:500">Equipment Load Sheet</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:3px">Check off each piece as it goes on the truck. Every game and performance has its own list — skip anything that does not ride this event, or add a one-off item at the bottom.</div>
     </div>
-    <div class="truck-subnav" id="truck-subnav">
-      <button type="button" class="btn sm primary" data-view="plan" onclick="showTruckView('plan')"><i class="ti ti-packages"></i> Load plan</button>
-      <button type="button" class="btn sm" data-view="inventory" onclick="showTruckView('inventory')"><i class="ti ti-list"></i> Instrument inventory</button>
-      <button type="button" class="btn sm" data-view="layout" onclick="showTruckView('layout')"><i class="ti ti-layout-grid"></i> Truck layouts</button>
-    </div>
-    <div id="trucks-view-plan"></div>
-    <div id="trucks-view-inventory" style="display:none"></div>
-    <div id="trucks-view-layout" style="display:none"></div>
+    <div id="loadsheet-body"></div>
   </div>
 
   <!-- HISTORY -->
@@ -804,9 +792,9 @@ function applyMode(mode){
 
   // Subtitle
   document.getElementById('app-subtitle').textContent =
-    mode === 'general' ? 'General Volunteer assignments' : 'Logistics volunteer assignments and truck loading';
-  const trucksTab = document.getElementById('tab-trucks');
-  if (trucksTab) trucksTab.style.display = mode === 'logistics' ? '' : 'none';
+    mode === 'general' ? 'General Volunteer assignments' : 'Logistics volunteer assignments and equipment load sheets';
+  const loadTab = document.getElementById('tab-loadsheet');
+  if (loadTab) loadTab.style.display = mode === 'logistics' ? '' : 'none';
 
   // CSV description — import now checks all categories regardless of which module you're in,
   // and routes each row to the right one automatically. The exact text-to-role mapping is
@@ -1220,8 +1208,14 @@ function defaultState(mode){
     // but 1st/Halftime/2nd Half and the regular game job list do not.
     nonGameJobs: isGeneral ? [] : undefined,
     history: [],
-    truckPack: isGeneral ? undefined : (typeof TruckPack !== 'undefined' ? TruckPack.defaultTruckPack() : undefined)
+    equipment: isGeneral ? undefined : (typeof EquipmentLoad !== 'undefined' ? EquipmentLoad.defaultEquipment() : undefined)
   };
+}
+
+function ensureLogisticsEquipment(){
+  if(!AS() || _mode!=='logistics') return;
+  if(typeof EquipmentLoad==='undefined'){ setTimeout(ensureLogisticsEquipment,50); return; }
+  if(EquipmentLoad.ensureEquipment(AS())) save();
 }
 
 function uid(){ return '_'+Math.random().toString(36).slice(2,9); }
@@ -1245,7 +1239,7 @@ async function initData(){
   } catch(e){}
   if(!AS()) setAS(defaultState(_mode));
   if(_mode==='general') migrateGeneralBusJobs();
-  if(_mode==='logistics' && typeof ensureLogisticsTruckPack==='function') ensureLogisticsTruckPack();
+  ensureLogisticsEquipment();
 
   autoSavePastEvents();
   showTab('schedules');
@@ -1257,7 +1251,7 @@ async function initData(){
       .then(r=>{
         if(r.data){
           setAS(r.data);
-          if(_mode==='logistics' && typeof ensureLogisticsTruckPack==='function') ensureLogisticsTruckPack();
+          ensureLogisticsEquipment();
           localStorage.setItem(cacheKey(),JSON.stringify(AS()));
           refreshAllPanels();
         }
@@ -1358,13 +1352,11 @@ function showTab(t){
   document.querySelectorAll('#main-tabs .tab').forEach(el=>el.classList.toggle('active', el.dataset.tab===t));
   document.querySelectorAll('.panel').forEach(el=>el.classList.remove('active'));
   panel.classList.add('active');
-  const wrap=document.querySelector('.app-wrap');
-  if(wrap) wrap.classList.toggle('trucks-wide', t==='trucks');
   if(t==='schedules'){autoSavePastEvents();renderSchedules();}
   if(t==='assign')renderAssign();
-  if(t==='config'){renderVolunteers();renderEventConfigSection();renderJobsTable();renderHalftimeTable();renderGeneralOnlyConfig();renderImportCategoriesTable();}
+  if(t==='config'){renderVolunteers();renderEventConfigSection();renderJobsTable();renderHalftimeTable();renderGeneralOnlyConfig();renderLogisticsOnlyConfig();renderImportCategoriesTable();}
   if(t==='history')renderHistory();
-  if(t==='trucks'){ if(typeof ensureLogisticsTruckPack==='function') ensureLogisticsTruckPack(); renderTrucks(); }
+  if(t==='loadsheet'){ ensureLogisticsEquipment(); renderLoadSheet(); }
 }
 
 /* ── SCHEDULES ── */
@@ -2893,6 +2885,59 @@ function renderGeneralOnlyConfig(){
   renderNonGameJobsTable();
 }
 
+function renderLogisticsOnlyConfig(){
+  document.querySelectorAll('.logistics-only-config').forEach(el=>{
+    el.style.display=(_mode==='logistics'&&_role==='admin')?'':'none';
+  });
+  if(_mode!=='logistics'||_role!=='admin'||!AS())return;
+  ensureLogisticsEquipment();
+  renderEquipmentCatalogTable();
+}
+function addEquipmentCatalogItem(){
+  if(typeof EquipmentLoad==='undefined'||!AS())return;
+  const name=document.getElementById('eq-name').value.trim();
+  if(!name){alert('Item name required.');return;}
+  EquipmentLoad.addCatalogItem(AS(),{
+    name,
+    category:document.getElementById('eq-cat').value,
+    qty:document.getElementById('eq-qty').value,
+    notes:document.getElementById('eq-notes').value
+  },uid());
+  document.getElementById('eq-name').value='';
+  document.getElementById('eq-notes').value='';
+  document.getElementById('eq-qty').value='1';
+  save();renderEquipmentCatalogTable();
+}
+function editEquipmentCatalogField(id,field,val){
+  if(typeof EquipmentLoad==='undefined'||!AS())return;
+  const fields={};
+  fields[field]=val;
+  EquipmentLoad.editCatalogItem(AS(),id,fields);
+  save();
+}
+function removeEquipmentCatalogItem(id){
+  if(!confirm('Remove this item from the catalog? Existing events will drop it from their load sheets.'))return;
+  EquipmentLoad.removeCatalogItem(AS(),id);
+  save();renderEquipmentCatalogTable();
+}
+function renderEquipmentCatalogTable(){
+  const tb=document.getElementById('eq-body');if(!tb||!AS()||typeof EquipmentLoad==='undefined')return;
+  const items=EquipmentLoad.catalog(AS());
+  tb.innerHTML='';
+  if(!items.length){tb.innerHTML='<tr><td colspan="5" style="padding:1rem;font-size:13px;color:var(--text2)">No equipment yet.</td></tr>';return;}
+  const catOpts=(id)=>EquipmentLoad.CATEGORIES.map(c=>`<option value="${c.id}"${c.id===id?' selected':''}>${esc(c.label)}</option>`).join('');
+  items.forEach(item=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><input class="inline-edit" value="${esc(item.name)}" onblur="editEquipmentCatalogField('${item.id}','name',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><select style="font-size:12px;padding:3px 6px;width:100%" onchange="editEquipmentCatalogField('${item.id}','category',this.value)">${catOpts(item.category)}</select></td>
+      <td><input class="inline-edit" type="number" min="1" value="${item.qty}" onblur="editEquipmentCatalogField('${item.id}','qty',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td><input class="inline-edit" value="${esc(item.notes||'')}" onblur="editEquipmentCatalogField('${item.id}','notes',this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder="—"></td>
+      <td><button class="btn xs danger" onclick="removeEquipmentCatalogItem('${item.id}')"><i class="ti ti-trash"></i></button></td>`;
+    tb.appendChild(tr);
+  });
+}
+
 /* ── NON-GAME EVENT JOBS (General mode, admin config) ── */
 function addNonGameJob(){
   const name=document.getElementById('ngj-name').value.trim();if(!name){alert('Job title required.');return;}
@@ -3383,6 +3428,202 @@ function setGenAssign(vid,field,val){
 }
 
 /* ── PRINT PICKER ── */
+/* ── EQUIPMENT LOAD SHEET ── */
+let _loadSheetSchedId=null;
+let _loadSheetFilter='needed'; // needed | remaining | loaded | skipped
+
+function loadSheetSchedule(){
+  if(!AS()||!AS().schedules) return null;
+  const scheds=AS().schedules;
+  if(_loadSheetSchedId){
+    const found=scheds.find(s=>s.id===_loadSheetSchedId);
+    if(found) return found;
+  }
+  if(AS().activeSchedId){
+    const active=scheds.find(s=>s.id===AS().activeSchedId);
+    if(active){ _loadSheetSchedId=active.id; return active; }
+  }
+  const td=today();
+  const upcoming=[...scheds].filter(s=>s.date>=td).sort((a,b)=>a.date.localeCompare(b.date));
+  const pick=upcoming[0]||[...scheds].sort((a,b)=>b.date.localeCompare(a.date))[0]||null;
+  _loadSheetSchedId=pick?pick.id:null;
+  return pick;
+}
+function selectLoadSheetEvent(id){
+  _loadSheetSchedId=id;
+  renderLoadSheet();
+}
+function setLoadSheetFilter(val){
+  _loadSheetFilter=val;
+  renderLoadSheet();
+}
+function renderLoadSheet(){
+  const el=document.getElementById('loadsheet-body');
+  if(!el) return;
+  const scrollY=window.scrollY;
+  if(typeof EquipmentLoad==='undefined'){ setTimeout(renderLoadSheet,50); return; }
+  if(_mode!=='logistics'){
+    el.innerHTML='<div class="card">The equipment load sheet is available in Logistics mode.</div>';
+    return;
+  }
+  ensureLogisticsEquipment();
+  const sc=loadSheetSchedule();
+  const scheds=[...(AS().schedules||[])].sort((a,b)=>a.date.localeCompare(b.date));
+  if(!scheds.length){
+    el.innerHTML='<div class="card" style="font-size:13px;color:var(--text2)">Create a game or performance on the Schedules tab first, then come back here to check off what needs to be loaded.</div>';
+    return;
+  }
+  const items=EquipmentLoad.eventItems(AS(),sc);
+  const st=EquipmentLoad.stats(items);
+  const pct=st.needed?Math.round(st.loaded/st.needed*100):0;
+  const filter=_loadSheetFilter;
+  const visible=items.filter(item=>{
+    if(filter==='skipped') return item.skipped;
+    if(filter==='loaded') return !item.skipped && item.loaded;
+    if(filter==='remaining') return !item.skipped && !item.loaded;
+    return !item.skipped; // needed
+  });
+  const prev=scheds.filter(s=>s.id!==sc.id && s.date<=sc.date).sort((a,b)=>b.date.localeCompare(a.date))[0];
+  const typeLabel=sc.eventType==='event'?'Performance':'Game';
+  let html='<div class="card">';
+  html+='<div class="load-toolbar">';
+  html+='<div style="flex:1;min-width:220px"><label class="lbl">Event</label><select id="loadsheet-event" onchange="selectLoadSheetEvent(this.value)">';
+  scheds.forEach(s=>{
+    const kind=s.eventType==='event'?'Performance':'Game';
+    html+=`<option value="${esc(s.id)}"${s.id===sc.id?' selected':''}>${esc(s.name)} — ${esc(fmtDate(s.date))} (${kind})</option>`;
+  });
+  html+='</select></div>';
+  html+='<div class="row" style="gap:6px">';
+  html+='<button class="btn sm" onclick="printLoadSheet()"><i class="ti ti-printer"></i> Print</button>';
+  html+='<button class="btn sm" onclick="markAllEquipmentLoaded(true)">Mark all loaded</button>';
+  html+='<button class="btn sm" onclick="clearEquipmentLoaded()">Clear checks</button>';
+  if(prev) html+=`<button class="btn sm" onclick="copyEquipmentNeededFrom('${esc(prev.id)}')">Copy list from ${esc(prev.name)}</button>`;
+  html+='</div></div>';
+  html+=`<div style="font-size:12px;color:var(--text2);margin-top:10px">${esc(typeLabel)} · ${st.loaded} of ${st.needed} loaded${st.needed?` (${pct}%)`:''}</div>`;
+  html+=`<div class="load-progress"><span style="width:${pct}%"></span></div>`;
+  html+='<div class="row" style="gap:6px;margin-top:10px">';
+  [{id:'needed',label:'This event'},{id:'remaining',label:'Still to load'},{id:'loaded',label:'Loaded'},{id:'skipped',label:'Not this event'}].forEach(f=>{
+    html+=`<button type="button" class="btn xs${filter===f.id?' primary':''}" onclick="setLoadSheetFilter('${f.id}')">${f.label}</button>`;
+  });
+  html+='</div></div>';
+
+  if(!visible.length){
+    html+='<div class="card" style="font-size:13px;color:var(--text2)">Nothing in this view.</div>';
+  } else {
+    EquipmentLoad.grouped(visible).forEach(group=>{
+      html+=`<div class="card" style="padding:0;overflow:hidden">`;
+      html+=`<div class="load-cat">${esc(group.label)}</div>`;
+      group.items.forEach(item=>{
+        const cls=item.skipped?' is-skipped':(item.loaded?' is-loaded':'');
+        html+=`<div class="load-row${cls}">`;
+        if(!item.skipped){
+          html+=`<input type="checkbox" ${item.loaded?'checked':''} onchange="toggleEquipmentLoaded('${item.id}',this.checked)" aria-label="Loaded ${esc(item.name)}">`;
+        } else {
+          html+=`<input type="checkbox" disabled aria-hidden="true">`;
+        }
+        html+=`<span class="load-name">${esc(item.name)}${item.extra?' <span class="badge blue" style="font-size:10px;vertical-align:middle">This event</span>':''}`;
+        if(item.notes) html+=`<span class="load-notes">${esc(item.notes)}</span>`;
+        html+='</span>';
+        html+=`<span class="load-qty">×${item.qty}</span>`;
+        if(item.skipped){
+          html+=`<button class="btn xs" onclick="toggleEquipmentSkipped('${item.id}',false)">Bring back</button>`;
+        } else {
+          html+=`<button class="btn xs" onclick="toggleEquipmentSkipped('${item.id}',true)">Not this event</button>`;
+        }
+        if(item.extra) html+=`<button class="btn xs danger" onclick="removeLoadSheetExtra('${item.id}')"><i class="ti ti-trash"></i></button>`;
+        html+='</div>';
+      });
+      html+='</div>';
+    });
+  }
+
+  html+=`<div class="card">`;
+  html+=`<div style="font-size:14px;font-weight:500;margin-bottom:.35rem">Add item for this ${esc(typeLabel).toLowerCase()} only</div>`;
+  html+=`<div class="eq-add">`;
+  html+=`<div><label class="lbl">Item</label><input type="text" id="ls-extra-name" placeholder="e.g. Homecoming props"></div>`;
+  html+=`<div><label class="lbl">Category</label><select id="ls-extra-cat">${EquipmentLoad.CATEGORIES.map(c=>`<option value="${c.id}"${c.id==='other'?' selected':''}>${esc(c.label)}</option>`).join('')}</select></div>`;
+  html+=`<div><label class="lbl">Qty</label><input type="number" id="ls-extra-qty" min="1" value="1"></div>`;
+  html+=`<div><label class="lbl">Notes</label><input type="text" id="ls-extra-notes" placeholder="Optional"></div>`;
+  html+=`<button class="btn primary" onclick="addLoadSheetExtra()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>`;
+  html+=`</div></div>`;
+  el.innerHTML=html;
+  window.scrollTo(0,scrollY);
+}
+function toggleEquipmentLoaded(id,checked){
+  const sc=loadSheetSchedule();if(!sc||typeof EquipmentLoad==='undefined')return;
+  EquipmentLoad.toggleLoaded(sc,id,checked);
+  save();renderLoadSheet();
+}
+function toggleEquipmentSkipped(id,skipped){
+  const sc=loadSheetSchedule();if(!sc||typeof EquipmentLoad==='undefined')return;
+  EquipmentLoad.toggleSkipped(sc,id,skipped);
+  save();renderLoadSheet();
+}
+function markAllEquipmentLoaded(loaded){
+  const sc=loadSheetSchedule();if(!sc||typeof EquipmentLoad==='undefined')return;
+  EquipmentLoad.eventItems(AS(),sc).filter(i=>!i.skipped).forEach(i=>EquipmentLoad.toggleLoaded(sc,i.id,!!loaded));
+  save();renderLoadSheet();
+}
+function clearEquipmentLoaded(){
+  const sc=loadSheetSchedule();if(!sc||typeof EquipmentLoad==='undefined')return;
+  EquipmentLoad.resetLoaded(sc);
+  save();renderLoadSheet();
+}
+function copyEquipmentNeededFrom(fromId){
+  const sc=loadSheetSchedule();if(!sc||typeof EquipmentLoad==='undefined')return;
+  const from=(AS().schedules||[]).find(s=>s.id===fromId);
+  if(!from)return;
+  if(!confirm('Replace this event\'s needed list with '+from.name+'? Loaded checks on this event will be cleared.'))return;
+  EquipmentLoad.copyNeededFrom(from,sc);
+  save();renderLoadSheet();
+}
+function addLoadSheetExtra(){
+  const sc=loadSheetSchedule();if(!sc||typeof EquipmentLoad==='undefined')return;
+  const name=document.getElementById('ls-extra-name').value.trim();
+  if(!name){alert('Item name required.');return;}
+  EquipmentLoad.addEventExtra(sc,{
+    name,
+    category:document.getElementById('ls-extra-cat').value,
+    qty:document.getElementById('ls-extra-qty').value,
+    notes:document.getElementById('ls-extra-notes').value
+  },uid());
+  save();renderLoadSheet();
+}
+function removeLoadSheetExtra(id){
+  const sc=loadSheetSchedule();if(!sc||typeof EquipmentLoad==='undefined')return;
+  EquipmentLoad.removeEventExtra(sc,id);
+  save();renderLoadSheet();
+}
+function printLoadSheet(){
+  const sc=loadSheetSchedule();
+  if(!sc){alert('Pick an event first.');return;}
+  if(typeof EquipmentLoad==='undefined')return;
+  const items=EquipmentLoad.eventItems(AS(),sc);
+  const needed=EquipmentLoad.neededItems(items);
+  const st=EquipmentLoad.stats(items);
+  const typeLabel=sc.eventType==='event'?'Performance':'Game';
+  let html=`<div style="font-family:Georgia,serif;color:#1a1a1c">
+    <div style="text-align:center;margin-bottom:10px">
+      <div style="font-size:16px;font-weight:600">Equipment Load Sheet</div>
+      <div style="font-size:13px;margin-top:2px">${esc(sc.name)}</div>
+      <div style="font-size:11px;color:#555">${esc(fmtDate(sc.date))} · ${esc(typeLabel)}</div>
+      <div style="font-size:11px;color:#555;margin-top:4px">${st.loaded} of ${st.needed} loaded</div>
+    </div>`;
+  EquipmentLoad.grouped(needed).forEach(group=>{
+    html+=`<div style="margin-top:10px;font-weight:600;font-size:11px;letter-spacing:.5px;color:#555;border-bottom:1px solid #ccc;padding-bottom:3px">${esc(group.label).toUpperCase()}</div>`;
+    group.items.forEach(item=>{
+      const mark=item.loaded?'☑':'☐';
+      html+=`<div style="display:flex;gap:8px;align-items:baseline;font-size:12px;padding:4px 0;border-bottom:.5px solid #eee">
+        <span style="width:16px">${mark}</span>
+        <span style="flex:1">${esc(item.name)}${item.notes?` <span style="color:#888;font-size:10px">${esc(item.notes)}</span>`:''}</span>
+        <span style="color:#666">×${item.qty}</span>
+      </div>`;
+    });
+  });
+  html+=`<p style="margin-top:10px;font-size:8px;color:#aaa">Printed ${new Date().toLocaleString()}</p></div>`;
+  showPrint(document.getElementById('print-view'),html);
+}
+
 function openPrintPicker(){
   document.getElementById('print-picker-future-only').checked=true;
   renderPrintPickerList();
@@ -3840,7 +4081,7 @@ function showLoginScreen(hint){
       const r = await apiCall('load');
       if(r.data){
         setAS(r.data);
-        if(_mode==='logistics' && typeof ensureLogisticsTruckPack==='function') ensureLogisticsTruckPack();
+        ensureLogisticsEquipment();
         localStorage.setItem(cacheKey(),JSON.stringify(AS()));
         refreshAllPanels();
         setSyncStatus('ok','Refreshed '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
@@ -3849,6 +4090,5 @@ function showLoginScreen(hint){
   }, 120000);
 })();
 </script>
-<script src="trucks-ui.js"></script>
 </body>
 </html>
