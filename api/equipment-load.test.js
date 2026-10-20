@@ -2,18 +2,23 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import EquipmentLoad from '../equipment-load.js';
 
-test('default catalog covers battery, pit, winds, and other', () => {
+test('default catalog uses storage and load locations', () => {
   const items = EquipmentLoad.defaultEquipment();
-  const cats = new Set(items.map((i) => i.category));
-  assert.ok(cats.has('battery'));
-  assert.ok(cats.has('pit'));
-  assert.ok(cats.has('wind'));
-  assert.ok(cats.has('other'));
+  const storage = new Set(items.map((i) => i.storageLocation));
+  const load = new Set(items.map((i) => i.loadLocation));
+  assert.ok(storage.has('percussion'));
+  assert.ok(storage.has('large-garage'));
+  assert.ok(storage.has('band-library'));
+  assert.ok(load.has('eagle-1'));
+  assert.ok(load.has('eagle-2'));
+  assert.ok(load.has('golf-carts'));
   assert.ok(items.length >= 10);
   items.forEach((i) => {
     assert.ok(i.id);
     assert.ok(i.name);
     assert.ok(i.qty >= 1);
+    assert.ok(EquipmentLoad.STORAGE_LOCATIONS.some((s) => s.id === i.storageLocation));
+    assert.ok(EquipmentLoad.LOAD_LOCATIONS.some((s) => s.id === i.loadLocation));
   });
 });
 
@@ -28,6 +33,24 @@ test('ensureEquipment seeds defaults and drops unused truckPack', () => {
   assert.equal(again, false);
 });
 
+test('ensureEquipment migrates old category values', () => {
+  const state = {
+    equipment: [
+      { id: 'snare', name: 'Snare drums', category: 'battery', qty: 16, notes: 'cases' },
+      { id: 'props', name: 'Props', category: 'weird', qty: 0 },
+    ],
+  };
+  assert.equal(EquipmentLoad.ensureEquipment(state), true);
+  assert.equal(state.equipment[0].storageLocation, 'percussion');
+  assert.equal(state.equipment[0].loadLocation, 'eagle-2');
+  assert.equal(state.equipment[0].notes, 'cases');
+  assert.equal(state.equipment[1].storageLocation, 'band-hall');
+  assert.equal(state.equipment[1].loadLocation, 'eagle-1');
+  assert.equal(state.equipment[1].qty, 1);
+  assert.equal(state.equipment[1].category, undefined);
+  assert.equal(EquipmentLoad.ensureEquipment(state), false);
+});
+
 test('ensureEquipment migrates truckPack instruments', () => {
   const state = {
     truckPack: {
@@ -40,7 +63,8 @@ test('ensureEquipment migrates truckPack instruments', () => {
   EquipmentLoad.ensureEquipment(state);
   assert.equal(state.equipment.length, 2);
   assert.equal(state.equipment[0].notes, 'cases');
-  assert.equal(state.equipment[1].category, 'other');
+  assert.equal(state.equipment[0].storageLocation, 'percussion');
+  assert.equal(state.equipment[1].storageLocation, 'band-hall');
   assert.equal(state.equipment[1].qty, 1);
   assert.equal(state.truckPack, undefined);
 });
@@ -77,9 +101,9 @@ test('skipping an item clears its loaded check', () => {
 
 test('stats count needed vs loaded, ignoring skipped', () => {
   const state = { equipment: [
-    { id: 'a', name: 'A', category: 'other', qty: 1 },
-    { id: 'b', name: 'B', category: 'other', qty: 1 },
-    { id: 'c', name: 'C', category: 'other', qty: 1 },
+    { id: 'a', name: 'A', storageLocation: 'band-hall', loadLocation: 'eagle-1', qty: 1 },
+    { id: 'b', name: 'B', storageLocation: 'band-hall', loadLocation: 'eagle-1', qty: 1 },
+    { id: 'c', name: 'C', storageLocation: 'band-hall', loadLocation: 'eagle-1', qty: 1 },
   ] };
   const sc = {};
   EquipmentLoad.toggleLoaded(sc, 'a', true);
@@ -91,10 +115,15 @@ test('stats count needed vs loaded, ignoring skipped', () => {
 });
 
 test('event extras appear only on that event', () => {
-  const state = { equipment: [{ id: 'a', name: 'A', category: 'other', qty: 1 }] };
+  const state = { equipment: [{ id: 'a', name: 'A', storageLocation: 'band-hall', loadLocation: 'eagle-1', qty: 1 }] };
   const game = {};
   const other = {};
-  EquipmentLoad.addEventExtra(game, { name: 'Homecoming throne', category: 'other', qty: 1 }, 'x1');
+  EquipmentLoad.addEventExtra(game, {
+    name: 'Homecoming throne',
+    storageLocation: 'band-hall',
+    loadLocation: 'colorguard-trailer',
+    qty: 1,
+  }, 'x1');
   const gameIds = EquipmentLoad.eventItems(state, game).map((i) => i.id);
   const otherIds = EquipmentLoad.eventItems(state, other).map((i) => i.id);
   assert.deepEqual(gameIds.sort(), ['a', 'x1']);
@@ -105,7 +134,7 @@ test('copyNeededFrom copies skip/extras but not loaded checks', () => {
   const from = {};
   EquipmentLoad.toggleSkipped(from, 'snare', true);
   EquipmentLoad.toggleLoaded(from, 'tenor', true);
-  EquipmentLoad.addEventExtra(from, { name: 'Banner', category: 'other' }, 'banner');
+  EquipmentLoad.addEventExtra(from, { name: 'Banner', storageLocation: 'band-hall', loadLocation: 'eagle-1' }, 'banner');
   const to = {};
   EquipmentLoad.toggleLoaded(to, 'snare', true);
   EquipmentLoad.copyNeededFrom(from, to);
@@ -117,7 +146,7 @@ test('copyNeededFrom copies skip/extras but not loaded checks', () => {
 
 test('removeCatalogItem drops the item and event checks', () => {
   const state = {
-    equipment: [{ id: 'a', name: 'A', category: 'other', qty: 1 }],
+    equipment: [{ id: 'a', name: 'A', storageLocation: 'band-hall', loadLocation: 'eagle-1', qty: 1 }],
     schedules: [{ id: 's1', equipmentLoaded: { a: true }, equipmentSkipped: {} }],
   };
   EquipmentLoad.removeCatalogItem(state, 'a');
@@ -125,11 +154,37 @@ test('removeCatalogItem drops the item and event checks', () => {
   assert.equal(state.schedules[0].equipmentLoaded.a, undefined);
 });
 
-test('grouped orders known categories and omits empty ones', () => {
+test('grouped orders load locations and omits empty ones', () => {
   const items = [
-    { id: 'w', name: 'W', category: 'wind' },
-    { id: 'b', name: 'B', category: 'battery' },
+    { id: 'w', name: 'W', loadLocation: 'eagle-2' },
+    { id: 'b', name: 'B', loadLocation: 'eagle-1' },
   ];
-  const groups = EquipmentLoad.grouped(items);
-  assert.deepEqual(groups.map((g) => g.id), ['battery', 'wind']);
+  const groups = EquipmentLoad.grouped(items, 'load');
+  assert.deepEqual(groups.map((g) => g.id), ['eagle-1', 'eagle-2']);
+});
+
+test('grouped can order by storage location', () => {
+  const items = [
+    { id: 'w', name: 'W', storageLocation: 'band-library' },
+    { id: 'p', name: 'P', storageLocation: 'percussion' },
+  ];
+  const groups = EquipmentLoad.grouped(items, 'storage');
+  assert.deepEqual(groups.map((g) => g.id), ['band-library', 'percussion']);
+});
+
+test('storage and load option lists match requested labels', () => {
+  assert.deepEqual(EquipmentLoad.STORAGE_LOCATIONS.map((s) => s.label), [
+    'Band Library',
+    'Uniform Room',
+    'Band Hall',
+    'Percussion',
+    'Large Garage (Door 33A)',
+    'Small Garage (Door 30)',
+  ]);
+  assert.deepEqual(EquipmentLoad.LOAD_LOCATIONS.map((s) => s.label), [
+    'Eagle 1',
+    'Eagle 2',
+    'Colorguard Trailer',
+    'Golf Carts',
+  ]);
 });
