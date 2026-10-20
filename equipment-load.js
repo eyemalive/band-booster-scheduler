@@ -25,39 +25,104 @@ function clone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
+// Bump when the seeded catalog should replace the previous starter list.
+const EQUIPMENT_CATALOG_V = 2;
+
+const STARTER_INSTRUMENT_IDS = {
+  snare: 1, tenor: 1, bassdrum: 1, cymbal: 1, marimba: 1, vibe: 1, xylo: 1, bells: 1,
+  timpani: 1, synth: 1, auxrack: 1, concertbd: 1, chimes: 1, drumset: 1, sub: 1,
+  mixer: 1, pitcart: 1, bari: 1, mellophone: 1, trombone: 1, sousa: 1, bassclar: 1,
+  barisax: 1, props: 1, water: 1, tarps: 1, firstaid: 1,
+};
+
+function item(id, name, storageLocation, loadLocation, qty, section, notes) {
+  return {
+    id: id,
+    name: name,
+    storageLocation: storageLocation,
+    loadLocation: loadLocation,
+    qty: qty,
+    section: section || '',
+    notes: notes || '',
+  };
+}
+
 function defaultEquipment() {
+  const food = 'Food Services';
+  const podium1 = 'Podium Assembly 1 (Under Track Stadium Bleachers)';
+  const podium2 = 'Podium Assembly 2 (Under Track Stadium Bleachers)';
+  const dualStorage = 'Also Band Library';
   return [
-    { id: 'snare', name: 'Snare drums', storageLocation: 'percussion', loadLocation: 'eagle-2', qty: 16, notes: '' },
-    { id: 'tenor', name: 'Tenors', storageLocation: 'percussion', loadLocation: 'eagle-2', qty: 6, notes: '' },
-    { id: 'bassdrum', name: 'Bass drums', storageLocation: 'percussion', loadLocation: 'eagle-2', qty: 5, notes: '' },
-    { id: 'cymbal', name: 'Cymbals', storageLocation: 'percussion', loadLocation: 'eagle-2', qty: 8, notes: '' },
+    item('water-wagons', 'Water Wagons filled with Ice', 'large-garage', 'golf-carts', 2, food),
+    item('all-stanchions', 'All Stanchions', 'large-garage', 'golf-carts', 1, food),
+    item('food-supply-cooler', 'Food Service "Supply Cooler"', 'large-garage', 'golf-carts', 1, food, 'Ice Scoop, Hose/Filter, Bleach/Rags'),
+    item('volunteer-cooler-water', 'Large Volunteer Cooler with Ice and 3 cases Volunteer bottled water', 'large-garage', 'golf-carts', 1, food, dualStorage),
+    item('volunteer-cooler-soda', 'Large Volunteer Cooler with Ice and Soda', 'large-garage', 'golf-carts', 1, food, dualStorage),
+    item('directors-cooler', 'Small Directors Cooler with Ice and 14 Dasani Bottled Water', 'large-garage', 'golf-carts', 1, food, dualStorage),
+    item('nurses-cooler', 'Small Nurses Cooler with Ice, Dasani Bottled Water and Gatorade', 'large-garage', 'golf-carts', 1, food, dualStorage),
+    item('warm-water', 'Cases of "warm" water', 'band-library', 'golf-carts', 2, food),
+    item('snacks-totes', 'Snacks Totes from Food Service', 'band-library', 'golf-carts', 4, food, 'Snacks for 615 students'),
+    item('gluten-free-tote', 'Gluten Free Tote from Food Service', 'band-library', 'golf-carts', 1, food, 'Need Gluten Free for 2 servings'),
+    item('trash-bags', 'Small Pack of Clear Trash Bags', 'band-library', 'golf-carts', 1, food),
+    item('rope-reels', 'Reel of rope', 'large-garage', 'golf-carts', 3, food),
 
-    { id: 'marimba', name: 'Marimbas', storageLocation: 'large-garage', loadLocation: 'eagle-1', qty: 4, notes: '' },
-    { id: 'vibe', name: 'Vibraphones', storageLocation: 'large-garage', loadLocation: 'eagle-1', qty: 3, notes: '' },
-    { id: 'xylo', name: 'Xylophone', storageLocation: 'large-garage', loadLocation: 'eagle-1', qty: 1, notes: '' },
-    { id: 'bells', name: 'Bells / glockenspiel', storageLocation: 'large-garage', loadLocation: 'eagle-1', qty: 1, notes: '' },
-    { id: 'timpani', name: 'Timpani cart', storageLocation: 'large-garage', loadLocation: 'eagle-1', qty: 1, notes: '' },
-    { id: 'synth', name: 'Synthesizer racks', storageLocation: 'large-garage', loadLocation: 'eagle-1', qty: 2, notes: '' },
-    { id: 'auxrack', name: 'Aux percussion racks', storageLocation: 'large-garage', loadLocation: 'eagle-1', qty: 2, notes: '' },
-    { id: 'concertbd', name: 'Concert bass drum', storageLocation: 'large-garage', loadLocation: 'eagle-1', qty: 1, notes: '' },
-    { id: 'chimes', name: 'Chimes', storageLocation: 'large-garage', loadLocation: 'eagle-1', qty: 1, notes: '' },
-    { id: 'drumset', name: 'Drum set', storageLocation: 'large-garage', loadLocation: 'eagle-1', qty: 1, notes: '' },
-    { id: 'sub', name: 'Subwoofers', storageLocation: 'large-garage', loadLocation: 'eagle-1', qty: 2, notes: '' },
-    { id: 'mixer', name: 'Mixer / electronics', storageLocation: 'large-garage', loadLocation: 'eagle-1', qty: 1, notes: '' },
-    { id: 'pitcart', name: 'Pit carts / field frames', storageLocation: 'large-garage', loadLocation: 'eagle-1', qty: 4, notes: '' },
+    item('percussion-snack-tote', 'Percussion Snack Tote', 'percussion', 'eagle-2', 1, food),
 
-    { id: 'bari', name: 'Baritones', storageLocation: 'band-library', loadLocation: 'eagle-2', qty: 16, notes: '' },
-    { id: 'mellophone', name: 'Mellophones', storageLocation: 'band-library', loadLocation: 'eagle-2', qty: 16, notes: '' },
-    { id: 'trombone', name: 'Trombones', storageLocation: 'band-library', loadLocation: 'eagle-2', qty: 16, notes: '' },
-    { id: 'sousa', name: 'Sousaphones', storageLocation: 'band-library', loadLocation: 'eagle-2', qty: 12, notes: '' },
-    { id: 'bassclar', name: 'Bass clarinets', storageLocation: 'band-library', loadLocation: 'eagle-2', qty: 4, notes: '' },
-    { id: 'barisax', name: 'Baritone saxophones', storageLocation: 'band-library', loadLocation: 'eagle-2', qty: 4, notes: '' },
+    item('pa1-scissor-lift', 'Black scissor-lift platform', 'large-garage', 'golf-carts', 1, podium1),
+    item('pa1-scissor-ladder', 'Ladder for scissor-lift platform', 'large-garage', 'golf-carts', 1, podium1),
+    item('pa1-safety-rails', 'Safety rails for scissor lift', 'large-garage', 'golf-carts', 2, podium1),
+    item('pa1-folding-podium', 'Aluminum folding podium with safety rails', 'large-garage', 'golf-carts', 2, podium1),
+    item('pa1-little-giant', 'Little Giant Ladder', 'large-garage', 'golf-carts', 1, podium1),
+    item('pa1-cam-buckle', 'Cam-buckle tie down strap', 'large-garage', 'golf-carts', 1, podium1),
+    item('pa1-anchor-speakers', 'Anchor Speakers - Stadium', 'large-garage', 'golf-carts', 4, podium1),
+    item('pa1-gator-stands', 'Gator Stands (2 bags) - Stadium', 'large-garage', 'golf-carts', 4, podium1),
 
-    { id: 'props', name: 'Props', storageLocation: 'band-hall', loadLocation: 'colorguard-trailer', qty: 1, notes: '' },
-    { id: 'water', name: 'Water coolers', storageLocation: 'large-garage', loadLocation: 'golf-carts', qty: 2, notes: '' },
-    { id: 'tarps', name: 'Tarps / rain covers', storageLocation: 'large-garage', loadLocation: 'golf-carts', qty: 2, notes: '' },
-    { id: 'firstaid', name: 'First aid kit', storageLocation: 'band-hall', loadLocation: 'golf-carts', qty: 1, notes: '' },
+    item('pa2-scissor-lift', 'Black scissor-lift platform', 'large-garage', 'golf-carts', 1, podium2),
+    item('pa2-scissor-ladder', 'Ladder for scissor-lift platform', 'large-garage', 'golf-carts', 1, podium2),
+    item('pa2-safety-rails', 'Safety rails for scissor lift', 'large-garage', 'golf-carts', 2, podium2),
+    item('pa2-folding-podium', 'Aluminum folding podium with safety rails', 'large-garage', 'golf-carts', 1, podium2),
+    item('pa2-little-giant', 'Little Giant Ladder', 'large-garage', 'golf-carts', 1, podium2),
+    item('pa2-cam-buckle', 'Cam-buckle tie down strap', 'large-garage', 'golf-carts', 1, podium2),
+    item('pa2-speaker-mic-box', 'Speaker Mic Box', 'large-garage', 'golf-carts', 1, podium2),
+    item('pa2-ubolts-pvc', 'Bucket with ubolts and PVC Pipe', 'large-garage', 'golf-carts', 1, podium2),
+
+    item('generator', 'Generator', 'small-garage', 'colorguard-trailer', 1),
+    item('chairs', 'Chairs', 'band-hall', 'colorguard-trailer', 4),
+    item('stanchion-cart', 'Stanchion Cart', 'large-garage', 'colorguard-trailer', 1),
+    item('hand-truck', 'Hand-truck w/Platform', 'large-garage', 'colorguard-trailer', 1),
+    item('caution-tape', 'Rolls of Caution Tape', 'large-garage', 'colorguard-trailer', 2),
+    item('plume-cases', 'Plume Cases', 'uniform-room', 'colorguard-trailer', 6),
+    item('green-plume-bags', 'Large Green Plume Bags', 'uniform-room', 'colorguard-trailer', 2),
+    item('z-racks', 'Z-Racks', 'uniform-room', 'colorguard-trailer', 2),
+    item('hanger-crate', 'Crate of Hangers', 'uniform-room', 'colorguard-trailer', 1),
+    item('drum-major-plumes', 'Drum Major Plumes', 'uniform-room', 'colorguard-trailer', 6),
+    item('uniform-bag', 'Uniform Bag', 'uniform-room', 'colorguard-trailer', 1),
   ];
+}
+
+function looksLikeStarterInstrumentCatalog(list) {
+  if (!Array.isArray(list) || list.length < 3) return false;
+  const ids = list.map(function (i) { return i && i.id; }).filter(Boolean);
+  if (ids.indexOf('snare') < 0 || ids.indexOf('marimba') < 0 || ids.indexOf('bari') < 0) return false;
+  for (let i = 0; i < ids.length; i++) {
+    if (!STARTER_INSTRUMENT_IDS[ids[i]]) return false;
+  }
+  return true;
+}
+
+function applySheetCatalog(state) {
+  const oldIds = (state.equipment || []).map(function (i) { return i && i.id; }).filter(Boolean);
+  state.equipment = defaultEquipment();
+  const keep = {};
+  state.equipment.forEach(function (i) { keep[i.id] = true; });
+  (state.schedules || []).forEach(function (sc) {
+    ['equipmentLoaded', 'equipmentSkipped'].forEach(function (key) {
+      if (!sc[key] || typeof sc[key] !== 'object') return;
+      oldIds.forEach(function (id) {
+        if (!keep[id]) delete sc[key][id];
+      });
+    });
+  });
 }
 
 function listHas(list, id) {
@@ -106,6 +171,7 @@ function normalizeItem(item, fallbackId) {
     storageLocation: resolveStorage(src),
     loadLocation: resolveLoad(src),
     qty: normQty(src.qty),
+    section: String(src.section || '').trim(),
     notes: String(src.notes || '').trim(),
   };
 }
@@ -131,20 +197,28 @@ function ensureMaps(sc) {
 function ensureEquipment(state) {
   if (!state || typeof state !== 'object') return false;
   let changed = false;
+  const fromPack = state.truckPack && Array.isArray(state.truckPack.instruments)
+    ? state.truckPack.instruments
+    : null;
   if (!Array.isArray(state.equipment) || !state.equipment.length) {
-    const fromPack = state.truckPack && Array.isArray(state.truckPack.instruments)
-      ? state.truckPack.instruments
-      : null;
-    if (fromPack && fromPack.length) {
+    if (fromPack && fromPack.length && !looksLikeStarterInstrumentCatalog(fromPack)) {
       state.equipment = fromPack.map(itemFromInstrument).filter(function (i) { return i.id && i.name; });
     } else {
       state.equipment = defaultEquipment();
     }
     changed = true;
+  } else if (state.equipmentCatalogV !== EQUIPMENT_CATALOG_V
+      && looksLikeStarterInstrumentCatalog(state.equipment)) {
+    applySheetCatalog(state);
+    changed = true;
   } else {
     const next = state.equipment.map(function (item) { return normalizeItem(item, item && item.id); });
     if (JSON.stringify(state.equipment) !== JSON.stringify(next)) changed = true;
     state.equipment = next;
+  }
+  if (state.equipmentCatalogV !== EQUIPMENT_CATALOG_V) {
+    state.equipmentCatalogV = EQUIPMENT_CATALOG_V;
+    changed = true;
   }
   (state.schedules || []).forEach(function (sc) {
     if (!sc || !Array.isArray(sc.equipmentExtra) || !sc.equipmentExtra.length) return;
@@ -209,6 +283,22 @@ function grouped(items, by) {
   }).filter(function (g) { return g.items.length; });
 }
 
+function sectioned(items) {
+  const order = [];
+  const buckets = {};
+  (items || []).forEach(function (item) {
+    const key = String((item && item.section) || '').trim();
+    if (!buckets[key]) {
+      buckets[key] = [];
+      order.push(key);
+    }
+    buckets[key].push(item);
+  });
+  return order.map(function (key) {
+    return { label: key, items: buckets[key] };
+  });
+}
+
 function toggleLoaded(sc, id, value) {
   if (!sc || !id) return false;
   ensureMaps(sc);
@@ -262,6 +352,7 @@ function editCatalogItem(state, id, fields) {
   item.storageLocation = merged.storageLocation;
   item.loadLocation = merged.loadLocation;
   item.qty = merged.qty;
+  item.section = merged.section;
   item.notes = merged.notes;
   delete item.category;
   return item;
@@ -295,6 +386,7 @@ function removeEventExtra(sc, id) {
 const api = {
   STORAGE_LOCATIONS: STORAGE_LOCATIONS,
   LOAD_LOCATIONS: LOAD_LOCATIONS,
+  EQUIPMENT_CATALOG_V: EQUIPMENT_CATALOG_V,
   defaultEquipment: defaultEquipment,
   ensureEquipment: ensureEquipment,
   catalog: catalog,
@@ -302,6 +394,7 @@ const api = {
   neededItems: neededItems,
   stats: stats,
   grouped: grouped,
+  sectioned: sectioned,
   storageLabel: storageLabel,
   loadLabel: loadLabel,
   toggleLoaded: toggleLoaded,
@@ -322,6 +415,7 @@ export default api;
 export {
   STORAGE_LOCATIONS,
   LOAD_LOCATIONS,
+  EQUIPMENT_CATALOG_V,
   defaultEquipment,
   ensureEquipment,
   catalog,
@@ -329,6 +423,7 @@ export {
   neededItems,
   stats,
   grouped,
+  sectioned,
   storageLabel,
   loadLabel,
   toggleLoaded,
