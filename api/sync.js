@@ -17,6 +17,7 @@ import {
   GZIP_SAVE_AFTER,
   buildSaveRequests,
   htmlErrorMessage,
+  isDeadWebAppError,
   looksLikeHtml,
   outdatedBackendMessage,
   payloadToString,
@@ -261,13 +262,16 @@ export default async function handler(req, res) {
           }
           const version = ping && ping.ok ? Number(ping.version) || 0 : 0;
           if (version < BACKEND_VERSION) {
+            const pingError = ping && ping.error;
             return json(res, 502, {
               ok: false,
-              error: outdatedBackendMessage({
-                bytes,
-                pingError: ping && ping.error,
-                version: version || null,
-              }),
+              error: isDeadWebAppError(pingError)
+                ? htmlErrorMessage()
+                : outdatedBackendMessage({
+                    bytes,
+                    pingError,
+                    version: version || null,
+                  }),
               backendVersion: version || null,
               requiredBackendVersion: BACKEND_VERSION,
               bytes,

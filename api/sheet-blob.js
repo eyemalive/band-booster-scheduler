@@ -56,7 +56,23 @@ export function looksLikeHtml(text) {
 }
 
 export function htmlErrorMessage() {
-  return 'Apps Script returned an HTML error page instead of JSON. The sheet backend did not run — usually because the save POST was too large for Google to execute, or the web app is on an old version. Paste the latest BandBoosterBackend.gs (keep your existing API_KEY), then Deploy → Manage deployments → edit → New version → Deploy.';
+  return [
+    'Apps Script returned an HTML error page instead of JSON, so Google never ran the web app.',
+    'This is not a 50,000-character problem — even a tiny ping/load is failing.',
+    'After archiving deployments the usual causes are:',
+    '(1) Vercel APPS_SCRIPT_URL still points at an archived /exec URL;',
+    '(2) the remaining web app is Who has access: Only myself, so Vercel gets a Google login page;',
+    '(3) the remaining script has a new /exec URL that is not in Vercel.',
+    'Fix: Deploy → Manage deployments. Match the active Web app URL to Vercel Settings → Environment Variables → APPS_SCRIPT_URL.',
+    'If they differ, paste the active URL into that env var (Production) and Redeploy.',
+    'Edit the matching deployment: Execute as Me, Who has access Anyone, Version New version, then Deploy.',
+    `Paste ${BACKEND_SCRIPT_URL} first and keep your existing API_KEY.`,
+  ].join(' ');
+}
+
+export function isDeadWebAppError(msg) {
+  const s = String(msg || '');
+  return looksLikeHtml(s) || /HTML error page/i.test(s) || /never ran the web app/i.test(s);
 }
 
 export function buildSaveRequests(apiKey, tab, payload, payloadChunk = GS_PAYLOAD_CHUNK) {

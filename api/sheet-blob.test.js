@@ -117,4 +117,6 @@ test('looksLikeHtml detects the Google ppConfig error page', () => {
   assert.equal(looksLikeHtml(html), true);
   assert.equal(looksLikeHtml('{"ok":true}'), false);
   assert.match(htmlErrorMessage(), /BandBoosterBackend\.gs/);
+  assert.match(htmlErrorMessage(), /archived/);
+  assert.match(htmlErrorMessage(), /Anyone/);
 });
