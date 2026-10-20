@@ -16,6 +16,9 @@
 //  {"logistics":"yourpassword","general":"yourpassword","admin":"yourpassword"}
 //  Passwords are hashed (sha256:…) on the next save. Existing plaintext values
 //  still work until they are changed.
+//
+//  After any change: Deploy → Manage deployments → edit the web app → New version.
+//  Keep the existing API_KEY. Vercel must keep calling the same /exec URL.
 // ════════════════════════════════════════════════════════════
 
 const API_KEY = 'YOUR_SECRET_KEY_HERE';  // ← change this
@@ -26,6 +29,8 @@ const DATA_TABS = ['AppData', 'AppDataGeneral', 'AppEvents', 'AppImportCategorie
 // the whole module (roster + jobs + every event's assignments), so we split it
 // across A1, A2, … and join on load.
 const CELL_CHUNK = 49000;
+// Bump when the Vercel proxy needs a new save/load protocol (gzip, saveChunk).
+const BACKEND_VERSION = 3;
 
 function sha256Hex(str) {
   const raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(str), Utilities.Charset.UTF_8);
@@ -69,41 +74,71 @@ function parseFormEncoded(raw) {
   return out;
 }
 
+function applyBodyFields(src, cur) {
+  if (!src || typeof src !== 'object') return cur;
+  if (src.action) cur.action = src.action;
+  if (src.key) cur.key = src.key;
+  if (src.tab) cur.tabName = src.tab;
+  if (src.encoding) cur.encoding = src.encoding;
+  if (src.payload !== undefined && src.payload !== null) {
+    const next = typeof src.payload === 'string' ? src.payload : JSON.stringify(src.payload);
+    // gzip payloads are shorter than raw JSON; always take them when encoded.
+    if (cur.encoding === 'gzip-b64' || src.encoding === 'gzip-b64' || !cur.payload || next.length >= String(cur.payload).length) {
+      cur.payload = next;
+    }
+  }
+  if (src.chunkIndex !== undefined && src.chunkIndex !== null && src.chunkIndex !== '') {
+    cur.chunkIndex = src.chunkIndex;
+  }
+  if (src.chunkCount !== undefined && src.chunkCount !== null && src.chunkCount !== '') {
+    cur.chunkCount = src.chunkCount;
+  }
+  return cur;
+}
+
+function unzipB64(b64) {
+  const bytes = Utilities.base64Decode(b64);
+  const blob = Utilities.newBlob(bytes, 'application/x-gzip');
+  return Utilities.ungzip(blob).getDataAsString('UTF-8');
+}
+
 // e.parameter can truncate a large `payload` field. Prefer the raw POST body
 // (JSON or the full form-urlencoded string) when it is longer.
 function parseRequest(e) {
   const params = (e && e.parameter) ? e.parameter : {};
-  let action = params.action || '';
-  let key = params.key || '';
-  let tabName = params.tab || 'AppData';
-  let payload = params.payload || '';
+  let parsed = {
+    action: params.action || '',
+    key: params.key || '',
+    tabName: params.tab || 'AppData',
+    payload: params.payload || '',
+    encoding: params.encoding || '',
+    chunkIndex: params.chunkIndex,
+    chunkCount: params.chunkCount,
+    decodeError: '',
+  };
 
   if (e && e.postData && e.postData.contents) {
     const type = String(e.postData.type || '').toLowerCase();
     const raw = e.postData.contents;
     if (type.indexOf('application/json') !== -1) {
       try {
-        const body = JSON.parse(raw);
-        if (body && typeof body === 'object') {
-          if (body.action) action = body.action;
-          if (body.key) key = body.key;
-          if (body.tab) tabName = body.tab;
-          if (body.payload !== undefined && body.payload !== null) {
-            payload = typeof body.payload === 'string' ? body.payload : JSON.stringify(body.payload);
-          }
-        }
+        parsed = applyBodyFields(JSON.parse(raw), parsed);
       } catch (err) {}
     } else {
       try {
-        const form = parseFormEncoded(raw);
-        if (form.action) action = form.action;
-        if (form.key) key = form.key;
-        if (form.tab) tabName = form.tab;
-        if (form.payload && form.payload.length > String(payload).length) payload = form.payload;
+        parsed = applyBodyFields(parseFormEncoded(raw), parsed);
       } catch (err) {}
     }
   }
-  return { action: action, key: key, tabName: tabName, payload: payload };
+
+  if (parsed.encoding === 'gzip-b64' && parsed.payload) {
+    try {
+      parsed.payload = unzipB64(parsed.payload);
+    } catch (err) {
+      parsed.decodeError = 'Failed to gunzip payload: ' + err.message;
+    }
+  }
+  return parsed;
 }
 
 function readCellBlob(sheet) {
@@ -165,6 +200,14 @@ function doPost(e) {
     // Auth check
     if (key !== API_KEY) {
       return jsonOut(out, { ok: false, error: 'Unauthorized' });
+    }
+
+    if (action === 'ping') {
+      return jsonOut(out, { ok: true, version: BACKEND_VERSION, cellChunk: CELL_CHUNK });
+    }
+
+    if (parsed.decodeError) {
+      return jsonOut(out, { ok: false, error: parsed.decodeError });
     }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -252,7 +295,36 @@ function doPost(e) {
         });
       }
       const chunks = writeCellBlob(sheet, payload);
-      return jsonOut(out, { ok: true, bytes: payload.length, chunks: chunks });
+      return jsonOut(out, { ok: true, bytes: payload.length, chunks: chunks, version: BACKEND_VERSION });
+    }
+
+    // ── saveChunk (proxy splits a payload Google would otherwise refuse) ─
+    if (action === 'saveChunk') {
+      const idx = parseInt(parsed.chunkIndex, 10);
+      const count = parseInt(parsed.chunkCount, 10);
+      if (!isFinite(idx) || !isFinite(count) || count < 1 || idx < 0 || idx >= count) {
+        return jsonOut(out, { ok: false, error: 'Invalid chunk index.' });
+      }
+      if (payload == null) return jsonOut(out, { ok: false, error: 'No payload provided.' });
+      const cell = sheet.getRange(idx + 1, 1);
+      cell.setNumberFormat('@');
+      cell.setValue(String(payload));
+      if (idx !== count - 1) {
+        return jsonOut(out, { ok: true, chunkIndex: idx, chunkCount: count, version: BACKEND_VERSION });
+      }
+      const vals = sheet.getRange(1, 1, count, 1).getValues();
+      const full = vals.map(function (row) {
+        return row[0] == null ? '' : String(row[0]);
+      }).join('');
+      try { JSON.parse(full); }
+      catch (err) {
+        return jsonOut(out, {
+          ok: false,
+          error: 'Payload is not valid JSON (' + full.length + ' chars).',
+        });
+      }
+      const chunks = writeCellBlob(sheet, full);
+      return jsonOut(out, { ok: true, bytes: full.length, chunks: chunks, version: BACKEND_VERSION });
     }
 
     return jsonOut(out, { ok: false, error: 'Unknown action: ' + action });
@@ -266,6 +338,11 @@ function doPost(e) {
 function doGet(e) {
   const out = ContentService.createTextOutput();
   out.setMimeType(ContentService.MimeType.JSON);
-  out.setContent(JSON.stringify({ ok: true, message: 'Band Booster Backend is running. Use POST requests.' }));
+  out.setContent(JSON.stringify({
+    ok: true,
+    message: 'Band Booster Backend is running. Use POST requests.',
+    version: BACKEND_VERSION,
+    cellChunk: CELL_CHUNK,
+  }));
   return out;
 }

@@ -914,12 +914,27 @@ function formatSaveError(err, extra){
   const lines = [];
   if(extra && extra.when) lines.push('Time: '+extra.when);
   if(extra && extra.tab) lines.push('Tab: '+extra.tab);
-  if(extra && extra.bytes!=null) lines.push('Data size: '+extra.bytes+' characters (Google Sheets cell limit is 50,000 unless chunking is deployed)');
-  if(err && err.status) lines.push('HTTP: '+err.status);
-  lines.push('Error: '+String((err && err.message) || err || 'Unknown error').replace(/^Proxy error:\s*/,''));
-  if(err && err.body && typeof err.body==='object'){
-    try{ lines.push('Response: '+JSON.stringify(err.body)); }catch(e){}
+  if(extra && extra.bytes!=null){
+    let sizeLine = 'Data size: '+extra.bytes+' characters';
+    if(extra.bytes > 50000) sizeLine += ' (over the 50,000-character Google Sheets cell limit — Apps Script must be version 3+ with cell chunking)';
+    lines.push(sizeLine);
   }
+  if(err && err.status) lines.push('HTTP: '+err.status);
+  let msg = String((err && err.message) || err || 'Unknown error').replace(/^Proxy error:\s*/,'');
+  if(/<!DOCTYPE html/i.test(msg) || /ppConfig/i.test(msg) || /HTML error page/i.test(msg) || /returned non-JSON/i.test(msg)){
+    msg = 'Apps Script returned an HTML error page instead of JSON. Google never ran the sheet backend for this save (the POST is too large, or the web app is on an old version).';
+  }
+  lines.push('Error: '+msg);
+  if(err && err.body && typeof err.body==='object'){
+    try{
+      const copy = Object.assign({}, err.body);
+      if(typeof copy.error === 'string' && (/<!DOCTYPE html/i.test(copy.error) || /ppConfig/i.test(copy.error))){
+        copy.error = msg;
+      }
+      lines.push('Response: '+JSON.stringify(copy));
+    }catch(e){}
+  }
+  lines.push('Next step: In the Apps Script project this app already uses, replace the script with BandBoosterBackend.gs from the repo (keep your existing API_KEY), then Deploy → Manage deployments → edit → New version → Deploy.');
   return lines.join('\n');
 }
 function showSaveErrorLog(text){
@@ -1194,9 +1209,29 @@ async function runDiagnostic(){
   let last = '';
   try{ last = sessionStorage.getItem('bbs_last_save_error') || ''; }catch(e){}
   let preface = 'This browser\'s <code>'+esc(sheetTab())+'</code> JSON: <code>'+bytes+'</code> characters';
-  if(bytes>50000) preface += ' — over the 50,000-character Google Sheets cell limit unless chunking is deployed';
+  if(bytes>50000) preface += ' — over the 50,000-character Google Sheets cell limit until Apps Script version 3+ is deployed';
   preface += '.<br>';
   if(last) preface += 'Last save error:<br><pre style="white-space:pre-wrap;font-size:11px;background:var(--surface2);padding:8px;border-radius:6px">'+esc(last)+'</pre>';
+
+  msg.innerHTML = preface + '⏳ Checking sheet backend…';
+  try{
+    const diag = await apiCall('diag');
+    if(!diag.configured){
+      msg.innerHTML = preface + '✗ <strong>Vercel env vars not set.</strong><br>APPS_SCRIPT_URL: '+(diag.hasUrl?'✓ set':'✗ missing')+'<br>API_KEY: '+(diag.hasKey?'✓ set':'✗ missing');
+      return;
+    }
+    const ver = diag.backendVersion;
+    const need = diag.requiredBackendVersion || 3;
+    if(ver == null || ver < need){
+      preface += '✗ Sheet backend is outdated (version '+(ver==null?'unknown':ver)+', need '+need+'). Paste <code>BandBoosterBackend.gs</code>, keep your API_KEY, then Deploy → Manage deployments → New version.<br>';
+      if(diag.backend && diag.backend.error) preface += '<code>'+esc(String(diag.backend.error))+'</code><br>';
+    } else {
+      preface += '✓ Sheet backend version '+ver+'.<br>';
+    }
+  }catch(err){
+    preface += '✗ Could not reach /api/sync: <code>'+esc(err.message)+'</code><br>';
+  }
+
   if(AS()){
     msg.innerHTML = preface + '⏳ Testing save of the current data…';
     try{
@@ -1211,11 +1246,6 @@ async function runDiagnostic(){
   }
   msg.innerHTML = preface + '⏳ Checking connection…';
   try{
-    const diag = await apiCall('diag');
-    if(!diag.configured){
-      msg.innerHTML = preface + '✗ <strong>Vercel env vars not set.</strong><br>APPS_SCRIPT_URL: '+(diag.hasUrl?'✓ set':'✗ missing')+'<br>API_KEY: '+(diag.hasKey?'✓ set':'✗ missing');
-      return;
-    }
     msg.innerHTML = preface + '✓ Proxy reachable.<br>⏳ Testing Apps Script…';
     const data = await apiCall('load');
     markConnected(); setSyncStatus('ok','Connected');

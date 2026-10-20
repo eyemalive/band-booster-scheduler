@@ -1,6 +1,7 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSessionToken, COOKIE_NAME } from './auth.js';
+import { gunzipBase64 } from './sheet-blob.js';
 import handler from './sync.js';
 
 function mockRes() {
@@ -110,4 +111,70 @@ test('session returns role for valid cookie', async () => {
   }), res);
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.body, { ok: true, role: 'general' });
+});
+
+test('save of a 50k+ blob gzips the Apps Script payload', async () => {
+  process.env.APPS_SCRIPT_URL = 'https://script.example/exec';
+  process.env.API_KEY = 'key';
+  const sent = [];
+  mock.method(globalThis, 'fetch', async (_url, opts) => {
+    sent.push(new URLSearchParams(opts.body));
+    return { ok: true, async text() { return JSON.stringify({ ok: true, chunks: 2, version: 3 }); } };
+  });
+  const token = createSessionToken('logistics', 'key');
+  const payload = { notes: 'x'.repeat(50129) };
+  const res = mockRes();
+  await handler(req({
+    body: { action: 'save', tab: 'AppData', payload },
+    cookie: `${COOKIE_NAME}=${token}`,
+  }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].get('action'), 'save');
+  assert.equal(sent[0].get('encoding'), 'gzip-b64');
+  assert.deepEqual(JSON.parse(gunzipBase64(sent[0].get('payload'))), payload);
+  mock.restoreAll();
+});
+
+test('HTML Apps Script response becomes a 502 with a deploy hint', async () => {
+  process.env.APPS_SCRIPT_URL = 'https://script.example/exec';
+  process.env.API_KEY = 'key';
+  mock.method(globalThis, 'fetch', async () => ({
+    ok: true,
+    async text() {
+      return `<!DOCTYPE html><html><head><script nonce="abc">window['ppConfig'] = {productName: '26981ed0d57bbad37e728ff58134270c', sealIsEnforced: false}`;
+    },
+  }));
+  const token = createSessionToken('logistics', 'key');
+  const res = mockRes();
+  await handler(req({
+    body: { action: 'save', tab: 'AppData', payload: { notes: 'x'.repeat(50129) } },
+    cookie: `${COOKIE_NAME}=${token}`,
+  }), res);
+  assert.equal(res.statusCode, 502);
+  assert.equal(res.body.ok, false);
+  assert.match(res.body.error, /HTML error page/);
+  assert.match(res.body.error, /BandBoosterBackend\.gs/);
+  mock.restoreAll();
+});
+
+test('diag reports Apps Script backend version from ping', async () => {
+  process.env.APPS_SCRIPT_URL = 'https://script.example/exec';
+  process.env.API_KEY = 'key';
+  mock.method(globalThis, 'fetch', async (_url, opts) => {
+    const params = new URLSearchParams(opts.body);
+    assert.equal(params.get('action'), 'ping');
+    return { ok: true, async text() { return JSON.stringify({ ok: true, version: 3, cellChunk: 49000 }); } };
+  });
+  const token = createSessionToken('logistics', 'key');
+  const res = mockRes();
+  await handler(req({
+    body: { action: 'diag' },
+    cookie: `${COOKIE_NAME}=${token}`,
+  }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.ok, true);
+  assert.equal(res.body.backendVersion, 3);
+  assert.equal(res.body.requiredBackendVersion, 3);
+  mock.restoreAll();
 });

@@ -12,6 +12,12 @@ import {
   sessionFromRequest,
   tabAllowed,
 } from './auth.js';
+import {
+  BACKEND_VERSION,
+  buildSaveRequests,
+  htmlErrorMessage,
+  looksLikeHtml,
+} from './sheet-blob.js';
 
 export const config = {
   api: {
@@ -19,13 +25,22 @@ export const config = {
   },
 };
 
-async function gsCall(url, apiKey, { action, payload, tab }) {
+function gsError(text, status) {
+  const err = new Error(
+    looksLikeHtml(text)
+      ? htmlErrorMessage()
+      : status
+        ? `Apps Script returned HTTP ${status}. Response: ${String(text || '').slice(0, 200)}`
+        : `Apps Script returned non-JSON: ${String(text || '').slice(0, 200)}`
+  );
+  err.status = 502;
+  return err;
+}
+
+async function gsPost(url, fields) {
   const params = new URLSearchParams();
-  params.append('action', action);
-  params.append('key', apiKey);
-  if (tab) params.append('tab', tab);
-  if (payload !== undefined) {
-    params.append('payload', typeof payload === 'string' ? payload : JSON.stringify(payload));
+  for (const [k, v] of Object.entries(fields || {})) {
+    if (v !== undefined && v !== null) params.append(k, String(v));
   }
 
   const gsRes = await fetch(url, {
@@ -35,21 +50,33 @@ async function gsCall(url, apiKey, { action, payload, tab }) {
     redirect: 'follow',
   });
 
-  if (!gsRes.ok) {
-    const text = await gsRes.text().catch(() => '');
-    const err = new Error(`Apps Script returned HTTP ${gsRes.status}. Response: ${text.slice(0, 200)}`);
-    err.status = 502;
-    throw err;
-  }
-
-  const text = await gsRes.text();
+  const text = await gsRes.text().catch(() => '');
+  if (!gsRes.ok) throw gsError(text, gsRes.status);
+  if (looksLikeHtml(text)) throw gsError(text);
   try {
     return JSON.parse(text);
   } catch {
-    const err = new Error(`Apps Script returned non-JSON: ${text.slice(0, 200)}`);
-    err.status = 502;
-    throw err;
+    throw gsError(text);
   }
+}
+
+async function gsCall(url, apiKey, { action, payload, tab }) {
+  if (action === 'save' && payload !== undefined) {
+    const requests = buildSaveRequests(apiKey, tab, payload);
+    let last = { ok: false, error: 'Save did not run.' };
+    for (const fields of requests) {
+      last = await gsPost(url, fields);
+      if (last && last.ok === false) return last;
+    }
+    return last;
+  }
+
+  const fields = { action, key: apiKey };
+  if (tab) fields.tab = tab;
+  if (payload !== undefined) {
+    fields.payload = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  }
+  return gsPost(url, fields);
 }
 
 function json(res, status, body, extraHeaders = {}) {
@@ -174,11 +201,20 @@ export default async function handler(req, res) {
 
   try {
     if (action === 'diag') {
+      let backend = { ok: false, error: 'Could not reach Apps Script.' };
+      try {
+        backend = await gsCall(APPS_SCRIPT_URL, API_KEY, { action: 'ping' });
+      } catch (err) {
+        backend = { ok: false, error: err.message };
+      }
       return json(res, 200, {
         ok: true,
         configured: true,
         hasUrl: true,
         hasKey: true,
+        requiredBackendVersion: BACKEND_VERSION,
+        backendVersion: backend && backend.ok ? backend.version : null,
+        backend,
       });
     }
 

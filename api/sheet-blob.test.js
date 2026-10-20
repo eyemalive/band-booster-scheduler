@@ -1,7 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-
-const CELL_CHUNK = 49000;
+import { randomBytes } from 'crypto';
+import {
+  BACKEND_VERSION,
+  CELL_CHUNK,
+  GZIP_SAVE_AFTER,
+  GS_PAYLOAD_CHUNK,
+  buildSaveRequests,
+  chunkBlob,
+  gunzipBase64,
+  gzipBase64,
+  htmlErrorMessage,
+  looksLikeHtml,
+} from './sheet-blob.js';
 
 function parseFormEncoded(raw) {
   const out = {};
@@ -19,19 +30,10 @@ function parseFormEncoded(raw) {
   return out;
 }
 
-function chunkBlob(text, size = CELL_CHUNK) {
-  const value = text == null ? '' : String(text);
-  const n = Math.max(1, Math.ceil(value.length / size) || 1);
-  const rows = [];
-  for (let i = 0; i < n; i++) {
-    rows.push(value.substring(i * size, (i + 1) * size));
-  }
-  return rows;
-}
-
 test('Google Sheets 50k cell limit requires chunking AppData JSON', () => {
   assert.equal(CELL_CHUNK, 49000);
   assert.ok(CELL_CHUNK < 50000);
+  assert.equal(BACKEND_VERSION, 3);
 });
 
 test('chunks of a large JSON blob join back to the original', () => {
@@ -61,4 +63,49 @@ test('form body recovers a payload longer than a truncated e.parameter value', (
   assert.equal(form.tab, 'AppData');
   assert.equal(form.payload, payload);
   assert.ok(form.payload.length > 8000);
+});
+
+test('gzip round-trip preserves JSON larger than a Sheets cell', () => {
+  const payload = JSON.stringify({ notes: 'x'.repeat(60000) });
+  assert.ok(payload.length > 50000);
+  const gz = gzipBase64(payload);
+  assert.ok(gz.length < GZIP_SAVE_AFTER);
+  assert.equal(gunzipBase64(gz), payload);
+});
+
+test('buildSaveRequests gzips a 50k+ blob into one small POST', () => {
+  const payload = { notes: 'x'.repeat(50129) };
+  const reqs = buildSaveRequests('secret', 'AppData', payload);
+  assert.equal(reqs.length, 1);
+  assert.equal(reqs[0].action, 'save');
+  assert.equal(reqs[0].encoding, 'gzip-b64');
+  assert.equal(reqs[0].tab, 'AppData');
+  assert.ok(reqs[0].payload.length <= GS_PAYLOAD_CHUNK);
+  assert.deepEqual(JSON.parse(gunzipBase64(reqs[0].payload)), payload);
+});
+
+test('buildSaveRequests leaves small saves uncompressed for old backends', () => {
+  const payload = { hello: 'world' };
+  const reqs = buildSaveRequests('secret', 'AppData', payload);
+  assert.equal(reqs.length, 1);
+  assert.equal(reqs[0].action, 'save');
+  assert.equal(reqs[0].encoding, undefined);
+  assert.equal(reqs[0].payload, JSON.stringify(payload));
+});
+
+test('buildSaveRequests splits an incompressible blob into saveChunk POSTs', () => {
+  const payload = randomBytes(80000).toString('base64');
+  const reqs = buildSaveRequests('secret', 'AppData', payload, 1000);
+  assert.ok(reqs.length > 1);
+  assert.ok(reqs.every((r) => r.action === 'saveChunk'));
+  assert.equal(reqs[0].chunkCount, String(reqs.length));
+  const joined = reqs.map((r) => r.payload).join('');
+  assert.equal(joined, payload);
+});
+
+test('looksLikeHtml detects the Google ppConfig error page', () => {
+  const html = `<!DOCTYPE html><html><head><script nonce="abc">window['ppConfig'] = {productName: '26981ed0d57bbad37e728ff58134270c', deleteIsEnforced:  false , sealIsEnforced:  false , heartbeatRa`;
+  assert.equal(looksLikeHtml(html), true);
+  assert.equal(looksLikeHtml('{"ok":true}'), false);
+  assert.match(htmlErrorMessage(), /BandBoosterBackend\.gs/);
 });
