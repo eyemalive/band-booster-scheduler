@@ -12,6 +12,7 @@ import {
   gzipBase64,
   htmlErrorMessage,
   looksLikeHtml,
+  outdatedBackendMessage,
 } from './sheet-blob.js';
 
 function parseFormEncoded(raw) {
@@ -101,6 +102,14 @@ test('buildSaveRequests splits an incompressible blob into saveChunk POSTs', () 
   assert.equal(reqs[0].chunkCount, String(reqs.length));
   const joined = reqs.map((r) => r.payload).join('');
   assert.equal(joined, payload);
+});
+
+test('outdated backend message says the JSON is valid and how to deploy', () => {
+  const msg = outdatedBackendMessage({ bytes: 50119, pingError: 'Unknown action: ping' });
+  assert.match(msg, /50119 characters/);
+  assert.match(msg, /Unknown action: ping/);
+  assert.match(msg, /BandBoosterBackend\.gs/);
+  assert.match(msg, /New version/);
 });
 
 test('looksLikeHtml detects the Google ppConfig error page', () => {

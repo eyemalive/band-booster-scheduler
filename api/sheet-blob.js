@@ -8,6 +8,24 @@ export const CELL_CHUNK = 49000;
 export const GS_PAYLOAD_CHUNK = 20000;
 export const GZIP_SAVE_AFTER = 20000;
 export const BACKEND_VERSION = 3;
+export const BACKEND_SCRIPT_URL = 'https://github.com/eyemalive/band-booster-scheduler/blob/main/BandBoosterBackend.gs';
+
+export function outdatedBackendMessage({ bytes, pingError, version } = {}) {
+  const parts = [
+    `The Google Apps Script web app is still an old version (need ${BACKEND_VERSION}` +
+      (version ? `, live version ${version}` : ', live version unknown') +
+      ').',
+  ];
+  if (bytes != null) {
+    parts.push(`Your AppData JSON is valid (${bytes} characters).`);
+  }
+  parts.push('The old script can only write 50,000 characters to one cell, so this save cannot work until the web app is updated.');
+  if (pingError) parts.push(`The live script replied: ${pingError}.`);
+  parts.push(
+    `Open ${BACKEND_SCRIPT_URL} , copy the file, paste it over the existing script (keep your existing API_KEY), then Deploy → Manage deployments → pencil on the existing web app → Version: New version → Deploy. Do not create a new deployment URL.`
+  );
+  return parts.join(' ');
+}
 
 export function chunkBlob(text, size = CELL_CHUNK) {
   const value = text == null ? '' : String(text);

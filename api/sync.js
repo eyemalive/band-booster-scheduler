@@ -14,9 +14,12 @@ import {
 } from './auth.js';
 import {
   BACKEND_VERSION,
+  GZIP_SAVE_AFTER,
   buildSaveRequests,
   htmlErrorMessage,
   looksLikeHtml,
+  outdatedBackendMessage,
+  payloadToString,
 } from './sheet-blob.js';
 
 export const config = {
@@ -246,6 +249,31 @@ export default async function handler(req, res) {
       const tabName = tab || 'AppData';
       if (!tabAllowed(role, tabName)) {
         return json(res, 403, { ok: false, error: 'That data is not available through this API.' });
+      }
+      if (action === 'save') {
+        const bytes = payloadToString(payload).length;
+        if (bytes > GZIP_SAVE_AFTER) {
+          let ping;
+          try {
+            ping = await gsCall(APPS_SCRIPT_URL, API_KEY, { action: 'ping' });
+          } catch (err) {
+            ping = { ok: false, error: err.message };
+          }
+          const version = ping && ping.ok ? Number(ping.version) || 0 : 0;
+          if (version < BACKEND_VERSION) {
+            return json(res, 502, {
+              ok: false,
+              error: outdatedBackendMessage({
+                bytes,
+                pingError: ping && ping.error,
+                version: version || null,
+              }),
+              backendVersion: version || null,
+              requiredBackendVersion: BACKEND_VERSION,
+              bytes,
+            });
+          }
+        }
       }
       const data = await gsCall(APPS_SCRIPT_URL, API_KEY, { action, payload, tab: tabName });
       if (data.ok === false) return json(res, 502, data);
