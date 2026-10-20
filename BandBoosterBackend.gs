@@ -6,11 +6,11 @@
 //  1. Set API_KEY below to a secret passphrase (matches Vercel env var)
 //  2. Deploy as Web App: Execute as Me, Access Anyone
 //  3. Make sure your spreadsheet has these tabs:
-//       AppData          ← logistics data (cell A1)
-//       AppDataGeneral   ← general volunteer data (cell A1)
+//       AppData          ← logistics data (column A, chunked if >50k chars)
+//       AppDataGeneral   ← general volunteer data (column A, chunked if >50k chars)
 //       AppPasswords     ← role passwords (cell A1)
-//       AppEvents        ← shared event registry [{id,name,date}] (cell A1, auto-created)
-//       AppImportCategories ← shared CSV import category mapping [{id,text,role}] (cell A1, auto-created)
+//       AppEvents        ← shared event registry (column A)
+//       AppImportCategories ← shared CSV import category mapping (column A)
 //
 //  AppPasswords tab A1 must contain JSON like:
 //  {"logistics":"yourpassword","general":"yourpassword","admin":"yourpassword"}
@@ -21,8 +21,11 @@
 const API_KEY = 'YOUR_SECRET_KEY_HERE';  // ← change this
 const HASH_PREFIX = 'sha256:';
 const PASSWORD_ROLES = ['logistics', 'general', 'admin'];
-
 const DATA_TABS = ['AppData', 'AppDataGeneral', 'AppEvents', 'AppImportCategories'];
+// Google Sheets allows 50,000 characters per cell. AppData is one JSON blob for
+// the whole module (roster + jobs + every event's assignments), so we split it
+// across A1, A2, … and join on load.
+const CELL_CHUNK = 49000;
 
 function sha256Hex(str) {
   const raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(str), Utilities.Charset.UTF_8);
@@ -50,6 +53,84 @@ function jsonOut(out, obj) {
   return out;
 }
 
+function parseFormEncoded(raw) {
+  const out = {};
+  String(raw || '').split('&').forEach(function (part) {
+    if (!part) return;
+    const i = part.indexOf('=');
+    let k = i < 0 ? part : part.substring(0, i);
+    let v = i < 0 ? '' : part.substring(i + 1);
+    try {
+      k = decodeURIComponent(k.replace(/\+/g, ' '));
+      v = decodeURIComponent(v.replace(/\+/g, ' '));
+    } catch (err) {}
+    out[k] = v;
+  });
+  return out;
+}
+
+// e.parameter can truncate a large `payload` field. Prefer the raw POST body
+// (JSON or the full form-urlencoded string) when it is longer.
+function parseRequest(e) {
+  const params = (e && e.parameter) ? e.parameter : {};
+  let action = params.action || '';
+  let key = params.key || '';
+  let tabName = params.tab || 'AppData';
+  let payload = params.payload || '';
+
+  if (e && e.postData && e.postData.contents) {
+    const type = String(e.postData.type || '').toLowerCase();
+    const raw = e.postData.contents;
+    if (type.indexOf('application/json') !== -1) {
+      try {
+        const body = JSON.parse(raw);
+        if (body && typeof body === 'object') {
+          if (body.action) action = body.action;
+          if (body.key) key = body.key;
+          if (body.tab) tabName = body.tab;
+          if (body.payload !== undefined && body.payload !== null) {
+            payload = typeof body.payload === 'string' ? body.payload : JSON.stringify(body.payload);
+          }
+        }
+      } catch (err) {}
+    } else {
+      try {
+        const form = parseFormEncoded(raw);
+        if (form.action) action = form.action;
+        if (form.key) key = form.key;
+        if (form.tab) tabName = form.tab;
+        if (form.payload && form.payload.length > String(payload).length) payload = form.payload;
+      } catch (err) {}
+    }
+  }
+  return { action: action, key: key, tabName: tabName, payload: payload };
+}
+
+function readCellBlob(sheet) {
+  const last = Math.max(sheet.getLastRow(), 1);
+  const vals = sheet.getRange(1, 1, last, 1).getValues();
+  return vals.map(function (row) {
+    return row[0] == null ? '' : String(row[0]);
+  }).join('');
+}
+
+function writeCellBlob(sheet, text) {
+  const value = text == null ? '' : String(text);
+  const n = Math.max(1, Math.ceil(value.length / CELL_CHUNK) || 1);
+  const rows = [];
+  for (let i = 0; i < n; i++) {
+    rows.push([value.substring(i * CELL_CHUNK, (i + 1) * CELL_CHUNK)]);
+  }
+  const existing = sheet.getLastRow();
+  if (existing > n) {
+    sheet.getRange(n + 1, 1, existing - n, 1).clearContent();
+  }
+  const range = sheet.getRange(1, 1, n, 1);
+  range.setNumberFormat('@');
+  range.setValues(rows);
+  return n;
+}
+
 function readPasswords(ss) {
   const pwSheet = ss.getSheetByName('AppPasswords');
   if (!pwSheet) return { error: 'AppPasswords tab not found.' };
@@ -75,11 +156,11 @@ function doPost(e) {
   out.setMimeType(ContentService.MimeType.JSON);
 
   try {
-    const params  = e.parameter || {};
-    const key     = params.key     || '';
-    const action  = params.action  || '';
-    const tabName = params.tab     || 'AppData';
-    const payload = params.payload || '';
+    const parsed  = parseRequest(e);
+    const key     = parsed.key     || '';
+    const action  = parsed.action  || '';
+    const tabName = parsed.tabName || 'AppData';
+    const payload = parsed.payload || '';
 
     // Auth check
     if (key !== API_KEY) {
@@ -152,10 +233,10 @@ function doPost(e) {
 
     // ── load ─────────────────────────────────────────────────
     if (action === 'load') {
-      const raw = sheet.getRange('A1').getValue();
+      const raw = readCellBlob(sheet);
       let data = null;
       if (raw) {
-        try { data = JSON.parse(raw); } catch (e) { data = null; }
+        try { data = JSON.parse(raw); } catch (err) { data = null; }
       }
       return jsonOut(out, { ok: true, data: data });
     }
@@ -164,9 +245,14 @@ function doPost(e) {
     if (action === 'save') {
       if (!payload) return jsonOut(out, { ok: false, error: 'No payload provided.' });
       try { JSON.parse(payload); }
-      catch (e) { return jsonOut(out, { ok: false, error: 'Payload is not valid JSON.' }); }
-      sheet.getRange('A1').setValue(payload);
-      return jsonOut(out, { ok: true });
+      catch (err) {
+        return jsonOut(out, {
+          ok: false,
+          error: 'Payload is not valid JSON (' + payload.length + ' chars).',
+        });
+      }
+      const chunks = writeCellBlob(sheet, payload);
+      return jsonOut(out, { ok: true, bytes: payload.length, chunks: chunks });
     }
 
     return jsonOut(out, { ok: false, error: 'Unknown action: ' + action });

@@ -881,12 +881,15 @@ function markConnected(){ localStorage.setItem('bbs_synced','yes'); }
 function markDisconnected(){ localStorage.removeItem('bbs_synced'); }
 function onHttpsHost(){ return location.protocol==='https:' || location.hostname==='localhost'; }
 
-function setSyncStatus(state, label){
+function setSyncStatus(state, label, detail){
   const el = document.getElementById('sync-status-text');
   const status = document.getElementById('sync-status');
   if(!el) return;
   el.textContent = label;
-  if(status) status.style.display = 'flex';
+  if(status){
+    status.style.display = 'flex';
+    status.title = detail || label;
+  }
 }
 
 async function apiCall(action, payload, tabOverride){
@@ -1071,11 +1074,15 @@ async function pushToSheets(){
   _syncing = true;
   setSyncStatus('busy','Saving…');
   try{
-    await apiCall('save', AS());
-    _dirty = false;
+    do {
+      _dirty = false;
+      await apiCall('save', AS());
+    } while(_dirty);
     setSyncStatus('ok','Saved '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
   } catch(err){
-    setSyncStatus('err','Save failed — stored locally');
+    _dirty = true;
+    const detail = String((err && err.message) || '').replace(/^Proxy error:\s*/,'');
+    setSyncStatus('err','Save failed — stored locally', detail);
     console.warn('pushToSheets error:',err);
   }
   _syncing = false;
