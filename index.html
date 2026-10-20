@@ -237,11 +237,12 @@
       <div style="font-size:16px;font-weight:500;margin-bottom:.5rem">Google Sheets sync</div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:1rem">The connection is configured via Vercel environment variables.</div>
       <div style="font-size:12px;background:var(--surface2);border-radius:var(--radius);padding:8px 10px;margin-bottom:1rem;line-height:1.5">
-        If Diagnose says <strong>Unknown action: ping</strong> or data is over 50,000 characters, the Google script is still the old version. Saving cannot work until you update it:
+        If Diagnose says <strong>HTML error page</strong>, Vercel is not reaching a running web app (archived deployment, or Who has access is not Anyone). If it says <strong>Unknown action: ping</strong>, the URL works but the script is still the old version.
         <ol style="margin:.4rem 0 0;padding-left:1.2rem">
-          <li>Open <a href="https://github.com/eyemalive/band-booster-scheduler/blob/main/BandBoosterBackend.gs" target="_blank" rel="noopener">BandBoosterBackend.gs</a> and copy the file.</li>
-          <li>In the Apps Script project this app already uses, paste over the current script. Keep the existing <code>API_KEY</code>.</li>
-          <li>Deploy → Manage deployments → pencil on the <strong>existing</strong> web app → Version: <strong>New version</strong> → Deploy. Do not create a new URL.</li>
+          <li>Copy <code>APPS_SCRIPT_URL</code> from Vercel → Settings → Environment Variables.</li>
+          <li>In Apps Script → Deploy → Manage deployments, the <strong>active</strong> Web app URL must match. If it does not, paste the active URL into Vercel and Redeploy.</li>
+          <li>Pencil on that deployment: Execute as Me, Who has access <strong>Anyone</strong>, Version: New version.</li>
+          <li>Paste <a href="https://github.com/eyemalive/band-booster-scheduler/blob/main/BandBoosterBackend.gs" target="_blank" rel="noopener">BandBoosterBackend.gs</a> first and keep your existing <code>API_KEY</code>.</li>
         </ol>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:1rem">
@@ -930,8 +931,8 @@ function formatSaveError(err, extra){
   }
   if(err && err.status) lines.push('HTTP: '+err.status);
   let msg = String((err && err.message) || err || 'Unknown error').replace(/^Proxy error:\s*/,'');
-  if(/<!DOCTYPE html/i.test(msg) || /ppConfig/i.test(msg) || /HTML error page/i.test(msg) || /returned non-JSON/i.test(msg)){
-    msg = 'Apps Script returned an HTML error page instead of JSON. Google never ran the sheet backend for this save (the POST is too large, or the web app is on an old version).';
+  if(/<!DOCTYPE html/i.test(msg) || /ppConfig/i.test(msg) || /HTML error page/i.test(msg) || /returned non-JSON/i.test(msg) || /never ran the web app/i.test(msg)){
+    msg = 'Google never ran the web app (HTML page instead of JSON). This is not the 50,000-character limit. Vercel’s APPS_SCRIPT_URL is likely an archived deployment, or Who has access is not Anyone, or the remaining /exec URL does not match Vercel.';
   }
   if(/Payload is not valid JSON/i.test(msg) || /Unknown action:\s*ping/i.test(msg)){
     msg = 'Your AppData JSON is valid. The live Google Apps Script is still the old version (it does not know ping / gzip / cell chunking), so it cannot store more than 50,000 characters.';
@@ -946,7 +947,7 @@ function formatSaveError(err, extra){
       lines.push('Response: '+JSON.stringify(copy));
     }catch(e){}
   }
-  lines.push('Next step: Open https://github.com/eyemalive/band-booster-scheduler/blob/main/BandBoosterBackend.gs and paste it over the existing Apps Script (keep your API_KEY). Then Deploy → Manage deployments → pencil on the EXISTING web app → Version: New version → Deploy. Do not create a new deployment. Diagnose must then show “Sheet backend version 3”.');
+  lines.push('Next step: In Vercel copy APPS_SCRIPT_URL. In Apps Script → Manage deployments, the active Web app URL must match. Unarchive or point Vercel at the remaining /exec URL, set Who has access to Anyone, paste BandBoosterBackend.gs (keep API_KEY), New version → Deploy, then Redeploy on Vercel if you changed the env var. Diagnose must show “Sheet backend version 3”.');
   return lines.join('\n');
 }
 function showSaveErrorLog(text){
@@ -1235,8 +1236,13 @@ async function runDiagnostic(){
     const ver = diag.backendVersion;
     const need = diag.requiredBackendVersion || 3;
     if(ver == null || ver < need){
-      preface += '✗ Sheet backend is outdated (version '+(ver==null?'unknown':ver)+', need '+need+'). Paste <code>BandBoosterBackend.gs</code>, keep your API_KEY, then Deploy → Manage deployments → New version.<br>';
-      if(diag.backend && diag.backend.error) preface += '<code>'+esc(String(diag.backend.error))+'</code><br>';
+      const be = diag.backend && diag.backend.error ? String(diag.backend.error) : '';
+      if(/HTML error page|never ran the web app|archived/i.test(be)){
+        preface += '✗ The Apps Script URL in Vercel is not running (HTML instead of JSON). Match the active Web app /exec URL to <code>APPS_SCRIPT_URL</code>, set Who has access to Anyone, then Redeploy on Vercel if the URL changed.<br>';
+      } else {
+        preface += '✗ Sheet backend is outdated (version '+(ver==null?'unknown':ver)+', need '+need+'). Paste <code>BandBoosterBackend.gs</code>, keep your API_KEY, then Deploy → Manage deployments → New version.<br>';
+      }
+      if(be) preface += '<code>'+esc(be)+'</code><br>';
     } else {
       preface += '✓ Sheet backend version '+ver+'.<br>';
     }

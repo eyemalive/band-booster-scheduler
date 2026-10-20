@@ -164,7 +164,30 @@ test('HTML Apps Script response becomes a 502 with a deploy hint', async () => {
   assert.equal(res.statusCode, 502);
   assert.equal(res.body.ok, false);
   assert.match(res.body.error, /HTML error page/);
-  assert.match(res.body.error, /BandBoosterBackend\.gs/);
+  assert.match(res.body.error, /archived/);
+  assert.match(res.body.error, /Anyone/);
+  mock.restoreAll();
+});
+
+test('large save reports a dead web app when ping returns HTML', async () => {
+  process.env.APPS_SCRIPT_URL = 'https://script.example/exec';
+  process.env.API_KEY = 'key';
+  mock.method(globalThis, 'fetch', async () => ({
+    ok: true,
+    async text() {
+      return `<!DOCTYPE html><html><head><script>window['ppConfig'] = {sealIsEnforced: false}`;
+    },
+  }));
+  const token = createSessionToken('logistics', 'key');
+  const res = mockRes();
+  await handler(req({
+    body: { action: 'save', tab: 'AppData', payload: { notes: 'x'.repeat(50129) } },
+    cookie: `${COOKIE_NAME}=${token}`,
+  }), res);
+  assert.equal(res.statusCode, 502);
+  assert.match(res.body.error, /never ran the web app/);
+  assert.match(res.body.error, /archived/);
+  assert.doesNotMatch(res.body.error, /still an old version/);
   mock.restoreAll();
 });
 
