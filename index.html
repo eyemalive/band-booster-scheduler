@@ -3541,7 +3541,7 @@ function renderLoadSheet(){
   html+=`<div style="font-size:14px;font-weight:500;margin-bottom:.35rem">Add item for this ${esc(typeLabel).toLowerCase()} only</div>`;
   html+=`<div class="eq-add">`;
   html+=`<div><label class="lbl">Item</label><input type="text" id="ls-extra-name" placeholder="e.g. Homecoming props"></div>`;
-  html+=`<div><label class="lbl">Category</label><select id="ls-extra-cat">${EquipmentLoad.CATEGORIES.map(c=>`<option value="${c.id}">${esc(c.label)}</option>`).join('')}</select></div>`;
+  html+=`<div><label class="lbl">Category</label><select id="ls-extra-cat">${EquipmentLoad.CATEGORIES.map(c=>`<option value="${c.id}"${c.id==='other'?' selected':''}>${esc(c.label)}</option>`).join('')}</select></div>`;
   html+=`<div><label class="lbl">Qty</label><input type="number" id="ls-extra-qty" min="1" value="1"></div>`;
   html+=`<div><label class="lbl">Notes</label><input type="text" id="ls-extra-notes" placeholder="Optional"></div>`;
   html+=`<button class="btn primary" onclick="addLoadSheetExtra()" style="white-space:nowrap;align-self:end"><i class="ti ti-plus"></i> Add</button>`;
