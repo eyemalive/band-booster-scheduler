@@ -254,6 +254,62 @@ test('sectioned groups items under first-seen section labels', () => {
   assert.deepEqual(sections[2].items.map((i) => i.id), ['d']);
 });
 
+test('ensureEquipment seeds editable storage locations', () => {
+  const state = {};
+  EquipmentLoad.ensureEquipment(state);
+  assert.deepEqual(state.storageLocations.map((s) => s.label), [
+    'Band Library',
+    'Uniform Room',
+    'Band Hall',
+    'Percussion',
+    'Large Garage (Door 33A)',
+    'Small Garage (Door 30)',
+  ]);
+  assert.equal(EquipmentLoad.ensureEquipment(state), false);
+});
+
+test('storage locations can be added, renamed, and removed when unused', () => {
+  const state = {};
+  EquipmentLoad.ensureEquipment(state);
+  const added = EquipmentLoad.addStorageLocation(state, 'Props Closet');
+  assert.equal(added.label, 'Props Closet');
+  assert.ok(added.id);
+  assert.equal(EquipmentLoad.addStorageLocation(state, 'props closet'), null);
+
+  EquipmentLoad.editStorageLocation(state, added.id, 'Prop Closet');
+  assert.equal(state.storageLocations.find((s) => s.id === added.id).label, 'Prop Closet');
+  assert.equal(EquipmentLoad.storageLabel(added.id, state.storageLocations), 'Prop Closet');
+
+  assert.equal(EquipmentLoad.removeStorageLocation(state, added.id), true);
+  assert.equal(state.storageLocations.find((s) => s.id === added.id), undefined);
+});
+
+test('cannot remove a storage location still assigned to an item', () => {
+  const state = {
+    equipment: [{ id: 'a', name: 'A', storageLocation: 'band-hall', loadLocation: 'eagle-1', qty: 1 }],
+  };
+  EquipmentLoad.ensureEquipment(state);
+  assert.equal(EquipmentLoad.storageLocationInUse(state, 'band-hall'), true);
+  assert.equal(EquipmentLoad.removeStorageLocation(state, 'band-hall'), false);
+  assert.ok(state.storageLocations.find((s) => s.id === 'band-hall'));
+});
+
+test('custom storage location ids are preserved on items', () => {
+  const state = {};
+  EquipmentLoad.ensureEquipment(state);
+  const loc = EquipmentLoad.addStorageLocation(state, 'Trailer Annex');
+  EquipmentLoad.addCatalogItem(state, {
+    name: 'Extra cones',
+    storageLocation: loc.id,
+    loadLocation: 'golf-carts',
+    qty: 4,
+  }, 'cones');
+  EquipmentLoad.ensureEquipment(state);
+  const item = state.equipment.find((i) => i.id === 'cones');
+  assert.equal(item.storageLocation, loc.id);
+  assert.equal(EquipmentLoad.storageLabel(item.storageLocation, EquipmentLoad.storageLocations(state)), 'Trailer Annex');
+});
+
 test('storage and load option lists match requested labels', () => {
   assert.deepEqual(EquipmentLoad.STORAGE_LOCATIONS.map((s) => s.label), [
     'Band Library',
