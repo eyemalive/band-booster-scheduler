@@ -6,6 +6,7 @@
 <title>Band Booster Scheduler</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <script type="module" src="equipment-load.js"></script>
+<script type="module" src="event-share.js"></script>
 <style>
   :root {
     --bg:#f7f7f8;--surface:#fff;--surface2:#f0f1f3;--border:rgba(0,0,0,.12);--border-med:rgba(0,0,0,.2);
@@ -773,6 +774,7 @@ async function ensureModeLoadedInBackground(mode){
   if(data){
     if(mode==='general') SG=data; else S=data;
     if(mode==='general') migrateGeneralBusJobs(SG,'general');
+    syncSharedEventsNow();
   }
   if(onHttpsHost()){
     try{
@@ -785,6 +787,7 @@ async function ensureModeLoadedInBackground(mode){
       if(mode==='general') SG=resolved; else S=resolved;
       try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(mode==='general'?SG:S)); }catch(e){}
       if(mode==='general') migrateGeneralBusJobs(SG,'general');
+      syncSharedEventsNow();
     }catch(e){
       console.warn('ensureModeLoadedInBackground failed:',e);
       // Do NOT fall back to defaultState() here. Leave SG/S as whatever cache gave us
@@ -1004,7 +1007,7 @@ async function loadData(){
       apiCall('load'),
       new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout')),5000))
     ]);
-    if(r.data){ setAS(r.data); localStorage.setItem(cacheKey(), JSON.stringify(AS())); }
+    if(r.data){ setAS(r.data); if(_mode==='general') migrateGeneralBusJobs(); syncSharedEventsNow(); localStorage.setItem(cacheKey(), JSON.stringify(AS())); }
     setSyncStatus('ok','Synced');
   } catch(err){
     setSyncStatus('err','Sync failed — using local data');
@@ -1025,6 +1028,41 @@ async function refreshEvents(){
       if(r.data&&Array.isArray(r.data)){ EVENTS=r.data; localStorage.setItem(CACHE_KEY_EVENTS,JSON.stringify(EVENTS)); }
     }catch(e){ console.warn('refreshEvents failed:',e); }
   }
+  syncSharedEventsNow();
+}
+function persistModeData(mode){
+  const data=mode==='general'?SG:S;
+  if(!data) return;
+  try{ localStorage.setItem(cacheKeyFor(mode),JSON.stringify(data)); }catch(e){}
+  if(mode===_mode) save();
+  else if(onHttpsHost()) apiCall('save',data,sheetTabFor(mode)).catch(e=>console.warn('persistModeData save failed:',e));
+}
+function syncSharedEventsNow(attempt){
+  const share=typeof EventShare!=='undefined'?EventShare:null;
+  if(!share){
+    if((attempt||0)<40) setTimeout(function(){ syncSharedEventsNow((attempt||0)+1); },50);
+    return false;
+  }
+  const catalog=share.catalogSharedEvents(EVENTS,S&&S.schedules,SG&&SG.schedules);
+  const merged=share.mergeEventsRegistry(EVENTS,catalog);
+  if(merged.changed){
+    EVENTS=merged.events;
+    saveEvents();
+  }
+  let changed=false;
+  if(S){
+    const r=share.ensureSharedScheduleShells(S,'logistics',catalog,buildJobsSnapshotForMode);
+    if(r.changed){ persistModeData('logistics'); changed=true; }
+  }
+  if(SG){
+    const r=share.ensureSharedScheduleShells(SG,'general',catalog,buildJobsSnapshotForMode);
+    if(r.changed){ persistModeData('general'); changed=true; }
+  }
+  if(changed){
+    const panel=document.getElementById('panel-schedules');
+    if(panel&&panel.classList.contains('active')) renderSchedules();
+  }
+  return changed;
 }
 async function saveEvents(){
   try{ localStorage.setItem(CACHE_KEY_EVENTS,JSON.stringify(EVENTS)); }catch(e){}
@@ -1203,7 +1241,7 @@ async function testAndSaveConnection(){
       apiCall('load'),
       new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timed out')),10000))
     ]);
-    if(r.data){ setAS(r.data); localStorage.setItem(cacheKey(), JSON.stringify(AS())); }
+    if(r.data){ setAS(r.data); if(_mode==='general') migrateGeneralBusJobs(); syncSharedEventsNow(); localStorage.setItem(cacheKey(), JSON.stringify(AS())); }
     markConnected(); setSyncStatus('ok','Connected');
     errEl.innerHTML = '';
     document.getElementById('setup-overlay').style.display='none';
@@ -1267,7 +1305,7 @@ async function runDiagnostic(){
     msg.innerHTML = preface + '✓ Proxy reachable.<br>⏳ Testing Apps Script…';
     const data = await apiCall('load');
     markConnected(); setSyncStatus('ok','Connected');
-    if(data.data){ setAS(data.data); localStorage.setItem(cacheKey(),JSON.stringify(AS())); refreshAllPanels(); }
+    if(data.data){ setAS(data.data); if(_mode==='general') migrateGeneralBusJobs(); syncSharedEventsNow(); localStorage.setItem(cacheKey(),JSON.stringify(AS())); refreshAllPanels(); }
 
     // Also check the shared tabs individually — these were added after the main data tabs,
     // so an out-of-date Apps Script deployment can pass the check above but still fail on these.
@@ -1294,7 +1332,7 @@ async function saveSettings(){
   msg.innerHTML='⏳ Testing…';
   try{
     const r = await apiCall('load');
-    if(r.data){ setAS(r.data); localStorage.setItem(cacheKey(),JSON.stringify(AS())); }
+    if(r.data){ setAS(r.data); if(_mode==='general') migrateGeneralBusJobs(); syncSharedEventsNow(); localStorage.setItem(cacheKey(),JSON.stringify(AS())); }
     markConnected(); setSyncStatus('ok','Connected');
     msg.innerHTML='✓ Connected and synced.';
     refreshAllPanels();
@@ -1387,6 +1425,7 @@ async function initData(){
   if(!AS()) setAS(defaultState(_mode));
   if(_mode==='general') migrateGeneralBusJobs();
   ensureLogisticsEquipment();
+  syncSharedEventsNow();
 
   autoSavePastEvents();
   showTab('schedules');
@@ -1399,6 +1438,8 @@ async function initData(){
         if(r.data){
           setAS(r.data);
           ensureLogisticsEquipment();
+          if(_mode==='general') migrateGeneralBusJobs();
+          syncSharedEventsNow();
           localStorage.setItem(cacheKey(),JSON.stringify(AS()));
           refreshAllPanels();
         }
